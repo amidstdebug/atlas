@@ -1,0 +1,15 @@
+version: '3'
+services:
+  app:
+    build: .
+    volumes:
+      - .:/usr/src/app # mmount codebase for hot reload
+      - ./local_model:/usr/src/app/local_model  # Mount the local_model directory
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_APP: app.py
+      FLASK_ENV: development
+      PYTHONUNBUFFERED: 1  
+
+    command: flask run --host=0.0.0.0 --reload

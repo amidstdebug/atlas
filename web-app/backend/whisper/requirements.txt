@@ -1,0 +1,8 @@
+Flask
+transformers
+torch
+soundfile
+librosa
+numpy
+fuzzywuzzy
+python-Levenshtein
