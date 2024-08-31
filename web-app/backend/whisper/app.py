@@ -13,7 +13,7 @@ from fuzzywuzzy import process
 app = Flask(__name__)
 
 # Load model and processor
-model_name_or_path = './local_model'
+model_name_or_path = 'local_model_small'
 processor = AutoProcessor.from_pretrained(model_name_or_path)
 model = AutoModelForSpeechSeq2Seq.from_pretrained(model_name_or_path)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -53,7 +53,7 @@ atc_words = [
     "ground control", "hazard", "ILS", "jetway", "kilo", "logbook", "missed approach",
     "nautical mile", "offset", "profile", "quadrant", "RVR",
     "static", "touchdown", "upwind", "variable", "wingtip", "Yankee", "zoom climb",
-    "airspeed", "backtrack", "ETOPS", "gate", "holding pattern", 
+    "airspeed", "backtrack", "ETOPS", "gate", "holding pattern",
     "jumpseat", "minimums", "pushback", "RNAV", "slot time", "taxiway", "TCAS",
     "wind shear", "zero fuel weight", "ETA",
     "flight deck", "ground proximity warning system", "jet route",
@@ -160,14 +160,22 @@ def apply_custom_fixes(transcription):
     # Manually break off frequencies after the first decimal point
     transcription = re.sub(r'(\d+\.\d)(\d+)', r'\1 \2', transcription)
 
+    # Combine adjacent digits that should form a single number
+    transcription = re.sub(r'\b(\d)\s+(\d)\s+(\d)\b', r'\1\2\3', transcription)
+    transcription = re.sub(r'\b(\d)\s+(\d)\b', r'\1\2', transcription)
+
+    # Specific rule to handle runway designations like "1 6L" to "16L"
+    transcription = re.sub(r'\b(\d)\s+(\d)([A-Z])\b', r'\1\2\3', transcription)
+
     return transcription
+
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe_audio():
     # Get the audio file from the request
     audio_file = request.files['file']
     audio, original_sample_rate = sf.read(audio_file)
-    
+
     # Convert to mono and resample
     audio_mono = librosa.to_mono(audio.T)
     target_sample_rate = 16000
@@ -199,13 +207,14 @@ def transcribe_audio():
         transcription = apply_custom_fixes(transcription)
 
         transcriptions.append(transcription)
-        break  # Process only the first chunk
-    return_data = jsonify({"transcription": transcriptions[0] if transcriptions else "No transcription available"})
+        print('Transcribed:', transcription)
+
+    return_data = jsonify({"transcription": transcriptions if transcriptions else "No transcription available"})
     print('Sending: ', str(transcriptions),flush=True)
     # Return the transcription as a JSON response
     return return_data
 
-        
+
 
 @app.route('/health', methods=['GET'])
 def health_check():

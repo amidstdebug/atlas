@@ -3,8 +3,8 @@ services:
   app:
     build: .
     volumes:
-      - .:/usr/src/app # mmount codebase for hot reload
-      - ./local_model:/usr/src/app/local_model  # Mount the local_model directory
+      - .:/usr/src/app # mount codebase for hot reload
+      - ./local_model_small:/usr/src/app/local_model_small  # Mount the local_model directory
     ports:
       - "5000:5000"
     environment:

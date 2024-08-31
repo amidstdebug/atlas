@@ -13,7 +13,7 @@ torch.cuda.init()
 
 # Define the model path or Hugging Face model ID
 # model_name_or_path = "jlvdoorn/whisper-large-v3-atco2-asr"
-model_name_or_path = './local_model'
+model_name_or_path = 'local_model_small'
 
 # Load the processor and model
 processor = AutoProcessor.from_pretrained(model_name_or_path)

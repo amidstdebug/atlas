@@ -1,5 +1,8 @@
-local_model
+local_model_large
+local_model_small
+local_model_joe
 *.tar.gz
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
