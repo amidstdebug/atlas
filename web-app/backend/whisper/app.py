@@ -8,6 +8,8 @@ import re
 from collections import defaultdict
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
+from pydub import AudioSegment
+import io
 
 # Initialize the Flask application
 app = Flask(__name__)
@@ -174,10 +176,18 @@ def apply_custom_fixes(transcription):
 def transcribe_audio():
     # Get the audio file from the request
     audio_file = request.files['file']
-    audio, original_sample_rate = sf.read(audio_file)
+
+    # Convert webm to wav using pydub
+    audio = AudioSegment.from_file(io.BytesIO(audio_file.read()), format="webm")
+    wav_io = io.BytesIO()
+    audio.export(wav_io, format="wav")
+    wav_io.seek(0)
+
+    # Read the WAV data using soundfile
+    audio_data, original_sample_rate = sf.read(wav_io)
 
     # Convert to mono and resample
-    audio_mono = librosa.to_mono(audio.T)
+    audio_mono = librosa.to_mono(audio_data.T)
     target_sample_rate = 16000
     audio = librosa.resample(audio_mono, orig_sr=original_sample_rate, target_sr=target_sample_rate, res_type='kaiser_fast')
 

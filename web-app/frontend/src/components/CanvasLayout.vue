@@ -122,7 +122,38 @@ export default {
     let isActive = false;
     let forceSendTimer = null;
 
+    let mediaRecorder;
+    let recordedChunks = [];
+
     resizeCanvas(canvas, canvasCtx);
+
+    async function setupMediaRecorder() {
+      const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = event => {
+        if (event.data.size > 0) {
+          recordedChunks.push(event.data);
+          // console.log('Data available:', event.data);
+        } else {
+          console.log('No data available:', event);
+        }
+      };
+
+
+      // mediaRecorder.onstop = () => {
+      //   sendChunkToConsole();
+      // };
+    }
+
+    function sendChunkToConsole() {
+      if (recordedChunks.length) {
+        const blob = new Blob(recordedChunks, {type: 'audio/webm'});
+        console.log('Chunk', chunkNumber, 'sent:', blob);
+        recordedChunks = [];  // Clear the array for the next chunk
+      }
+      chunkNumber++
+    }
 
     function drawWaveform() {
       requestAnimationFrame(drawWaveform);
@@ -274,12 +305,21 @@ export default {
       forceSendTimer = setTimeout(() => {
         forceSendChunk('time');
       }, forceSendDuration);
+
+      if (mediaRecorder.state === 'inactive') {
+        mediaRecorder.start(); // Start recording if not already started
+        // console.log('MediaRecorder started:', mediaRecorder.state);
+      }
     }
 
     function deactivateRecording() {
       console.log('Deactivating');
+
+      // Update the UI to reflect the inactive state
       activateButton.classList.remove('active');
       activateButton.classList.add('inactive');
+
+      // Update flags and timers
       chunkSent = false;
       isActive = false;
       isRecording = false;
@@ -287,10 +327,18 @@ export default {
       reactivationCount++;
       console.log('Audio stopped | Reactivation count:', reactivationCount);
 
+      // Clear the forceSendTimer if it is still active
+      if (forceSendTimer) {
+        clearTimeout(forceSendTimer);
+        forceSendTimer = null;
+      }
+
+      // Start the delay timer for reactivation
       delayTimer = setTimeout(() => {
         startInactiveTimer();
       }, delayDuration);
     }
+
 
     function forceSendChunk(reason) {
       if (reason === 'max') {
@@ -302,10 +350,22 @@ export default {
       chunkSentButton.classList.remove('grey');
       chunkSentButton.classList.add('red');
 
+      mediaRecorder.stop(); // Stop the current recording to trigger chunk sending
+
+      mediaRecorder.onstop = () => {
+        sendChunkToConsole(); // Move logging to where the chunk is actually sent
+      };
+
       resetState();
 
-      console.log('Chunk', chunkNumber, 'sent');
+      console.log('Chunk', chunkNumber, 'sent due to', reason);
       chunkNumber++;
+
+      // Clear the forceSendTimer here
+      if (forceSendTimer) {
+        clearTimeout(forceSendTimer);
+        forceSendTimer = null;
+      }
 
       resetTimer = setTimeout(() => {
         chunkSentButton.classList.remove('red');
@@ -354,8 +414,19 @@ export default {
         return;
       }
       inactiveTimer = setTimeout(() => {
-        console.log('Chunk', chunkNumber, 'sent');
-        chunkNumber++;
+        // Check if the MediaRecorder is recording and stop it
+        if (mediaRecorder.state === 'recording') {
+          // console.log('Stopping MediaRecorder');
+          mediaRecorder.stop();
+        } else {
+          console.log('MediaRecorder is not in recording state:', mediaRecorder.state);
+        }
+
+        mediaRecorder.onstop = () => {
+          sendChunkToConsole(); // Log the chunk data when it’s actually sent
+        };
+
+        // chunkNumber++;
         reactivationCount = 0;
         chunkSentButton.classList.remove('grey');
         chunkSentButton.classList.add('red');
@@ -370,7 +441,9 @@ export default {
       }, delayDuration);
     }
 
+    setupMediaRecorder(); // Call this after mounting to set up the recorder
+
     drawWaveform();
   }
-}
+};
 </script>
