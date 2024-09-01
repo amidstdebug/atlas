@@ -12,11 +12,10 @@
       <div id="delayTime" class="timer text-color">Delay Time Left: 0s</div>
     </el-row>
     <el-row>
-      <div id="reactivationsLeft" class="timer text-color">Reactivations Left: 2</div>
+      <div id="reactivationsLeft" class="timer text-color">Re-activations Left: 2</div>
     </el-row>
   </div>
 </template>
-
 
 <style scoped>
 body {
@@ -80,8 +79,12 @@ canvas {
 
 </style>
 
-
 <script>
+import {resizeCanvas} from '@/methods/waveform/setupCanvas'
+import {setupAudioContext} from "@/methods/recording/recording";
+import {updateMinMax} from '@/methods/utils/updateMinMax';
+import {updateTimers} from '@/methods/utils/updateTimers';
+
 export default {
   mounted() {
     const canvas = document.getElementById('waveform');
@@ -91,43 +94,7 @@ export default {
     const recordingTimeDisplay = document.getElementById('recordingTime');
     const delayTimeDisplay = document.getElementById('delayTime');
     const reactivationsLeftDisplay = document.getElementById('reactivationsLeft');
-
-    let inactiveTimer = null;
-    let resetTimer = null;
-    let delayTimer = null;
-    let reactivationCount = 0;
-    let maxReactivations = 2; // Maximum allowed reactivations
-    let delayDuration = 1000;
-    let chunkBeepDuration = 250;
-    let isRecording = false;
-    let recordingStartTime = null;
-    let delayStartTime = null;
-
-    function resizeCanvas() {
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = 1200 * dpr;
-      canvas.height = 400 * dpr;
-      canvas.style.width = '1200px';
-      canvas.style.height = '400px';
-      canvasCtx.scale(dpr, dpr);
-    }
-
-    resizeCanvas();
-
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048;
-
-    navigator.mediaDevices.getUserMedia({audio: true})
-        .then(stream => {
-          const source = audioContext.createMediaStreamSource(stream);
-          source.connect(analyser);
-          drawWaveform();
-        })
-        .catch(err => {
-          console.error('Error accessing audio stream:', err);
-        });
-
+    const {analyser} = setupAudioContext(drawWaveform);
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     const fps = 60;
@@ -135,56 +102,66 @@ export default {
     const rollingBuffer = new Float32Array(totalSlices * bufferLength).fill(128);
     const slicesFor4Seconds = 4 * fps;
     const thresholdPercentage = 0.05;
-    let conditionCounter = 0;
     const activationThreshold = 3 * fps;
+    const verticalOffset = 60;
+    const forceSendDuration = 7000;
+
+    let inactiveTimer = null;
+    let resetTimer = null;
+    let delayTimer = null;
+    let reactivationCount = 0;
+    let maxReactivations = 2;
+    let delayDuration = 1000;
+    let chunkBeepDuration = 250;
+    let isRecording = false;
+    let recordingStartTime = null;
+    let delayStartTime = null;
+    let conditionCounter = 0;
     let chunkSent = false;
     let chunkNumber = 1;
     let isActive = false;
-    const verticalOffset = 60;
+    let forceSendTimer = null;
 
-    function updateMinMax() {
-      let minValue = Infinity;
-      let maxValue = -Infinity;
-      const startIndex = rollingBuffer.length - slicesFor4Seconds * bufferLength;
-      for (let i = startIndex; i < rollingBuffer.length; i++) {
-        const v = rollingBuffer[i] / 128.0 - 1.0;
-        if (v < minValue) minValue = v;
-        if (v > maxValue) maxValue = v;
-      }
-      const centerY = (canvas.height / 2) - verticalOffset;
-      const normalizedMinValue = Math.min(canvas.height, Math.max(0, centerY + minValue * (canvas.height / 4)));
-      const normalizedMaxValue = Math.min(canvas.height, Math.max(0, centerY + maxValue * (canvas.height / 4)));
-      return {min: normalizedMinValue, max: normalizedMaxValue};
-    }
-
-    function updateTimers() {
-      if (isRecording) {
-        const currentTime = Date.now();
-        const elapsedRecordingTime = Math.floor((currentTime - recordingStartTime) / 1000);
-        recordingTimeDisplay.textContent = `Recording Time: ${elapsedRecordingTime}s`;
-      }
-      if (delayStartTime) {
-        const currentTime = Date.now();
-        const remainingDelayTime = Math.max(0, delayDuration / 1000 - Math.floor((currentTime - delayStartTime) / 1000));
-        delayTimeDisplay.textContent = `Delay Time Left: ${remainingDelayTime}s`;
-      }
-      reactivationsLeftDisplay.textContent = `Reactivations Left: ${Math.max(0, maxReactivations - reactivationCount)}`;
-    }
+    resizeCanvas(canvas, canvasCtx);
 
     function drawWaveform() {
       requestAnimationFrame(drawWaveform);
-      updateTimers();
 
+      updateTimers(
+          isRecording,
+          recordingStartTime,
+          recordingTimeDisplay,
+          delayStartTime,
+          delayDuration,
+          delayTimeDisplay,
+          maxReactivations,
+          reactivationCount,
+          reactivationsLeftDisplay
+      );
+
+      updateRollingBuffer();
+      clearCanvas();
+      drawWaveformLine();
+      drawMinMaxLines();
+      drawActivationThresholdLines();
+      checkThresholdCondition();
+    }
+
+    function updateRollingBuffer() {
       analyser.getByteTimeDomainData(dataArray);
       rollingBuffer.set(rollingBuffer.subarray(bufferLength), 0);
       rollingBuffer.set(dataArray, rollingBuffer.length - bufferLength);
+    }
 
-      const {min: normalizedMinValue, max: normalizedMaxValue} = updateMinMax();
-
+    function clearCanvas() {
       canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function drawWaveformLine() {
       canvasCtx.lineWidth = 2;
       canvasCtx.strokeStyle = '#00FFCC';
       canvasCtx.beginPath();
+
       const sliceWidth = canvas.width / totalSlices;
       let x = 0;
       const centerY = (canvas.height / 2) - verticalOffset;
@@ -200,7 +177,18 @@ export default {
         x += sliceWidth;
       }
       canvasCtx.stroke();
+    }
 
+    function drawMinMaxLines() {
+      const {min: normalizedMinValue, max: normalizedMaxValue} = updateMinMax(
+          rollingBuffer,
+          bufferLength,
+          slicesFor4Seconds,
+          canvas,
+          verticalOffset
+      );
+
+      // Draw max value line
       canvasCtx.strokeStyle = '#f83030';
       canvasCtx.lineWidth = 1;
       canvasCtx.beginPath();
@@ -208,12 +196,16 @@ export default {
       canvasCtx.lineTo(canvas.width, normalizedMaxValue);
       canvasCtx.stroke();
 
+      // Draw min value line
       canvasCtx.strokeStyle = '#21219a';
       canvasCtx.beginPath();
       canvasCtx.moveTo(0, normalizedMinValue);
       canvasCtx.lineTo(canvas.width, normalizedMinValue);
       canvasCtx.stroke();
+    }
 
+    function drawActivationThresholdLines() {
+      const centerY = (canvas.height / 2) - verticalOffset;
       const activationThresholdY = canvas.height * (thresholdPercentage / 2);
       canvasCtx.strokeStyle = '#919b07';
       canvasCtx.beginPath();
@@ -222,71 +214,123 @@ export default {
       canvasCtx.moveTo(0, centerY + activationThresholdY);
       canvasCtx.lineTo(canvas.width, centerY + activationThresholdY);
       canvasCtx.stroke();
+    }
 
+    function checkThresholdCondition() {
+      const centerY = (canvas.height / 2) - verticalOffset;
       const centerThreshold = canvas.height * thresholdPercentage;
-      const withinThreshold = Math.abs(normalizedMaxValue - centerY) < centerThreshold && Math.abs(normalizedMinValue - centerY) < centerThreshold;
+      const {min: normalizedMinValue, max: normalizedMaxValue} = updateMinMax(
+          rollingBuffer,
+          bufferLength,
+          slicesFor4Seconds,
+          canvas,
+          verticalOffset
+      );
+
+      const withinThreshold =
+          Math.abs(normalizedMaxValue - centerY) < centerThreshold &&
+          Math.abs(normalizedMinValue - centerY) < centerThreshold;
 
       if (withinThreshold) {
         conditionCounter++;
         if (conditionCounter >= activationThreshold && isActive) {
-          // Check for maximum reactivations
           if (reactivationCount >= maxReactivations) {
             forceSendChunk('max');
           } else {
-            activateButton.classList.remove('active');
-            activateButton.classList.add('inactive');
-            chunkSent = false;
-            isActive = false;
-            isRecording = false;
-            delayStartTime = Date.now();
-            reactivationCount++;
-            console.log('Audio stopped | Reactivation count:', reactivationCount);
-
-            delayTimer = setTimeout(() => {
-              startInactiveTimer();
-            }, delayDuration);
+            deactivateRecording();
           }
         }
       } else {
         if (!isActive && !chunkSent) {
-          activateButton.classList.add('active');
-          activateButton.classList.remove('inactive');
-          console.log('Recording chunk:', chunkNumber);
-          chunkSent = true;
-          isActive = true;
-          isRecording = true;
-          recordingStartTime = Date.now();
-          delayStartTime = null;
-          if (delayTimer) {
-            clearTimeout(delayTimer);
-            delayTimer = null;
-          }
+          activateRecording();
         }
         conditionCounter = 0;
-
         if (inactiveTimer) {
           clearTimeout(inactiveTimer);
           inactiveTimer = null;
         }
       }
+    }
 
+    drawWaveform();
+
+    function activateRecording() {
+      console.log('Activating');
+      activateButton.classList.add('active');
+      activateButton.classList.remove('inactive');
+      console.log('Recording chunk:', chunkNumber);
+      chunkSent = true;
+      isActive = true;
+      isRecording = true;
+      recordingStartTime = Date.now();
+      delayStartTime = null;
+      if (delayTimer) {
+        clearTimeout(delayTimer);
+        delayTimer = null;
+      }
+      if (forceSendTimer) {
+        clearTimeout(forceSendTimer);
+      }
+      forceSendTimer = setTimeout(() => {
+        forceSendChunk('time');
+      }, forceSendDuration);
+    }
+
+    function deactivateRecording() {
+      console.log('Deactivating');
+      activateButton.classList.remove('active');
+      activateButton.classList.add('inactive');
+      chunkSent = false;
+      isActive = false;
+      isRecording = false;
+      delayStartTime = Date.now();
+      reactivationCount++;
+      console.log('Audio stopped | Reactivation count:', reactivationCount);
+
+      delayTimer = setTimeout(() => {
+        startInactiveTimer();
+      }, delayDuration);
+    }
+
+    function forceSendChunk(reason) {
+      if (reason === 'max') {
+        console.log('Max activations reached.');
+      } else if (reason === 'time') {
+        console.log('Max duration reached.');
+      }
+
+      chunkSentButton.classList.remove('grey');
+      chunkSentButton.classList.add('red');
+
+      resetState();
+
+      console.log('Chunk', chunkNumber, 'sent');
+      chunkNumber++;
+
+      resetTimer = setTimeout(() => {
+        chunkSentButton.classList.remove('red');
+        chunkSentButton.classList.add('grey');
+      }, chunkBeepDuration);
     }
 
     function resetState() {
-      // Reset all relevant state variables
       activateButton.classList.remove('active');
       activateButton.classList.add('inactive');
       chunkSentButton.classList.remove('red');
       chunkSentButton.classList.add('grey');
       isRecording = false;
+      isActive = false;
       reactivationCount = 0;
       recordingStartTime = null;
       delayStartTime = null;
+      conditionCounter = 0;
+      chunkSent = false;
       recordingTimeDisplay.textContent = 'Recording Time: 0s';
       delayTimeDisplay.textContent = 'Delay Time Left: 0s';
-      reactivationsLeftDisplay.textContent = `Reactivations Left: ${maxReactivations}`;
+      reactivationsLeftDisplay.textContent = `Re-activations Left: ${maxReactivations}`;
+      activateButton.disabled = false;
+      chunkSentButton.disabled = false;
 
-      // Clear any timers
       if (resetTimer) {
         clearTimeout(resetTimer);
         resetTimer = null;
@@ -295,32 +339,20 @@ export default {
         clearTimeout(delayTimer);
         delayTimer = null;
       }
-    }
-
-    function forceSendChunk(reason) {
-      if (reason == 'max') {
-        console.log('Maximum reactivations reached, forcing chunk send.');
-
+      if (inactiveTimer) {
+        clearTimeout(inactiveTimer);
+        inactiveTimer = null;
       }
-      chunkSentButton.classList.remove('grey');
-      chunkSentButton.classList.add('red');
-
-      resetState();
-
-      console.log('Chunk forced sent');
-
-      // Set a timer to turn the button back to grey after the beep duration
-      resetTimer = setTimeout(() => {
-        chunkSentButton.classList.remove('red');
-        chunkSentButton.classList.add('grey');
-      }, chunkBeepDuration);
+      if (forceSendTimer) {
+        clearTimeout(forceSendTimer);
+        forceSendTimer = null;
+      }
     }
 
     function startInactiveTimer() {
       if (inactiveTimer) {
         return;
       }
-      // console.log('Starting inactive timer...');
       inactiveTimer = setTimeout(() => {
         console.log('Chunk', chunkNumber, 'sent');
         chunkNumber++;
@@ -328,7 +360,6 @@ export default {
         chunkSentButton.classList.remove('grey');
         chunkSentButton.classList.add('red');
 
-        // Set a timer to turn the button back to grey after 0.25 seconds
         resetTimer = setTimeout(() => {
           chunkSentButton.classList.remove('red');
           chunkSentButton.classList.add('grey');
@@ -343,4 +374,3 @@ export default {
   }
 }
 </script>
-

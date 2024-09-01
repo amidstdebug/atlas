@@ -1,9 +1,9 @@
 <template>
   <el-container>
     <el-main>
-      <el-row justify="center" gutter="40" style="margin: 40px 0;">
-        <!-- Left Column -->
-        <el-col :span="10" class="left-column">
+      <!-- Top Column: Live Transcription -->
+      <el-row justify="center" gutter="40" style="margin-bottom: 20px;">
+        <el-col :span="24" class="top-column">
           <el-card class="box-card">
             <template #header>
               <span>Live Transcription</span>
@@ -12,8 +12,23 @@
               <slot name="left-content">This is where the live transcriptions will appear...</slot>
             </div>
           </el-card>
+        </el-col>
+      </el-row>
 
-          <div class="button-group">
+      <!-- Bottom Column: Live Summary -->
+      <el-row justify="center" gutter="40" style="margin-top: 20px;">
+        <el-col :span="24" class="bottom-column">
+          <el-card class="box-card">
+            <template #header>
+              <span>Live Summary</span>
+            </template>
+            <div class="content-box">
+              <slot name="right-content">This is where the live summary will appear...</slot>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+      <div class="button-group">
             <el-button :color="liveRecordColor" class="centered-button same-width-button">
               <el-icon class="icon-group">
                 <MicrophoneIcon />
@@ -28,20 +43,6 @@
               Upload Recording
             </el-button>
           </div>
-        </el-col>
-
-        <!-- Right Column -->
-        <el-col :span="10" class="right-column">
-          <el-card class="box-card">
-            <template #header>
-              <span>Live Summary</span>
-            </template>
-            <div class="content-box">
-              <slot name="right-content">This is where the live summary will appear...</slot>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
     </el-main>
   </el-container>
 </template>
@@ -84,7 +85,13 @@ export default {
   font-size: 24px;
 }
 
-.left-column, .right-column {
+.canvas-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.top-column, .bottom-column {
   display: flex;
   flex-direction: column;
 }
