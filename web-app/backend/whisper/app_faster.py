@@ -1,6 +1,7 @@
 import os
 
 from flask import Flask, request, jsonify
+from faster_whisper import WhisperModel, BatchedInferencePipeline
 import torch
 import soundfile as sf
 import librosa
@@ -12,19 +13,16 @@ from fuzzywuzzy import process
 import io
 from flask_cors import CORS
 from scipy.signal import resample_poly
-from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
 
 # Initialize the Flask application
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 # Load model and processor
-model_name_or_path = 'local_model_medium'
-processor = AutoProcessor.from_pretrained(model_name_or_path)
-model = AutoModelForSpeechSeq2Seq.from_pretrained(model_name_or_path)
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-model.to(device)
-model.eval()
+model_dir = './faster-whisper-large-v3'
+model = WhisperModel(model_dir, device="cuda", compute_type="float16", num_workers=8)
+batched_model = BatchedInferencePipeline(model=model)
+
 # Predefined lists and mappings
 general = ['Air Traffic Control communications', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '90', '180', '270',
            '360']
@@ -138,22 +136,9 @@ number_mapping = {
 	r'\bthousand\b': '000'
 }
 
-# Prepare prompt for the model (convert it to tokens)
-if collated_list_string:
-	prompt_ids = processor(text=collated_list_string, return_tensors="pt").input_ids.to(device)
-else:
-	prompt_ids = None
-
 transcription_history = defaultdict(int)
 pattern_history = defaultdict(lambda: {'count': 0, 'correct_format': ''})
 
-
-# Loop through and handle 'ident' patterns by looking to the left and right
-def handle_ident_numbers(transcription):
-	pattern = r"0ident "
-	new_transcription = re.sub(pattern, "", transcription)
-
-	return new_transcription
 
 # Define helper functions (apply_custom_fixes, etc.)
 def fix_decimal_followups(transcription):
@@ -193,11 +178,32 @@ def apply_custom_fixes(transcription):
 	# Apply custom word-to-number mapping
 	for word_pattern, number in number_mapping.items():
 		transcription = re.sub(word_pattern, number, transcription, flags=re.IGNORECASE)
-		
-	# Handle 'ident' patterns with adjacent digits
-	transcription = handle_ident_numbers(transcription)
 
-	# Final cleanup: Remove any remaining 'ident' markers (just in case)
+	# Recursive combining of numbers with 'ident'
+	while True:
+		# First pass: Find and combine numbers with 'ident' followed by another number
+		new_transcription = re.sub(
+			r'(\d+)\s*ident\s*(\d+)\s*ident',
+			lambda match: str(match.group(1)) + str(match.group(2)),  # Concatenate as strings
+			transcription,
+			flags=re.IGNORECASE
+		)
+
+		# Additional pass: Handle cases like '20ident 20ident' to concatenate the numbers
+		new_transcription = re.sub(
+			r'(\d+)\s*ident\s*(\d+)',
+			lambda match: str(int(match.group(1)) + int(match.group(2))),  # Add numbers as integers
+			new_transcription,
+			flags=re.IGNORECASE
+		)
+
+		# If no change, break the loop
+		if new_transcription == transcription:
+			break
+
+		transcription = new_transcription
+
+	# Final cleanup: Remove any remaining 'ident' markers
 	transcription = re.sub(r'ident', '', transcription, flags=re.IGNORECASE)
 
 	# Find patterns like "word + digits" (e.g., "Singapore 638")
@@ -264,8 +270,12 @@ def apply_custom_fixes(transcription):
 	# Handle squawk code recognition: ensure squawk code is always a 4-digit number
 	transcription = re.sub(r'\bsquawk\s+(\d)\s*(\d)\s*(\d)\s*(\d)\b', r'squawk \1\2\3\4', transcription,
 	                       flags=re.IGNORECASE)
+
+	# Apply the regex to break "flight level xxxYY" followed by digits into "flight level xxx YY"
+	transcription = re.sub(r'(flight\s*level\s*\d{3})(\d+)', r'\1 \2', transcription, flags=re.IGNORECASE)
+
 	# Handle Flight Level: Prevent flight levels from concatenating with other numbers like time references
-	transcription = re.sub(r'\bflight level\s*(\d{3})(?=\s|$)', r'FL\1', transcription, flags=re.IGNORECASE)
+	transcription = re.sub(r'\bflight\s*level\s*(\d{3})(?=\s|$)', r'FL\1', transcription, flags=re.IGNORECASE)
 
 	# Ensure proper spacing between FLxxx and any following digits or text (e.g., "FL150 10 minutes")
 	transcription = re.sub(r'(FL\d{3})(?=\d)', r'\1 ', transcription, flags=re.IGNORECASE)
@@ -300,7 +310,7 @@ def transcribe_audio():
 		# Get the audio file from the request
 		audio_file = request.files['file']
 
-		# Read the WAV file directly
+		# Read the WAV file directly from request
 		wav_io = io.BytesIO(audio_file.read())
 		if wav_io.getbuffer().nbytes == 0:
 			return jsonify({"error": "No file data received"}), 400
@@ -308,33 +318,33 @@ def transcribe_audio():
 		# Read the WAV data using soundfile
 		audio_data, original_sample_rate = sf.read(wav_io)
 
-		# Convert to mono (you can still use librosa for this step)
-		audio_mono = librosa.to_mono(audio_data.T)
-		target_sample_rate = 16000
+		# Convert to mono (if necessary)
+		if len(audio_data.shape) > 1:
+			audio_mono = np.mean(audio_data, axis=1)  # Convert stereo to mono by averaging channels
+		else:
+			audio_mono = audio_data
 
-		# Resample using scipy
-		audio = resample_poly(audio_mono, up=target_sample_rate, down=original_sample_rate)
+		# Define the file path for temporary processing
+		temp_audio_path = "./temp_audio.wav"
 
-		# Padding if necessary
-		padding_duration_sec = 30
-		padding_size = target_sample_rate * padding_duration_sec
-		if len(audio) < padding_size:
-			audio = np.pad(audio, (0, padding_size - len(audio)), mode='constant')
+		# Save the processed audio data to a temp WAV file
+		sf.write(temp_audio_path, audio_mono, original_sample_rate)
 
-		# Process the audio
-		inputs = processor(audio, sampling_rate=target_sample_rate, return_tensors="pt", padding=True).to(device)
+		# Perform transcription using Faster-Whisper, including initial_prompt
+		segments, info = batched_model.transcribe(temp_audio_path, batch_size=10, language='en',
+		                                          initial_prompt=collated_list_string)
 
-		with torch.no_grad():
-			generated_ids = model.generate(inputs["input_features"])
-
-		transcription = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-		transcription = re.sub(r'\s+', ' ', transcription).strip()
+		# Combine transcription segments into a single string
+		transcription = ""
+		for segment in segments:
+			transcription += f"[{segment.start:.2f}s -> {segment.end:.2f}s]: {segment.text}\n"
 
 		# Apply any custom word-to-number mapping
-		number_mapping = {}  # Define the custom mappings
+		number_mapping = {}  # Define the custom mappings here if necessary
 		for word, num in number_mapping.items():
 			transcription = re.sub(word, num, transcription, flags=re.IGNORECASE)
 
+		transcription = transcription.strip()
 		transcription = apply_custom_fixes(transcription)
 
 		print('Transcribed:', transcription)
@@ -342,6 +352,12 @@ def transcribe_audio():
 
 	except Exception as e:
 		return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+	finally:
+		# Ensure the temporary file is deleted after processing
+		if os.path.exists(temp_audio_path):
+			os.remove(temp_audio_path)
+			# print(f"Temporary file {temp_audio_path} deleted.")
+
 
 @app.route('/health', methods=['GET'])
 def health_check():

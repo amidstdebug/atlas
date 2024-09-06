@@ -8,8 +8,10 @@
             <template #header>
               <span>Live Transcription</span>
             </template>
-            <div class="content-box">
-              <slot name="left-content">This is where the live transcriptions will appear...</slot>
+            <div class="content-box transcription-box">
+              <!-- Display live transcription -->
+              <p v-if="transcription" v-html="transcription.replace(/\n/g, '<br>')"></p>
+              <p v-else>This is where the live transcriptions will appear...</p>
             </div>
           </el-card>
         </el-col>
@@ -22,33 +24,41 @@
             <template #header>
               <span>Live Summary</span>
             </template>
-            <div class="content-box">
+            <div class="content-box ">
               <slot name="right-content">This is where the live summary will appear...</slot>
             </div>
           </el-card>
         </el-col>
       </el-row>
-      <div class="button-group">
-            <el-button :color="liveRecordColor" class="centered-button same-width-button">
-              <el-icon class="icon-group">
-                <MicrophoneIcon />
-              </el-icon>
-              Live Record
-            </el-button>
 
-            <el-button :color="uploadColor" class="centered-button same-width-button">
-              <el-icon class="icon-group">
-                <UploadIcon />
-              </el-icon>
-              Upload Recording
-            </el-button>
-          </div>
+      <div class="button-group">
+        <!-- Live Record Button -->
+        <el-button :style="{ color: liveRecordColor }" class="centered-button same-width-button">
+          <el-icon class="icon-group">
+            <MicrophoneIcon/>
+          </el-icon>
+          Live Record
+        </el-button>
+
+        <!-- Upload Recording Button -->
+        <el-button :style="{ color: uploadColor }" class="centered-button same-width-button">
+          <el-icon class="icon-group">
+            <UploadIcon/>
+          </el-icon>
+          Upload Recording
+        </el-button>
+
+        <!-- Clear Transcript Button -->
+        <el-button class="centered-button same-width-button" @click="clearTranscription">
+          Clear Transcript
+        </el-button>
+      </div>
     </el-main>
   </el-container>
 </template>
 
 <script>
-import { Microphone, Upload } from '@element-plus/icons-vue';
+import {Microphone, Upload} from '@element-plus/icons-vue';
 
 export default {
   name: 'ColumnLayout',
@@ -59,17 +69,32 @@ export default {
   props: {
     liveRecordColor: {
       type: String,
-      default: '#e34660'
+      default: '#e34660',
     },
     uploadColor: {
       type: String,
-      default: '#5773d9'
-    }
-  }
+      default: '#5773d9',
+    },
+    transcription: {
+      type: String,
+      default: '', // Empty string by default, will be replaced by real transcription data
+    },
+  },
+  methods: {
+    clearTranscription() {
+      // Clear the transcription by emitting an event or directly updating the prop
+      this.$emit('transcription-cleared');
+    },
+  },
 };
 </script>
 
 <style scoped>
+/* Add to your existing scoped styles */
+.el-container {
+  overflow-x: hidden; /* Prevent horizontal scrolling */
+}
+
 .header-content {
   display: flex;
   align-items: center;
@@ -91,7 +116,8 @@ export default {
   align-items: center;
 }
 
-.top-column, .bottom-column {
+.top-column,
+.bottom-column {
   display: flex;
   flex-direction: column;
 }
@@ -109,6 +135,10 @@ export default {
   background-color: #f9f9f9;
   border-radius: 4px;
   overflow-y: auto;
+}
+.transcription-box {
+  max-height: 300px; /* Set a maximum height */
+  overflow-y: auto; /* Enable scrolling */
 }
 
 .button-group {

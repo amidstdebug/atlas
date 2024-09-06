@@ -1,21 +1,33 @@
 <template>
-  <div>
-    <canvas id="waveform"></canvas>
-    <el-row>
-      <button id="activateButton" class="statusButton inactive">Activated</button>
-      <button id="chunkSentButton" class="chunkSentButton grey">Chunk Sent</button>
+  <div class="container">
+    <canvas ref="waveform"></canvas>
+    <el-row class="button-row">
+      <!-- Activate Button -->
+      <el-button
+          :class="['statusButton', 'no-click', isActive ? 'active' : 'inactive']"
+      >
+        Activated
+      </el-button>
+
+      <!-- Chunk Sent Button -->
+      <el-button
+          :class="['chunkSentButton', 'no-click', chunkSent ? 'red' : 'grey']"
+      >
+        Chunk Sent
+      </el-button>
     </el-row>
     <el-row>
-      <div id="recordingTime" class="timer text-color">Recording Time: 0s</div>
+      <div class="timer text-color">Recording Time: {{ recordingTime }}s</div>
     </el-row>
     <el-row>
-      <div id="delayTime" class="timer text-color">Delay Time Left: 0s</div>
+      <div class="timer text-color">Delay Time Left: {{ delayTime }}s</div>
     </el-row>
     <el-row>
-      <div id="reactivationsLeft" class="timer text-color">Re-activations Left: 2</div>
+      <div class="timer text-color">Re-activations Left: {{ reactivationsLeft }}</div>
     </el-row>
   </div>
 </template>
+
 
 <style scoped>
 body {
@@ -30,41 +42,45 @@ body {
 
 canvas {
   border: 1px solid #333;
+  margin-bottom: 20px; /* Add space between canvas and buttons */
 }
 
-.statusButton {
-  padding: 10px 20px;
-  font-size: 16px;
-  border: none;
-  border-radius: 5px;
-  margin: 5px;
+.statusButton,
+.chunkSentButton {
+  padding: 20px 40px; /* Increase padding for a larger button */
+  font-size: 20px; /* Increase font size */
+  border-radius: 8px; /* Adjust border-radius for a larger look */
+  margin: 10px; /* Increase margin to give more spacing between buttons */
   color: white;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%; /* Ensures the container spans the full width */
+}
+
+.no-click {
+  pointer-events: none; /* Prevents the button from being clickable */
 }
 
 .inactive {
-  background-color: #555;
+  background-color: #555 !important;
 }
 
 .active {
-  background-color: #4CAF50;
+  background-color: #4CAF50 !important;
 }
 
-.chunkSentButton {
-  padding: 10px 20px;
-  font-size: 16px;
-  border: none;
-  border-radius: 5px;
-  margin: 5px;
-  background-color: #FF6347;
-  color: white;
-}
 
 .grey {
-  background-color: #555; /* Grey color for the initial state */
+  background-color: #555 !important; /* Grey color for the initial state */
 }
 
 .red {
-  background-color: #FF6347; /* Red color when activated */
+  background-color: #FF6347 !important; /* Red color when activated */
 }
 
 .timer {
@@ -84,366 +100,566 @@ import {resizeCanvas} from '@/methods/waveform/setupCanvas'
 import {setupAudioContext} from "@/methods/recording/recording";
 import {updateMinMax} from '@/methods/utils/updateMinMax';
 import {updateTimers} from '@/methods/utils/updateTimers';
+import {FFmpeg} from '@ffmpeg/ffmpeg';
 
 export default {
+  data() {
+    return {
+      transcription: 'This is where the live transcriptions will appear...',
+      backendURI: 'http://localhost:5000/transcribe',
+      sensitivity: {
+        'activity': 0.2,
+        'reduced': 0.4,
+      },
+      recordingTime: 0, // Initial recording time
+      delayTime: 0, // Initial delay time
+      reactivationsLeft: 2, // Initial reactivation count
+      canvas: null,
+      canvasCtx: null,
+      activateButton: null,
+      chunkSentButton: null,
+      recordingTimeDisplay: null,
+      delayTimeDisplay: null,
+      reactivationsLeftDisplay: null,
+      analyser: null,
+      bufferLength: null,
+      dataArray: null,
+      rollingBuffer: null,
+      totalSlices: null,
+      slicesFor4Seconds: null,
+      activationThreshold: null,
+      fps: 60,
+      verticalOffset: 60,
+      thresholdPercentage: 0.05,
+      forceSendDuration: 7000,
+      inactiveTimer: null,
+      resetTimer: null,
+      delayTimer: null,
+      reactivationCount: 0,
+      maxReactivations: 1,
+      delayDuration: 500,
+      chunkBeepDuration: 250,
+      isRecording: false,
+      recordingStartTime: null,
+      delayStartTime: null,
+      conditionCounter: 0,
+      isActive: false,
+      chunkSent: false,
+      chunkNumber: 1,
+      forceSendTimer: null,
+      mediaRecorder: null,
+      recordedChunks: [],
+
+
+    };
+  },
   mounted() {
-    const canvas = document.getElementById('waveform');
-    const canvasCtx = canvas.getContext('2d');
-    const activateButton = document.getElementById('activateButton');
-    const chunkSentButton = document.getElementById('chunkSentButton');
-    const recordingTimeDisplay = document.getElementById('recordingTime');
-    const delayTimeDisplay = document.getElementById('delayTime');
-    const reactivationsLeftDisplay = document.getElementById('reactivationsLeft');
-    const {analyser} = setupAudioContext(drawWaveform);
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    const fps = 60;
-    const totalSlices = 20 * fps;
-    const rollingBuffer = new Float32Array(totalSlices * bufferLength).fill(128);
-    const slicesFor4Seconds = 4 * fps;
-    const thresholdPercentage = 0.05;
-    const activationThreshold = 3 * fps;
-    const verticalOffset = 60;
-    const forceSendDuration = 7000;
+    this.$nextTick(() => {
+      this.setupCanvas();
+      this.setupAudio();
+      this.setupMediaRecorder();
+      this.drawWaveform();
+      this.startUpdatingTimers();
+    });
+  },
+  methods: {
 
-    let inactiveTimer = null;
-    let resetTimer = null;
-    let delayTimer = null;
-    let reactivationCount = 0;
-    let maxReactivations = 2;
-    let delayDuration = 1000;
-    let chunkBeepDuration = 250;
-    let isRecording = false;
-    let recordingStartTime = null;
-    let delayStartTime = null;
-    let conditionCounter = 0;
-    let chunkSent = false;
-    let chunkNumber = 1;
-    let isActive = false;
-    let forceSendTimer = null;
+    updateTimerValues(recordingTime, delayTime, reactivationsLeft) {
+      this.recordingTime = recordingTime;
+      this.delayTime = delayTime;
+      this.reactivationsLeft = reactivationsLeft;
+    },
+    startUpdatingTimers() {
+      const update = () => {
+        updateTimers(
+            this.isRecording,
+            this.recordingStartTime,
+            this.delayStartTime,
+            this.delayDuration,
+            this.maxReactivations,
+            this.reactivationCount,
+            this.updateTimerValues
+        );
+        requestAnimationFrame(update);
+      };
+      update();
+    },
+    /**
+     * Sets up the canvas and related DOM elements for drawing the waveform
+     */
+    setupCanvas() {
+      // Retrieve the canvas element using Vue's ref system
+      const canvas = this.$refs.waveform;
 
-    let mediaRecorder;
-    let recordedChunks = [];
+      // Check if the canvas element exists
+      if (!canvas) {
+        console.error("Canvas element with ref 'waveform' not found.");
+        return;
+      }
 
-    resizeCanvas(canvas, canvasCtx);
+      // Retrieve the 2D drawing context from the canvas
+      const canvasCtx = canvas.getContext('2d');
 
-    async function setupMediaRecorder() {
-      const stream = await navigator.mediaDevices.getUserMedia({audio: true});
-      mediaRecorder = new MediaRecorder(stream);
+      // Check if the 2D context is available
+      if (!canvasCtx) {
+        console.error("Failed to get 2D context from canvas.");
+        return;
+      }
 
-      mediaRecorder.ondataavailable = event => {
+      // Store the canvas and context in the Vue instance
+      this.canvas = canvas;
+      this.canvasCtx = canvasCtx;
+
+      // Retrieve and store button and display elements using Vue's ref system
+      this.recordingTimeDisplay = this.$refs.recordingTime;
+      this.delayTimeDisplay = this.$refs.delayTime;
+      this.reactivationsLeftDisplay = this.$refs.reactivationsLeft;
+
+      // Resize the canvas for optimal display
+      resizeCanvas(this.canvas, this.canvasCtx);
+    },
+
+    /**
+     * Initializes the audio context and analyser for capturing real-time audio data
+     */
+    setupAudio() {
+      // Set up the audio context and analyser node
+      const {analyser} = setupAudioContext(this.drawWaveform);
+
+      // Store the analyser and buffer properties in the component
+      this.analyser = analyser;
+      this.bufferLength = analyser.frequencyBinCount / 2
+      this.dataArray = new Uint8Array(this.bufferLength);
+
+      // Initialize the rolling buffer and slices for waveform processing
+      this.totalSlices = 20 * this.fps;
+      this.rollingBuffer = new Float32Array(this.totalSlices * this.bufferLength).fill(128);
+      this.slicesFor4Seconds = 4 * this.fps;
+      this.activationThreshold = this.sensitivity['activity'] * this.fps;
+
+    },
+    /**
+     * Sets up the MediaRecorder to handle microphone audio recording
+     */
+    async setupMediaRecorder() {
+      // Request microphone access and define audio constraints
+      const constraints = {audio: {sampleRate: 16000}};
+
+      // Capture the audio stream from the user's microphone
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      // Initialize the MediaRecorder with the captured audio stream
+      this.mediaRecorder = new MediaRecorder(stream);
+      // Warm up the media recorder
+      this.mediaRecorder.start();
+      this.mediaRecorder.stop();
+      // Set up event handler for capturing audio chunks when data is available
+      this.mediaRecorder.ondataavailable = event => {
         if (event.data.size > 0) {
-          recordedChunks.push(event.data);
-          // console.log('Data available:', event.data);
+          // Store the recorded chunk in the recordedChunks array
+          this.recordedChunks.push(event.data);
         } else {
           console.log('No data available:', event);
         }
       };
+    },
+    /**
+     * Saves the recorded audio chunk as a WAV file locally
+     * @param {Blob} blob - The audio blob to be saved
+     * @param {string} fileName - The name of the file to save
+     */
+    saveWavLocally(blob, fileName) {
+      // Create a temporary URL for the audio blob
+      const url = URL.createObjectURL(blob);
 
+      // Create a hidden anchor element to trigger the download
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = fileName;  // Set the desired file name
 
-      // mediaRecorder.onstop = () => {
-      //   sendChunkToConsole();
-      // };
-    }
+      // Append the anchor to the DOM and trigger the download
+      document.body.appendChild(a);
+      a.click();
 
-    function sendChunkToConsole() {
-      if (recordedChunks.length) {
-        const blob = new Blob(recordedChunks, {type: 'audio/webm'});
-        console.log('Chunk', chunkNumber, 'sent:', blob);
-        recordedChunks = [];  // Clear the array for the next chunk
-      }
-      chunkNumber++
-    }
+      // Revoke the object URL and clean up the DOM after the download
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    },
+    /**
+     * Converts a WebM audio file to WAV format using FFmpeg
+     * @param {Blob} blob - The WebM audio blob to be converted
+     * @returns {Promise<Blob>} - A promise that resolves with the WAV blob
+     */
+    async convertWebmToWav(blob) {
+      // Create an instance of the FFmpeg library
+      const ffmpeg = new FFmpeg();
 
-    function drawWaveform() {
-      requestAnimationFrame(drawWaveform);
+      // Load the FFmpeg core into memory
+      await ffmpeg.load();
 
-      updateTimers(
-          isRecording,
-          recordingStartTime,
-          recordingTimeDisplay,
-          delayStartTime,
-          delayDuration,
-          delayTimeDisplay,
-          maxReactivations,
-          reactivationCount,
-          reactivationsLeftDisplay
-      );
+      // Read the WebM blob data and write it into FFmpeg's virtual filesystem
+      const webmFileData = await blob.arrayBuffer();
+      await ffmpeg.writeFile('input.webm', new Uint8Array(webmFileData));
 
-      updateRollingBuffer();
-      clearCanvas();
-      drawWaveformLine();
-      drawMinMaxLines();
-      drawActivationThresholdLines();
-      checkThresholdCondition();
-    }
+      // Execute FFmpeg command to convert WebM to WAV
+      await ffmpeg.exec(['-i', 'input.webm', 'output.wav']);
 
-    function updateRollingBuffer() {
-      analyser.getByteTimeDomainData(dataArray);
-      rollingBuffer.set(rollingBuffer.subarray(bufferLength), 0);
-      rollingBuffer.set(dataArray, rollingBuffer.length - bufferLength);
-    }
+      // Read the converted WAV data back into a blob
+      const wavData = await ffmpeg.readFile('output.wav');
+      const wavBlob = new Blob([wavData.buffer], {type: 'audio/wav'});
 
-    function clearCanvas() {
-      canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
-    }
+      // Clean up the FFmpeg instance and return the WAV blob
+      ffmpeg.terminate();
+      return wavBlob;
+    },
+    /**
+     * Updates the rolling buffer with the latest audio data from the AnalyserNode
+     */
+    updateRollingBuffer() {
+      // Fetch time-domain audio data from the analyser
+      this.analyser.getByteTimeDomainData(this.dataArray);
 
-    function drawWaveformLine() {
-      canvasCtx.lineWidth = 2;
-      canvasCtx.strokeStyle = '#00FFCC';
-      canvasCtx.beginPath();
+      // Shift the rolling buffer to make room for new data
+      this.rollingBuffer.set(this.rollingBuffer.subarray(this.bufferLength), 0);
 
-      const sliceWidth = canvas.width / totalSlices;
+      // Append the latest audio data to the end of the rolling buffer
+      this.rollingBuffer.set(this.dataArray, this.rollingBuffer.length - this.bufferLength);
+    },
+    /**
+     * Clears the canvas to prepare it for the next frame of the waveform
+     */
+    clearCanvas() {
+      // Clear the entire canvas
+      this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    },
+    /**
+     * Draws the waveform line on the canvas based on the current rolling buffer data
+     */
+    drawWaveformLine() {
+      this.canvasCtx.lineWidth = 2;
+      this.canvasCtx.strokeStyle = '#00FFCC';  // Color of the waveform line
+      this.canvasCtx.beginPath();
+
+      const sliceWidth = this.canvas.width / this.totalSlices;
       let x = 0;
-      const centerY = (canvas.height / 2) - verticalOffset;
+      const centerY = this.canvas.height / 2 - this.verticalOffset;
 
-      for (let i = 0; i < rollingBuffer.length; i += bufferLength) {
-        const v = rollingBuffer[i] / 128.0 - 1.0;
-        const y = centerY + v * (canvas.height / 4);
+      // Loop through the rolling buffer and plot the waveform points
+      for (let i = 0; i < this.rollingBuffer.length; i += this.bufferLength) {
+        const v = this.rollingBuffer[i] / 128.0 - 1.0;
+        const y = centerY + v * (this.canvas.height / 4);
+
         if (i === 0) {
-          canvasCtx.moveTo(x, y);
+          this.canvasCtx.moveTo(x, y);
         } else {
-          canvasCtx.lineTo(x, y);
+          this.canvasCtx.lineTo(x, y);
         }
         x += sliceWidth;
       }
-      canvasCtx.stroke();
-    }
-
-    function drawMinMaxLines() {
+      this.canvasCtx.stroke();  // Draw the waveform
+    }, /**
+     * Draws the min and max value lines on the canvas to indicate signal extremes
+     */
+    drawMinMaxLines() {
+      // Get the normalized min and max values of the current rolling buffer
       const {min: normalizedMinValue, max: normalizedMaxValue} = updateMinMax(
-          rollingBuffer,
-          bufferLength,
-          slicesFor4Seconds,
-          canvas,
-          verticalOffset
+          this.rollingBuffer,
+          this.bufferLength,
+          this.slicesFor4Seconds,
+          this.canvas,
+          this.verticalOffset
       );
 
-      // Draw max value line
-      canvasCtx.strokeStyle = '#f83030';
-      canvasCtx.lineWidth = 1;
-      canvasCtx.beginPath();
-      canvasCtx.moveTo(0, normalizedMaxValue);
-      canvasCtx.lineTo(canvas.width, normalizedMaxValue);
-      canvasCtx.stroke();
+      // Draw the max value line in red
+      this.canvasCtx.strokeStyle = '#f83030';
+      this.canvasCtx.lineWidth = 1;
+      this.canvasCtx.beginPath();
+      this.canvasCtx.moveTo(0, normalizedMaxValue);
+      this.canvasCtx.lineTo(this.canvas.width, normalizedMaxValue);
+      this.canvasCtx.stroke();
 
-      // Draw min value line
-      canvasCtx.strokeStyle = '#21219a';
-      canvasCtx.beginPath();
-      canvasCtx.moveTo(0, normalizedMinValue);
-      canvasCtx.lineTo(canvas.width, normalizedMinValue);
-      canvasCtx.stroke();
-    }
+      // Draw the min value line in blue
+      this.canvasCtx.strokeStyle = '#21219a';
+      this.canvasCtx.beginPath();
+      this.canvasCtx.moveTo(0, normalizedMinValue);
+      this.canvasCtx.lineTo(this.canvas.width, normalizedMinValue);
+      this.canvasCtx.stroke();
+    },
+    /**
+     * Draws activation threshold lines on the canvas to show the boundary for triggering recording
+     */
+    drawActivationThresholdLines() {
+      const centerY = this.canvas.height / 2 - this.verticalOffset;
+      const activationThresholdY = this.canvas.height * (this.thresholdPercentage / 2);
 
-    function drawActivationThresholdLines() {
-      const centerY = (canvas.height / 2) - verticalOffset;
-      const activationThresholdY = canvas.height * (thresholdPercentage / 2);
-      canvasCtx.strokeStyle = '#919b07';
-      canvasCtx.beginPath();
-      canvasCtx.moveTo(0, centerY - activationThresholdY);
-      canvasCtx.lineTo(canvas.width, centerY - activationThresholdY);
-      canvasCtx.moveTo(0, centerY + activationThresholdY);
-      canvasCtx.lineTo(canvas.width, centerY + activationThresholdY);
-      canvasCtx.stroke();
-    }
+      // Draw the upper threshold line
+      this.canvasCtx.strokeStyle = '#919b07';  // Yellow color for threshold lines
+      this.canvasCtx.beginPath();
+      this.canvasCtx.moveTo(0, centerY - activationThresholdY);
+      this.canvasCtx.lineTo(this.canvas.width, centerY - activationThresholdY);
 
-    function checkThresholdCondition() {
-      const centerY = (canvas.height / 2) - verticalOffset;
-      const centerThreshold = canvas.height * thresholdPercentage;
+      // Draw the lower threshold line
+      this.canvasCtx.moveTo(0, centerY + activationThresholdY);
+      this.canvasCtx.lineTo(this.canvas.width, centerY + activationThresholdY);
+      this.canvasCtx.stroke();
+    },
+    /**
+     * Checks if the waveform data exceeds the activation threshold and controls recording accordingly
+     */
+    checkThresholdCondition() {
+      const centerY = this.canvas.height / 2 - this.verticalOffset;
+      const centerThreshold = this.canvas.height * this.thresholdPercentage;
+      let reducedThreshold = centerThreshold * this.sensitivity['reduced']; // Make it more responsive to changes
+
+
+      // Get the current min and max values from the rolling buffer
       const {min: normalizedMinValue, max: normalizedMaxValue} = updateMinMax(
-          rollingBuffer,
-          bufferLength,
-          slicesFor4Seconds,
-          canvas,
-          verticalOffset
+          this.rollingBuffer,
+          this.bufferLength,
+          this.slicesFor4Seconds,
+          this.canvas,
+          this.verticalOffset
       );
 
+      // Check if the signal stays within the threshold range
       const withinThreshold =
-          Math.abs(normalizedMaxValue - centerY) < centerThreshold &&
-          Math.abs(normalizedMinValue - centerY) < centerThreshold;
+          Math.abs(normalizedMaxValue - centerY) < reducedThreshold &&
+          Math.abs(normalizedMinValue - centerY) < reducedThreshold;
 
       if (withinThreshold) {
-        conditionCounter++;
-        if (conditionCounter >= activationThreshold && isActive) {
-          if (reactivationCount >= maxReactivations) {
-            forceSendChunk('max');
+        // Increment the condition counter if the signal is within the threshold
+        this.conditionCounter++;
+
+        // If the condition counter exceeds the activation threshold, deactivate recording
+        if (this.conditionCounter >= this.activationThreshold && this.isActive) {
+          if (this.reactivationCount >= this.maxReactivations) {
+            this.forceSendChunk('max');
           } else {
-            deactivateRecording();
+            this.deactivateRecording();
           }
         }
       } else {
-        if (!isActive && !chunkSent) {
-          activateRecording();
+        // If the signal exceeds the threshold, activate recording
+        if (!this.isActive && !this.chunkSent) {
+          this.activateRecording();
         }
-        conditionCounter = 0;
-        if (inactiveTimer) {
-          clearTimeout(inactiveTimer);
-          inactiveTimer = null;
+        this.conditionCounter = 0;  // Reset the counter if the signal exceeds the threshold
+
+        // Clear the inactivity timer if it exists
+        if (this.inactiveTimer) {
+          clearTimeout(this.inactiveTimer);
+          this.inactiveTimer = null;
         }
       }
-    }
+    }, /**
+     * Activates recording by starting the media recorder and updating the UI
+     */
+    activateRecording() {
+      console.log('Activating recording');
 
-    drawWaveform();
+      // this.chunkSent = true;
+      this.isActive = true;
+      this.isRecording = true;
+      this.recordingStartTime = Date.now();
+      this.delayStartTime = null;
 
-    function activateRecording() {
-      console.log('Activating');
-      activateButton.classList.add('active');
-      activateButton.classList.remove('inactive');
-      console.log('Recording chunk:', chunkNumber);
-      chunkSent = true;
-      isActive = true;
-      isRecording = true;
-      recordingStartTime = Date.now();
-      delayStartTime = null;
-      if (delayTimer) {
-        clearTimeout(delayTimer);
-        delayTimer = null;
-      }
-      if (forceSendTimer) {
-        clearTimeout(forceSendTimer);
-      }
-      forceSendTimer = setTimeout(() => {
-        forceSendChunk('time');
-      }, forceSendDuration);
-
-      if (mediaRecorder.state === 'inactive') {
-        mediaRecorder.start(); // Start recording if not already started
-        // console.log('MediaRecorder started:', mediaRecorder.state);
-      }
-    }
-
-    function deactivateRecording() {
-      console.log('Deactivating');
-
-      // Update the UI to reflect the inactive state
-      activateButton.classList.remove('active');
-      activateButton.classList.add('inactive');
-
-      // Update flags and timers
-      chunkSent = false;
-      isActive = false;
-      isRecording = false;
-      delayStartTime = Date.now();
-      reactivationCount++;
-      console.log('Audio stopped | Reactivation count:', reactivationCount);
-
-      // Clear the forceSendTimer if it is still active
-      if (forceSendTimer) {
-        clearTimeout(forceSendTimer);
-        forceSendTimer = null;
+      // Clear any existing timers
+      if (this.delayTimer) {
+        clearTimeout(this.delayTimer);
+        this.delayTimer = null;
       }
 
-      // Start the delay timer for reactivation
-      delayTimer = setTimeout(() => {
-        startInactiveTimer();
-      }, delayDuration);
-    }
+      // Start a timer to forcefully send a chunk after the max duration
+      this.forceSendTimer = setTimeout(() => {
+        this.forceSendChunk('time');
+      }, this.forceSendDuration);
 
+      // Update recording time
+      this.recordingTime = 0;  // Reset recording time when starting
 
-    function forceSendChunk(reason) {
-      if (reason === 'max') {
-        console.log('Max activations reached.');
-      } else if (reason === 'time') {
-        console.log('Max duration reached.');
+      // Start the media recorder if it is inactive
+      if (this.mediaRecorder.state === 'inactive') {
+        this.mediaRecorder.start();
+      }
+      // Reset chunkSent flag since we are starting a new recording
+      this.chunkSent = false;
+    },
+    /**
+     * Deactivates recording by stopping the media recorder and updating the UI
+     */
+    deactivateRecording() {
+      console.log('Deactivating recording');
+
+      this.isActive = false;
+      this.isRecording = false;
+      this.delayStartTime = Date.now();
+
+      // Increment the reactivation count
+      this.reactivationCount++;
+      this.reactivationsLeft = this.maxReactivations - this.reactivationCount; // Update reactivations left
+
+      // Reset delay time left
+      this.delayTime = 0;
+
+      console.log(`Audio stopped | Reactivation count: ${this.reactivationCount}`);
+
+      // Clear the force send timer
+      if (this.forceSendTimer) {
+        clearTimeout(this.forceSendTimer);
+        this.forceSendTimer = null;
       }
 
-      chunkSentButton.classList.remove('grey');
-      chunkSentButton.classList.add('red');
+      // Start a delay timer for reactivation
+      this.delayTimer = setTimeout(() => {
+        this.startInactiveTimer();
+      }, this.delayDuration);
 
-      mediaRecorder.stop(); // Stop the current recording to trigger chunk sending
+      this.chunkSent = false; // Set button to inactive state
+    },
+    resetState() {
+      // Resetting the state
+      this.isRecording = false;
+      this.isActive = false;
+      this.reactivationCount = 0;
+      this.recordingStartTime = null;
+      this.delayStartTime = null;
+      this.conditionCounter = 0;
+      this.chunkSent = false;
 
-      mediaRecorder.onstop = () => {
-        sendChunkToConsole(); // Move logging to where the chunk is actually sent
+      // Update the UI (referencing the refs)
+      if (this.$refs.recordingTime) {
+        this.$refs.recordingTime.textContent = 'Recording Time: 0s';
+      }
+      if (this.$refs.delayTime) {
+        this.$refs.delayTime.textContent = 'Delay Time Left: 0s';
+      }
+      if (this.$refs.reactivationsLeft) {
+        this.$refs.reactivationsLeft.textContent = `Re-activations Left: ${this.maxReactivations}`;
+      }
+
+
+    },
+    /**
+     * Forces the current chunk to be sent when a threshold or duration limit is reached
+     * @param {string} reason - The reason for forcing the chunk to be sent ('max' or 'time')
+     */
+    forceSendChunk(reason) {
+      console.log(`Chunk sent due to ${reason}`);
+
+      // Stop the media recorder to trigger chunk sending
+      this.mediaRecorder.stop();
+
+      // After stopping, send the chunk to the console and server
+      this.mediaRecorder.onstop = () => {
+        this.sendChunkToConsole();
       };
 
-      resetState();
+      // Reset the recording state
+      this.resetState();
 
-      console.log('Chunk', chunkNumber, 'sent due to', reason);
-      chunkNumber++;
-
-      // Clear the forceSendTimer here
-      if (forceSendTimer) {
-        clearTimeout(forceSendTimer);
-        forceSendTimer = null;
+      // Clear the force send timer
+      if (this.forceSendTimer) {
+        clearTimeout(this.forceSendTimer);
+        this.forceSendTimer = null;
       }
 
-      resetTimer = setTimeout(() => {
-        chunkSentButton.classList.remove('red');
-        chunkSentButton.classList.add('grey');
-      }, chunkBeepDuration);
-    }
+      this.chunkSent = true;
 
-    function resetState() {
-      activateButton.classList.remove('active');
-      activateButton.classList.add('inactive');
-      chunkSentButton.classList.remove('red');
-      chunkSentButton.classList.add('grey');
-      isRecording = false;
-      isActive = false;
-      reactivationCount = 0;
-      recordingStartTime = null;
-      delayStartTime = null;
-      conditionCounter = 0;
-      chunkSent = false;
-      recordingTimeDisplay.textContent = 'Recording Time: 0s';
-      delayTimeDisplay.textContent = 'Delay Time Left: 0s';
-      reactivationsLeftDisplay.textContent = `Re-activations Left: ${maxReactivations}`;
-      activateButton.disabled = false;
-      chunkSentButton.disabled = false;
+      // Reset the chunk sent button after a short beep duration
+      this.resetTimer = setTimeout(() => {
+        this.chunkSent = false
+      }, this.chunkBeepDuration);
+      // Mark the chunk as sent and light up the button
+      this.isActive = false; // Set button to inactive state
+    },
+    /**
+     * Sends the recorded audio chunk to the backend for transcription
+     */
+    sendChunkToConsole() {
+      if (this.recordedChunks.length) {
+        const blob = new Blob(this.recordedChunks, {type: 'audio/webm'});
+        console.log('Chunk', this.chunkNumber, 'sent:', blob); // Add log for the chunk
 
-      if (resetTimer) {
-        clearTimeout(resetTimer);
-        resetTimer = null;
-      }
-      if (delayTimer) {
-        clearTimeout(delayTimer);
-        delayTimer = null;
-      }
-      if (inactiveTimer) {
-        clearTimeout(inactiveTimer);
-        inactiveTimer = null;
-      }
-      if (forceSendTimer) {
-        clearTimeout(forceSendTimer);
-        forceSendTimer = null;
-      }
-    }
+        this.convertWebmToWav(blob).then((wavBlob) => {
+          const formData = new FormData();
+          formData.append('file', wavBlob, `chunk_${this.chunkNumber}.wav`);
+          console.log('Sending WAV blob:', wavBlob); // Log the WAV blob before sending
+          fetch(this.backendURI, {
+            method: 'POST',
+            body: formData,
+          })
+              .then((response) => {
+                if (response.ok) {
+                  return response.headers.get('content-type').includes('application/json')
+                      ? response.json()
+                      : response.text();
+                }
+                throw new Error('Network response was not ok.');
+              })
+              .then((data) => {
+                console.log('Transcription result:', data); // Log the transcription result
+                // Emit the transcription data to the parent component (App.vue)\
+                if (data.transcription !== 'false activation') {
+                  this.$emit('transcription-received', data.transcription || 'Transcription failed');
+                }
+              })
+              .catch((error) => {
+                console.error('Error sending the chunk:', error); // Log any error
+              });
+        });
 
-    function startInactiveTimer() {
-      if (inactiveTimer) {
+        this.recordedChunks = []; // Clear the array for the next chunk
+      }
+      this.chunkNumber++;
+    },
+    startInactiveTimer() {
+      // Check if the inactive timer is already running
+      if (this.inactiveTimer) {
         return;
       }
-      inactiveTimer = setTimeout(() => {
-        // Check if the MediaRecorder is recording and stop it
-        if (mediaRecorder.state === 'recording') {
-          // console.log('Stopping MediaRecorder');
-          mediaRecorder.stop();
+
+      // Set the inactive timer
+      this.inactiveTimer = setTimeout(() => {
+        // Check if the MediaRecorder is currently recording and stop it
+        if (this.mediaRecorder.state === 'recording') {
+          this.mediaRecorder.stop();
         } else {
-          console.log('MediaRecorder is not in recording state:', mediaRecorder.state);
+          console.log('MediaRecorder is not in recording state:', this.mediaRecorder.state);
         }
 
-        mediaRecorder.onstop = () => {
-          sendChunkToConsole(); // Log the chunk data when it’s actually sent
+        // Set up the 'onstop' event to send the audio chunk when recording stops
+        this.mediaRecorder.onstop = () => {
+          this.sendChunkToConsole(); // Log and send the chunk data
         };
 
-        // chunkNumber++;
-        reactivationCount = 0;
-        chunkSentButton.classList.remove('grey');
-        chunkSentButton.classList.add('red');
+        // Reset the reactivation count
+        this.reactivationCount = 0;
 
-        resetTimer = setTimeout(() => {
-          chunkSentButton.classList.remove('red');
-          chunkSentButton.classList.add('grey');
-          resetTimer = null;
-        }, chunkBeepDuration);
+        this.chunkSent = true;
 
-        inactiveTimer = null;
-      }, delayDuration);
-    }
+        // Set the reset timer to revert the button's appearance
+        this.resetTimer = setTimeout(() => {
+          this.resetTimer = null; // Clear the reset timer
+          this.chunkSent = false;
+        }, this.chunkBeepDuration);
 
-    setupMediaRecorder(); // Call this after mounting to set up the recorder
+        // Clear the inactive timer after it finishes
+        this.inactiveTimer = null;
+      }, this.delayDuration);
+    },
 
-    drawWaveform();
-  }
+    drawWaveform() {
+      requestAnimationFrame(this.drawWaveform);
+      this.updateRollingBuffer();
+      this.clearCanvas();
+      this.drawWaveformLine();
+      this.drawMinMaxLines();
+      this.drawActivationThresholdLines();
+      this.checkThresholdCondition();
+    },
+
+  },
+
 };
 </script>

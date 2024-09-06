@@ -1,6 +1,9 @@
 local_model_large
 local_model_small
 local_model_joe
+local_model_medium
+faster-whisper-large-v3
+
 *.tar.gz
 
 
