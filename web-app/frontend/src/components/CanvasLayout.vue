@@ -107,13 +107,14 @@ export default {
     return {
       transcription: 'This is where the live transcriptions will appear...',
       backendURI: 'http://localhost:5000/transcribe',
+      thresholdPercentage: 0.2, // sensitivity percentage
       sensitivity: {
-        'activity': 0.2,
-        'reduced': 0.4,
+        'activity': 0.8, // the higher, the less sensitive
+        'reduced': 0.5, // the higher, the less sensitive
       },
       recordingTime: 0, // Initial recording time
       delayTime: 0, // Initial delay time
-      reactivationsLeft: 2, // Initial reactivation count
+      reactivationsLeft: 1, // Initial reactivation count
       canvas: null,
       canvasCtx: null,
       activateButton: null,
@@ -130,7 +131,6 @@ export default {
       activationThreshold: null,
       fps: 60,
       verticalOffset: 60,
-      thresholdPercentage: 0.05,
       forceSendDuration: 7000,
       inactiveTimer: null,
       resetTimer: null,
@@ -293,11 +293,14 @@ export default {
      */
     async convertWebmToWav(blob) {
       // Create an instance of the FFmpeg library
-      const ffmpeg = new FFmpeg();
-
+      // const ffmpeg = new FFmpeg();
+      try {
+        const ffmpeg = new FFmpeg({
+        corePath: '/libs/ffmpeg-core.js',  // Path to the locally stored core file
+      });
       // Load the FFmpeg core into memory
       await ffmpeg.load();
-
+      console.log('ffmpeg loaded successfully')
       // Read the WebM blob data and write it into FFmpeg's virtual filesystem
       const webmFileData = await blob.arrayBuffer();
       await ffmpeg.writeFile('input.webm', new Uint8Array(webmFileData));
@@ -312,6 +315,11 @@ export default {
       // Clean up the FFmpeg instance and return the WAV blob
       ffmpeg.terminate();
       return wavBlob;
+      }catch (e){
+        console.error('couldnt load ffmpeg core')
+      }
+
+
     },
     /**
      * Updates the rolling buffer with the latest audio data from the AnalyserNode

@@ -1,8 +1,10 @@
-Flask
-transformers
+flask
+flask-cors
 torch
-soundfile
-librosa
+torchaudio
+transformers
 numpy
-fuzzywuzzy
-python-Levenshtein
+librosa
+scipy
+pysoundfile
+fuzzywuzzy[speedup]

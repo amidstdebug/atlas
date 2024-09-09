@@ -23,6 +23,7 @@ model_name_or_path = 'local_model_medium'
 processor = AutoProcessor.from_pretrained(model_name_or_path)
 model = AutoModelForSpeechSeq2Seq.from_pretrained(model_name_or_path)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print('Running on', device)
 model.to(device)
 model.eval()
 # Predefined lists and mappings

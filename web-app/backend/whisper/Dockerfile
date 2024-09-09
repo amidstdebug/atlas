@@ -1,27 +1,26 @@
 # Use the official PyTorch image as the base image
-FROM pytorch/pytorch:2.0.1-cuda11.7-cudnn8-runtime
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 
 # Set the working directory
 WORKDIR /usr/src/app
 
-# Copy the conda environment archive created by conda-pack
-COPY env.tar.gz .
+# Install system dependencies for sndfile (libsndfile1-dev)
+# RUN apt-get update && apt-get install -y libsndfile1-dev
+RUN apt-get -y update
+RUN apt-get install -y libsndfile1
+# Copy the requirements.txt file to the container
+COPY requirements.txt .
 
-# Unpack the environment and remove the archive
-RUN mkdir -p /opt/conda/envs/myenv && \
-    tar -xzf env.tar.gz -C /opt/conda/envs/myenv && \
-    rm env.tar.gz
+# Install pip dependencies from requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Set the path to the conda environment
-ENV PATH /opt/conda/envs/myenv/bin:$PATH
-
-# Copy the rest of the application code
-COPY . .
+# Copy the rest of the application code to the container
+# COPY . .
 
 # Expose port 5000
 EXPOSE 5000
 
-# Set the environment variables for Flask
+# Set environment variables for Flask
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=development
 
