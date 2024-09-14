@@ -2,8 +2,17 @@ local_model_large
 local_model_small
 local_model_joe
 local_model_medium
+local_model_medium_justin
 faster-whisper-large-v3
-
+final_model
+web-app/backend/whisper/final_model
+final_model_2
+local_model
+train
+train_model
+validation
+models
+logs
 *.tar.gz
 
 

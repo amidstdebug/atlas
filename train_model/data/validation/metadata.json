@@ -1,0 +1,18 @@
+[
+  {"audio": "../data/validation/wsss11_chunk37_cleaned.wav", "text": "Papa Oscar Sierra Oscar Golf Malaysian seven one three for stop"},
+  {"audio": "../data/validation/wsss11_chunk38_cleaned.wav", "text": "climb seven thousand feet and altitude up to emptu scooter two seven four"},
+  {"audio": "../data/validation/wsss11_chunk39_cleaned.wav", "text": "guys good morning Jetstar asia Two Zero One climbing flight level two four zero passing flight level two one one and will like request a heading one four five due weather"},
+  {"audio": "../data/validation/wsss11_chunk40_cleaned.wav", "text": "singapore Seven Two Six good morning passing thousand seven hundred aroso five bravo"},
+  {"audio": "../data/validation/wsss11_chunk41_cleaned.wav", "text": "singapore radar singapore one three two climbing flight level two hundred"},
+  {"audio": "../data/validation/wsss11_chunk42_cleaned.wav", "text": "at the moment now we are tracking direct to bublo"},
+  {"audio": "../data/validation/wsss11_chunk43_cleaned.wav", "text": "Delhi Nine Four Two good morning Delhi Nine Four Two singapore radar good morning confirm squawk zero two seven six"},
+  {"audio": "../data/validation/wsss11_chunk44_cleaned.wav", "text": "Two hundred Singapore One Three Two"},
+  {"audio": "../data/validation/wsss21_chunk28_cleaned.wav", "text": "three six zero anita direct to Victor juliette Bravo"},
+  {"audio": "../data/validation/wsss21_chunk29_cleaned.wav", "text": "we join seat Singapore one zero six good morning departure air India Three Eight One arroso of five level out of one thousand five hundred plus three thousand turning one one zero climb to six thousand feet Air India Three Eight One"},
+  {"audio": "../data/validation/wsss21_chunk30_cleaned.wav", "text": "scooter two zero zero request higher altitude climb flight level two hundred Singapore one zero six"},
+  {"audio": "../data/validation/wsss21_chunk31_cleaned.wav", "text": "Nine Two Three Six Two scooter Two Zero thank you Mike seven yearly runway two one QNH one zero zero nine firefly three one two four"},
+  {"audio": "../data/validation/wsss21_chunk32_cleaned.wav", "text": "good morning on final runway two one fully visual and runway two one firefly three one two four"},
+  {"audio": "../data/validation/wsss21_chunk33_cleaned.wav", "text": "Three Six Seven Zero good morning descend flight level two one zero squawk two six five one"},
+  {"audio": "../data/validation/wsss21_chunk34_cleaned.wav", "text": "affirm bobag redcap one five seven three one redcap five one seven three roger left heading three five zero climb six thousand feet Singapore one zero six reaching flight level one six zero"}
+
+]

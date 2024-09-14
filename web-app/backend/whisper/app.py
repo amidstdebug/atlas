@@ -19,7 +19,7 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 # Load model and processor
-model_name_or_path = 'local_model_medium'
+model_name_or_path = 'local_model_medium_justin'
 processor = AutoProcessor.from_pretrained(model_name_or_path)
 model = AutoModelForSpeechSeq2Seq.from_pretrained(model_name_or_path)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
