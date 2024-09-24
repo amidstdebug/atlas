@@ -8,6 +8,7 @@ WORKDIR /usr/src/app
 # RUN apt-get update && apt-get install -y libsndfile1-dev
 RUN apt-get -y update
 RUN apt-get install -y libsndfile1
+# RUN apt-get install -y sox
 # Copy the requirements.txt file to the container
 COPY requirements.txt .
 

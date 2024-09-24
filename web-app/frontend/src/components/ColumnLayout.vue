@@ -1,55 +1,103 @@
 <template>
   <el-container>
     <el-main>
-      <!-- Top Column: Live Transcription -->
-      <el-row justify="center" gutter="40" style="margin-bottom: 20px;">
-        <el-col :span="24" class="top-column">
+      <!-- Row: Transcription and Summary Side by Side -->
+      <el-row justify="center" gutter="20" style="margin: 20px 0;">
+        <!-- Left Column: Live Transcription -->
+        <el-col :span="12" class="left-column">
           <el-card class="box-card">
             <template #header>
               <span>Live Transcription</span>
             </template>
-            <div class="content-box transcription-box">
+            <div class="transcription-box" ref="transcriptionBox">
               <!-- Display live transcription -->
-              <p v-if="transcription" v-html="transcription.replace(/\n/g, '<br>')"></p>
-              <p v-else>This is where the live transcriptions will appear...</p>
+              <div v-if="transcriptionBuffer" class="transcription-content">
+                <p v-html="formattedTranscription"></p>
+              </div>
+              <div v-else class="initial-text">
+                <p>This is where the live transcriptions will appear...</p>
+              </div>
             </div>
           </el-card>
         </el-col>
-      </el-row>
 
-      <!-- Bottom Column: Live Summary -->
-      <el-row justify="center" gutter="40" style="margin-top: 20px;">
-        <el-col :span="24" class="bottom-column">
+        <!-- Right Column: Live Summary -->
+        <el-col :span="12" class="right-column">
           <el-card class="box-card">
             <template #header>
               <span>Live Summary</span>
             </template>
-            <div class="content-box ">
-              <slot name="right-content">This is where the live summary will appear...</slot>
+            <div class="content-box">
+              <el-carousel
+                :interval="0"
+                arrow="never"
+                indicator-position="outside"
+                height="600px"
+                :loop="false"
+                :trigger="'click'"
+              >
+                <!-- Initial Carousel Item when no summaries are available -->
+                <el-carousel-item v-if="summaries.length === 0">
+                  <div class="initial-text">
+                    <p>This is where the live summary will appear...</p>
+                  </div>
+                </el-carousel-item>
+
+                <!-- Carousel Items for each summary -->
+                <el-carousel-item
+                  v-for="(summary, index) in summaries"
+                  :key="index"
+                  class="summary-item"
+                  v-else
+                >
+                  <div class="summary-content" ref='summaryContent'>
+                    <el-tag type="info" size="small" class="timestamp-tag">
+                      {{ summary.timestamp }}
+                    </el-tag>
+                    <div
+                      v-html="summary.formattedContent"
+                      class="formatted-summary"
+                      
+                    ></div>
+                  </div>
+                </el-carousel-item>
+              </el-carousel>
             </div>
           </el-card>
         </el-col>
       </el-row>
 
+      <!-- Button Group -->
       <div class="button-group">
         <!-- Live Record Button -->
-        <el-button :style="{ color: liveRecordColor }" class="centered-button same-width-button">
+        <el-button
+          :style="{ color: liveRecordColor }"
+          class="centered-button same-width-button"
+          @click="startLiveRecord"
+        >
           <el-icon class="icon-group">
-            <MicrophoneIcon/>
+            <MicrophoneIcon />
           </el-icon>
           Live Record
         </el-button>
 
         <!-- Upload Recording Button -->
-        <el-button :style="{ color: uploadColor }" class="centered-button same-width-button">
+        <el-button
+          :style="{ color: uploadColor }"
+          class="centered-button same-width-button"
+          @click="uploadRecording"
+        >
           <el-icon class="icon-group">
-            <UploadIcon/>
+            <UploadIcon />
           </el-icon>
           Upload Recording
         </el-button>
 
         <!-- Clear Transcript Button -->
-        <el-button class="centered-button same-width-button" @click="clearTranscription">
+        <el-button
+          class="centered-button same-width-button"
+          @click="clearTranscription"
+        >
           Clear Transcript
         </el-button>
       </div>
@@ -58,13 +106,41 @@
 </template>
 
 <script>
-import {Microphone, Upload} from '@element-plus/icons-vue';
+import {
+  ElContainer,
+  ElMain,
+  ElRow,
+  ElCol,
+  ElCard,
+  ElButton,
+  ElIcon,
+  ElTag,
+  ElCarousel,
+  ElCarouselItem,
+  ElMessage,
+} from 'element-plus';
+import { Microphone, Upload } from '@element-plus/icons-vue';
+import axios from 'axios';
+import debounce from 'lodash.debounce';
+import Prism from 'prismjs';
+import 'prismjs/themes/prism.css';
+import DOMPurify from 'dompurify';
 
 export default {
   name: 'ColumnLayout',
   components: {
     MicrophoneIcon: Microphone,
     UploadIcon: Upload,
+    ElContainer,
+    ElMain,
+    ElRow,
+    ElCol,
+    ElCard,
+    ElButton,
+    ElIcon,
+    ElTag,
+    ElCarousel,
+    ElCarouselItem,
   },
   props: {
     liveRecordColor: {
@@ -77,75 +153,306 @@ export default {
     },
     transcription: {
       type: String,
-      default: '', // Empty string by default, will be replaced by real transcription data
+      default: '',
     },
   },
-  methods: {
-    clearTranscription() {
-      // Clear the transcription by emitting an event or directly updating the prop
-      this.$emit('transcription-cleared');
+  data() {
+    return {
+      transcriptionBuffer: '',
+      summaries: [],
+      maxBufferLength: 2000,
+      apiEndpoint: 'https://jwong.dev/api/summary',
+      isRecording: false,
+      debouncedGenerateSummary: null,
+    };
+  },
+  computed: {
+    formattedTranscription() {
+      return this.transcriptionBuffer
+        ? DOMPurify.sanitize(this.transcriptionBuffer.replace(/\n/g, '<br>'))
+        : '';
     },
+  },
+  watch: {
+    transcription(newVal, oldVal) {
+      if (newVal) {
+        let newText = '';
+        if (!oldVal) {
+          // If there's no old value, consider the entire newVal as new text
+          newText = newVal;
+        } else if (newVal.length > oldVal.length) {
+          // Extract the new text added to the transcription
+          newText = newVal.slice(oldVal.length);
+        } else {
+          // If newVal is shorter or equal, assume transcription was reset
+          newText = newVal;
+        }
+        if (newText.trim()) {
+          this.addTranscription(newText);
+        }
+      }
+    },
+  },
+
+  methods: {
+    addTranscription(newText) {
+      this.transcriptionBuffer += newText + '\n';
+      if (this.transcriptionBuffer.length > this.maxBufferLength) {
+        this.transcriptionBuffer = this.transcriptionBuffer.slice(
+          -this.maxBufferLength
+        );
+      }
+      this.scrollToBottom();
+
+      const lineCount = this.transcriptionBuffer
+        .split('\n')
+        .filter((line) => line.trim() !== '').length;
+
+      if (lineCount >= 3) {
+        this.debouncedGenerateSummary();
+      }
+    },
+    clearTranscription() {
+      this.transcriptionBuffer = '';
+      this.summaries = [];
+      this.$emit('transcription-cleared');
+      ElMessage.success('Transcription and summaries cleared.');
+    },
+    scrollToBottom() {
+      this.$nextTick(() => {
+        const box = this.$refs.transcriptionBox;
+        if (box) {
+          box.scrollTop = box.scrollHeight;
+        }
+        const box2 = this.$refs.summaryContent;
+        if (box2) {
+          box2.scrollTop = box2.scrollHeight;
+        }
+      });
+    },
+    startLiveRecord() {
+      this.isRecording = !this.isRecording;
+      if (this.isRecording) {
+        ElMessage.success('Live recording started.');
+        // Implement actual recording logic here
+      } else {
+        ElMessage.info('Live recording stopped.');
+        // Implement logic to stop recording here
+      }
+    },
+    uploadRecording() {
+      ElMessage.info('Upload functionality not implemented yet.');
+      // Implement actual upload logic here
+    },
+    async generateSummary() {
+      try {
+        let payload = {
+          transcription: this.transcriptionBuffer.trim(),
+          previous_report: null,
+        };
+
+        // Include previous_report if available
+        if (this.summaries.length > 0) {
+          // Get the most recent summary's formatted content as previous_report
+          const previousReport = this.summaries[0].rawContent;
+          payload.previous_report = previousReport;
+        }
+
+        const response = await axios.post(this.apiEndpoint, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization:
+              'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYXRsYXN1c2VyIiwiZXhwIjoxNzI2NTg3NjUxfQ.1N7yP-q4NSXO6dnQPhOrBHZXkBXZAb3mg88AQ7XvDS4', // Replace with your actual token
+          },
+        });
+
+        if (
+          response.data &&
+          response.data.message &&
+          response.data.message.content
+        ) {
+          const apiResponse = response.data.message.content;
+          const summaryObj = this.extractSummary(apiResponse);
+          if (summaryObj) {
+            this.addSummary(summaryObj);
+            ElMessage.success('Summary generated successfully.');
+          } else {
+            ElMessage.warning('No summary found in the API response.');
+          }
+        } else {
+          ElMessage.warning('Unexpected API response structure.');
+        }
+      } catch (error) {
+        console.error('Error generating summary:', error);
+        if (error.response) {
+          if (error.response.status === 401) {
+            ElMessage.error('Unauthorized: Please check your API credentials.');
+          } else {
+            ElMessage.error(
+              `Error ${error.response.status}: ${error.response.statusText}`
+            );
+          }
+        } else if (error.request) {
+          ElMessage.error(
+            'No response from the server. Please check your network.'
+          );
+        } else {
+          ElMessage.error(`Request error: ${error.message}`);
+        }
+      }
+    },
+    extractSummary(apiResponse) {
+      try {
+        const start = apiResponse.indexOf('```');
+        if (start === -1) return null;
+
+        const end = apiResponse.indexOf('```', start + 3);
+        if (end === -1) return null;
+
+        let extractedContent = apiResponse.substring(start + 3, end).trim();
+
+        extractedContent = extractedContent
+          .replace(/\\n/g, '')
+          .replace(/\\\\/g, '\\')
+          .replace(/\\"/g, '"');
+        console.log(extractedContent);
+        const jsonObj = JSON.parse(extractedContent);
+        return jsonObj;
+      } catch (error) {
+        console.error('Error extracting and parsing summary:', error);
+        return null;
+      }
+    },
+    addSummary(summaryObj) {
+      const timestamp = new Date().toLocaleString();
+      const formattedContent = this.formatSummary(summaryObj);
+      this.summaries.unshift({ timestamp, formattedContent, rawContent: summaryObj });
+      if (this.summaries.length > 10) {
+        this.summaries.pop();
+      }
+    },
+    formatSummary(summaryObj) {
+      try {
+        let htmlContent = '';
+
+        Object.entries(summaryObj).forEach(([key, value]) => {
+          const formattedKey = this.capitalizeFirstLetter(
+            this.convertCamelCase(key)
+          );
+
+          if (typeof value === 'object' && !Array.isArray(value)) {
+            htmlContent += `<h3>${formattedKey}</h3>`;
+            htmlContent += this.formatSummary(value);
+          } else if (Array.isArray(value)) {
+            // Check if the array contains objects
+            if (value.length > 0 && typeof value[0] === 'object') {
+              htmlContent += `<h3>${formattedKey}</h3>`;
+              value.forEach((item) => {
+                htmlContent += `<div class="nested-object">`;
+                htmlContent += this.formatSummary(item);
+                htmlContent += `</div>`;
+              });
+            } else {
+              htmlContent += `<h3>${formattedKey}</h3>`;
+              htmlContent += '<ul>';
+              value.forEach((item) => {
+                htmlContent += `<li>${item}</li>`;
+              });
+              htmlContent += '</ul>';
+            }
+          } else {
+            htmlContent += `<p><strong>${formattedKey}:</strong> ${value}</p>`;
+          }
+        });
+
+        return htmlContent;
+      } catch (error) {
+        console.error('Error formatting summary:', error);
+        return 'Invalid summary format.';
+      }
+    },
+    convertCamelCase(text) {
+      return text
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/_/g, ' ')
+        .trim();
+    },
+    capitalizeFirstLetter(text) {
+      if (!text) return '';
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    },
+  },
+  created() {
+    this.debouncedGenerateSummary = debounce(this.generateSummary, 3000);
+  },
+  mounted() {
+    this.$watch(
+      () => this.summaries,
+      () => {
+        this.$nextTick(() => {
+          Prism.highlightAll();
+        });
+      }
+    );
   },
 };
 </script>
 
 <style scoped>
-/* Add to your existing scoped styles */
+/* Reset box-sizing for all elements */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 .el-container {
-  overflow-x: hidden; /* Prevent horizontal scrolling */
+  overflow-x: hidden;
 }
 
-.header-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: white;
-  background-color: #5369c3;
-  padding: 0 20px;
+.left-column,
+.right-column {
+  padding: 0 10px;
 }
 
-.header-content h1 {
-  margin: 0;
-  font-size: 24px;
+.transcription-box {
+  position: relative;
+  min-height: 600px;
+  max-height: 600px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  scroll-behavior: smooth;
+  overflow-y: auto;
 }
 
-.canvas-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.transcription-content {
+  padding: 20px 20px 20px 30px; /* Added left padding */
 }
 
-.top-column,
-.bottom-column {
-  display: flex;
-  flex-direction: column;
-}
-
-.box-card {
+.initial-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #999;
   padding: 20px;
-  display: flex;
-  flex-direction: column;
-  height: auto;
 }
 
 .content-box {
-  padding: 20px;
-  margin-top: 10px;
+  min-height: 600px;
+  max-height: 600px;
+  padding: 0;
   background-color: #f9f9f9;
   border-radius: 4px;
   overflow-y: auto;
-}
-.transcription-box {
-  max-height: 300px; /* Set a maximum height */
-  overflow-y: auto; /* Enable scrolling */
 }
 
 .button-group {
   display: flex;
   justify-content: center;
   gap: 10px;
-  margin-top: 10px;
+  margin-top: 20px;
 }
 
 .icon-group {
@@ -166,17 +473,53 @@ export default {
   max-width: 180px;
 }
 
-.el-col {
-  padding: 0 15px;
+.el-carousel {
+  width: 100%;
 }
 
-.box-card {
-  min-height: 200px;
-  max-height: 350px;
+.el-carousel .el-carousel__item {
+  width: 100%;
+}
+
+.el-carousel__indicators {
+  bottom: 10px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.summary-content {
+  width: 100%;
+  padding: 10px 20px;
+  flex: 1;
+  overflow-y: auto; /* Enable vertical scrolling */
+}
+
+.timestamp-tag {
+  margin-bottom: 10px;
+}
+
+.formatted-summary {
+  width: 100%;
+  font-family: 'Arial', sans-serif;
+  line-height: 1.6;
+}
+
+/* Styling for nested objects within summaries */
+.nested-object {
+  border-left: 2px solid #e0e0e0;
+  padding-left: 10px;
+  margin-bottom: 10px;
+}
+
+.el-col {
+  padding: 0;
 }
 
 .el-row {
-  margin-left: 20px;
-  margin-right: 20px;
+  margin: 0;
 }
 </style>

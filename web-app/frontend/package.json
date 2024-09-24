@@ -12,7 +12,10 @@
     "@ffmpeg/ffmpeg": "^0.12.10",
     "axios": "^1.7.7",
     "core-js": "^3.8.3",
+    "dompurify": "^3.1.6",
     "element-plus": "^2.8.0",
+    "lodash.debounce": "^4.0.8",
+    "prismjs": "^1.29.0",
     "vue": "^3.2.13"
   },
   "devDependencies": {

@@ -8,3 +8,5 @@ librosa
 scipy
 pysoundfile
 fuzzywuzzy[speedup]
+pyjwt
+# sox

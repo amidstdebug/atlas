@@ -4,17 +4,26 @@ local_model_joe
 local_model_medium
 local_model_medium_justin
 faster-whisper-large-v3
+final_model_small
+distil_medium
+distil_medium_justin_retrained
+distil_large
+distil_large_justin
+distil_large_justin_retrained
 final_model
 web-app/backend/whisper/final_model
 final_model_2
 local_model
 train
-train_model
 validation
-models
 logs
+output
+train_cleaned
 *.tar.gz
-
+models_saved
+wandb
+atco2_large_v3
+atco2_medium
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

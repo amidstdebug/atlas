@@ -16,15 +16,17 @@
         Chunk Sent
       </el-button>
     </el-row>
-    <el-row>
-      <div class="timer text-color">Recording Time: {{ recordingTime }}s</div>
-    </el-row>
-    <el-row>
-      <div class="timer text-color">Delay Time Left: {{ delayTime }}s</div>
-    </el-row>
-    <el-row>
-      <div class="timer text-color">Re-activations Left: {{ reactivationsLeft }}</div>
-    </el-row>
+<!--    <el-row>-->
+<!--      <div class="timer text-color">Recording Time: {{ recordingTime }}s</div>-->
+<!--    </el-row>-->
+<!--    <el-row>-->
+<!--      <div class="timer text-color">Delay Time Left: {{ delayTime }}s</div>-->
+<!--    </el-row>-->
+<!--    <el-row>-->
+<!--      <div class="timer text-color">-->
+<!--        Re-activations Left: {{ reactivationsLeft }}-->
+<!--      </div>-->
+<!--    </el-row>-->
   </div>
 </template>
 
@@ -47,8 +49,8 @@ canvas {
 
 .statusButton,
 .chunkSentButton {
-  padding: 20px 40px; /* Increase padding for a larger button */
-  font-size: 20px; /* Increase font size */
+  padding: 10px 20px; /* Reduced padding */
+  font-size: 15px; /* Increase font size */
   border-radius: 8px; /* Adjust border-radius for a larger look */
   margin: 10px; /* Increase margin to give more spacing between buttons */
   color: white;
@@ -60,6 +62,8 @@ canvas {
   justify-content: center;
   align-items: center;
   width: 100%; /* Ensures the container spans the full width */
+  margin-left: 20px; /* Add margin to the left */
+  margin-top:45px;
 }
 
 .no-click {
@@ -106,15 +110,17 @@ export default {
   data() {
     return {
       transcription: 'This is where the live transcriptions will appear...',
-      backendURI: 'http://localhost:5000/transcribe',
-      thresholdPercentage: 0.2, // sensitivity percentage
+      backendURI: 'https://jwong.dev/api/transcribe',
+      thresholdPercentage: 0.20, // sensitivity percentage
       sensitivity: {
-        'activity': 0.8, // the higher, the less sensitive
+        'activity': 0.5, // the higher, the less sensitive
         'reduced': 0.5, // the higher, the less sensitive
       },
       recordingTime: 0, // Initial recording time
       delayTime: 0, // Initial delay time
       reactivationsLeft: 1, // Initial reactivation count
+      delayDuration: 250, // delay in between sending chunks
+      forceSendDuration: 8000, // the higher, the longer each chunk is
       canvas: null,
       canvasCtx: null,
       activateButton: null,
@@ -131,13 +137,11 @@ export default {
       activationThreshold: null,
       fps: 60,
       verticalOffset: 60,
-      forceSendDuration: 7000,
       inactiveTimer: null,
       resetTimer: null,
       delayTimer: null,
       reactivationCount: 0,
       maxReactivations: 1,
-      delayDuration: 500,
       chunkBeepDuration: 250,
       isRecording: false,
       recordingStartTime: null,
@@ -224,11 +228,21 @@ export default {
      */
     setupAudio() {
       // Set up the audio context and analyser node
-      const {analyser} = setupAudioContext(this.drawWaveform);
+      const {analyser, audioContext} = setupAudioContext(this.drawWaveform);
+
+      // Create a gain node to boost the volume
+      const gainNode = audioContext.createGain();
+      gainNode.gain.value = 1.2; // Increase the value to boost the volume (1.0 = no boost, >1.0 = volume boost)
+
+      // Connect the analyser to the gain node, but do not connect to destination (no playback)
+      analyser.connect(gainNode);
+
+      // Do not connect gainNode to audioContext.destination to avoid playback
+      // gainNode.connect(audioContext.destination); // Remove or comment this out
 
       // Store the analyser and buffer properties in the component
       this.analyser = analyser;
-      this.bufferLength = analyser.frequencyBinCount / 2
+      this.bufferLength = analyser.frequencyBinCount / 2;
       this.dataArray = new Uint8Array(this.bufferLength);
 
       // Initialize the rolling buffer and slices for waveform processing
@@ -236,20 +250,30 @@ export default {
       this.rollingBuffer = new Float32Array(this.totalSlices * this.bufferLength).fill(128);
       this.slicesFor4Seconds = 4 * this.fps;
       this.activationThreshold = this.sensitivity['activity'] * this.fps;
-
     },
+
     /**
      * Sets up the MediaRecorder to handle microphone audio recording
      */
     async setupMediaRecorder() {
       // Request microphone access and define audio constraints
-      const constraints = {audio: {sampleRate: 16000}};
+      const constraints = {
+        audio: {
+          sampleRate: 48000,
+          echoCancellation: false,
+          noiseSuppression: false,
+          channelCount: 2
+        }
+      };
 
       // Capture the audio stream from the user's microphone
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       // Initialize the MediaRecorder with the captured audio stream
-      this.mediaRecorder = new MediaRecorder(stream);
+      this.mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm; codecs=opus',
+        audioBitsPerSecond: 192000 // 192 kbps for high-quality audio
+      });
       // Warm up the media recorder
       this.mediaRecorder.start();
       this.mediaRecorder.stop();
@@ -292,35 +316,34 @@ export default {
      * @returns {Promise<Blob>} - A promise that resolves with the WAV blob
      */
     async convertWebmToWav(blob) {
-      // Create an instance of the FFmpeg library
-      // const ffmpeg = new FFmpeg();
       try {
         const ffmpeg = new FFmpeg({
-        corePath: '/libs/ffmpeg-core.js',  // Path to the locally stored core file
-      });
-      // Load the FFmpeg core into memory
-      await ffmpeg.load();
-      console.log('ffmpeg loaded successfully')
-      // Read the WebM blob data and write it into FFmpeg's virtual filesystem
-      const webmFileData = await blob.arrayBuffer();
-      await ffmpeg.writeFile('input.webm', new Uint8Array(webmFileData));
+          corePath: '/libs/ffmpeg-core.js',  // Path to the locally stored core file
+        });
 
-      // Execute FFmpeg command to convert WebM to WAV
-      await ffmpeg.exec(['-i', 'input.webm', 'output.wav']);
+        // Load the FFmpeg core into memory
+        await ffmpeg.load();
+        console.log('ffmpeg loaded successfully');
 
-      // Read the converted WAV data back into a blob
-      const wavData = await ffmpeg.readFile('output.wav');
-      const wavBlob = new Blob([wavData.buffer], {type: 'audio/wav'});
+        // Read the WebM blob data and write it into FFmpeg's virtual filesystem
+        const webmFileData = await blob.arrayBuffer();
+        await ffmpeg.writeFile('input.webm', new Uint8Array(webmFileData));
 
-      // Clean up the FFmpeg instance and return the WAV blob
-      ffmpeg.terminate();
-      return wavBlob;
-      }catch (e){
-        console.error('couldnt load ffmpeg core')
+        // Execute FFmpeg command to convert WebM to WAV with high-quality settings
+        await ffmpeg.exec(['-i', 'input.webm', '-ar', '48000', '-ac', '2', '-b:a', '320k', 'output.wav']);
+
+        // Read the converted WAV data back into a blob
+        const wavData = await ffmpeg.readFile('output.wav');
+        const wavBlob = new Blob([wavData.buffer], {type: 'audio/wav'});
+
+        // Clean up the FFmpeg instance and return the WAV blob
+        ffmpeg.terminate();
+        return wavBlob;
+      } catch (e) {
+        console.error('could not load ffmpeg core');
       }
-
-
-    },
+    }
+    ,
     /**
      * Updates the rolling buffer with the latest audio data from the AnalyserNode
      */
@@ -593,9 +616,17 @@ export default {
           const formData = new FormData();
           formData.append('file', wavBlob, `chunk_${this.chunkNumber}.wav`);
           console.log('Sending WAV blob:', wavBlob); // Log the WAV blob before sending
+
+          // Save the WAV file locally before sending it
+          const fileName = `chunk_${this.chunkNumber}.wav`;
+          // this.saveWavLocally(wavBlob, fileName);
+          const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYXRsYXN1c2VyIiwiZXhwIjoxNzI2NTg3NjUxfQ.1N7yP-q4NSXO6dnQPhOrBHZXkBXZAb3mg88AQ7XvDS4';
           fetch(this.backendURI, {
             method: 'POST',
             body: formData,
+            headers: {
+              'Authorization': `Bearer ${token}`, // Add Bearer token to the Authorization header
+            },
           })
               .then((response) => {
                 if (response.ok) {
@@ -609,7 +640,8 @@ export default {
                 console.log('Transcription result:', data); // Log the transcription result
                 // Emit the transcription data to the parent component (App.vue)\
                 if (data.transcription !== 'false activation') {
-                  this.$emit('transcription-received', data.transcription || 'Transcription failed');
+                  // this.$emit('transcription-received', data.transcription || 'Transcription failed');
+                  this.$emit('transcription-received', data.transcription)
                 }
               })
               .catch((error) => {

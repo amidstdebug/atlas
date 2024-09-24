@@ -13,15 +13,15 @@ torch.cuda.init()
 
 # Define the model path or Hugging Face model ID
 # model_name_or_path = "jlvdoorn/whisper-small-atco2-asr"
-model_name_or_path = 'final_model'
+model_name_or_path = 'jlvdoorn/whisper-medium-atco2-asr'
 
 # Load the processor and model
 processor = AutoProcessor.from_pretrained(model_name_or_path)
 model = AutoModelForSpeechSeq2Seq.from_pretrained(model_name_or_path)
 
 # # Save the processor and model to a local directory
-# processor.save_pretrained("./local_model_small")
-# model.save_pretrained("./local_model_small")
+processor.save_pretrained("../models/atco2_medium")
+model.save_pretrained("../models/atco2_medium")
 
 # Move model to GPU if available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -30,7 +30,7 @@ model.to(device)
 model.eval()
 #
 # Load your audio file (e.g., WAV file)
-audio_input = "./atc_incident.wav"
+audio_input = "./startup.wav"
 audio, original_sample_rate = sf.read(audio_input)
 print(f"Audio data shape: {audio.shape}")
 

@@ -3,40 +3,35 @@
     <el-row justify="center" gutter="40" style="margin: 40px 0;">
       <el-header height="60px">
         <div class="header-content">
-          <h1>ATLAS - Automated Transmission and Logging Analysis System </h1>
+          <h1>ATLAS - Automated Transmission and Logging Analysis System</h1>
         </div>
       </el-header>
     </el-row>
 
     <el-row justify="center" gutter="40">
-      <!-- Left Side: Waveform -->
-      <el-col :span="10">
+      <!-- Canvas Layout Column -->
+      <el-col :span="7" :offset="1">
         <div class="canvas-container">
           <!-- Listen for transcription-received event -->
-          <CanvasLayout ref="canvasLayout" @transcription-received="updateTranscription"></CanvasLayout>
+          <CanvasLayout
+            ref="canvasLayout"
+            @transcription-received="updateTranscription"
+          />
         </div>
       </el-col>
 
-      <!-- Right Side: Columns (Stacked) -->
-      <el-col :span="10">
+      <!-- Transcription and Summary Column -->
+      <el-col :span="16">
         <ColumnLayout
-            :liveRecordColor="liveRecordColor"
-            :uploadColor="uploadColor"
-            :transcription="transcription"
-            @transcription-cleared="clearTranscription"
-        >
-          <template #left-content>
-            <p>This is where the live transcriptions will appear...</p>
-          </template>
-          <template #right-content>
-            <p>This is where the live summary will appear...</p>
-          </template>
-        </ColumnLayout>
+          :liveRecordColor="liveRecordColor"
+          :uploadColor="uploadColor"
+          :transcription="transcription"
+          @transcription-cleared="clearTranscription"
+        />
       </el-col>
     </el-row>
   </div>
 </template>
-
 
 <script>
 import ColumnLayout from './components/ColumnLayout.vue';
@@ -48,6 +43,10 @@ export default {
     ColumnLayout,
     CanvasLayout,
   },
+  mounted() {
+    // Change the title of the tab when the component is mounted
+    document.title = 'ATLAS';
+  },
   data() {
     return {
       liveRecordColor: '#e34660',
@@ -55,20 +54,15 @@ export default {
       transcription: '', // Store the transcription data
     };
   },
-  mounted() {
-    // this.$nextTick(() => {
-    //   this.resizeCanvas();
-    // });
-  },
   methods: {
     // Update the transcription data when the event is received
     updateTranscription(transcriptionData) {
-      this.transcription += transcriptionData + '. \n\n';
+      this.transcription += transcriptionData + '\n\n';
     },
     clearTranscription() {
       // Reset the transcription when it is cleared
       this.transcription = '';
-    }
+    },
   },
 };
 </script>
@@ -85,6 +79,6 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100%; /* Ensure it takes up full width */
+  width: 100%;
 }
 </style>
