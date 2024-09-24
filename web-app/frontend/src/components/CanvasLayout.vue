@@ -16,17 +16,6 @@
         Chunk Sent
       </el-button>
     </el-row>
-<!--    <el-row>-->
-<!--      <div class="timer text-color">Recording Time: {{ recordingTime }}s</div>-->
-<!--    </el-row>-->
-<!--    <el-row>-->
-<!--      <div class="timer text-color">Delay Time Left: {{ delayTime }}s</div>-->
-<!--    </el-row>-->
-<!--    <el-row>-->
-<!--      <div class="timer text-color">-->
-<!--        Re-activations Left: {{ reactivationsLeft }}-->
-<!--      </div>-->
-<!--    </el-row>-->
   </div>
 </template>
 
@@ -63,7 +52,7 @@ canvas {
   align-items: center;
   width: 100%; /* Ensures the container spans the full width */
   margin-left: 20px; /* Add margin to the left */
-  margin-top:45px;
+  margin-top: 45px;
 }
 
 .no-click {
@@ -100,11 +89,9 @@ canvas {
 </style>
 
 <script>
-import {resizeCanvas} from '@/methods/waveform/setupCanvas'
-import {setupAudioContext} from "@/methods/recording/recording";
+import {resizeCanvas} from '@/methods/waveform/setupCanvas';
 import {updateMinMax} from '@/methods/utils/updateMinMax';
 import {updateTimers} from '@/methods/utils/updateTimers';
-import {FFmpeg} from '@ffmpeg/ffmpeg';
 
 export default {
   data() {
@@ -113,8 +100,8 @@ export default {
       backendURI: 'https://jwong.dev/api/transcribe',
       thresholdPercentage: 0.20, // sensitivity percentage
       sensitivity: {
-        'activity': 0.5, // the higher, the less sensitive
-        'reduced': 0.5, // the higher, the less sensitive
+        activity: 0.5, // the higher, the less sensitive
+        reduced: 0.5, // the higher, the less sensitive
       },
       recordingTime: 0, // Initial recording time
       delayTime: 0, // Initial delay time
@@ -151,17 +138,17 @@ export default {
       chunkSent: false,
       chunkNumber: 1,
       forceSendTimer: null,
-      mediaRecorder: null,
-      recordedChunks: [],
-
-
+      audioContext: null,
+      audioWorkletNode: null,
+      recordedSamples: [],
+      sampleRate: 48000,
+      audioStream: null,
     };
   },
   mounted() {
     this.$nextTick(() => {
       this.setupCanvas();
       this.setupAudio();
-      this.setupMediaRecorder();
       this.drawWaveform();
       this.startUpdatingTimers();
     });
@@ -206,7 +193,7 @@ export default {
 
       // Check if the 2D context is available
       if (!canvasCtx) {
-        console.error("Failed to get 2D context from canvas.");
+        console.error('Failed to get 2D context from canvas.');
         return;
       }
 
@@ -214,136 +201,49 @@ export default {
       this.canvas = canvas;
       this.canvasCtx = canvasCtx;
 
-      // Retrieve and store button and display elements using Vue's ref system
-      this.recordingTimeDisplay = this.$refs.recordingTime;
-      this.delayTimeDisplay = this.$refs.delayTime;
-      this.reactivationsLeftDisplay = this.$refs.reactivationsLeft;
-
       // Resize the canvas for optimal display
       resizeCanvas(this.canvas, this.canvasCtx);
     },
-
     /**
-     * Initializes the audio context and analyser for capturing real-time audio data
+     * Initializes the audio context and sets up the AudioWorkletNode
      */
-    setupAudio() {
-      // Set up the audio context and analyser node
-      const {analyser, audioContext} = setupAudioContext(this.drawWaveform);
+    async setupAudio() {
+      // Request microphone access
+      this.audioStream = await navigator.mediaDevices.getUserMedia({audio: true});
 
-      // Create a gain node to boost the volume
-      const gainNode = audioContext.createGain();
-      gainNode.gain.value = 1.2; // Increase the value to boost the volume (1.0 = no boost, >1.0 = volume boost)
+      // Create AudioContext
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: this.sampleRate,
+      });
 
-      // Connect the analyser to the gain node, but do not connect to destination (no playback)
-      analyser.connect(gainNode);
+      // Create MediaStreamSource
+      const source = this.audioContext.createMediaStreamSource(this.audioStream);
 
-      // Do not connect gainNode to audioContext.destination to avoid playback
-      // gainNode.connect(audioContext.destination); // Remove or comment this out
-
-      // Store the analyser and buffer properties in the component
-      this.analyser = analyser;
-      this.bufferLength = analyser.frequencyBinCount / 2;
+      // Set up analyser for visualization
+      this.analyser = this.audioContext.createAnalyser();
+      source.connect(this.analyser);
+      this.bufferLength = this.analyser.frequencyBinCount;
       this.dataArray = new Uint8Array(this.bufferLength);
 
-      // Initialize the rolling buffer and slices for waveform processing
-      this.totalSlices = 20 * this.fps;
-      this.rollingBuffer = new Float32Array(this.totalSlices * this.bufferLength).fill(128);
-      this.slicesFor4Seconds = 4 * this.fps;
-      this.activationThreshold = this.sensitivity['activity'] * this.fps;
-    },
+      // Load the AudioWorkletProcessor
+      await this.audioContext.audioWorklet.addModule('@/audio/processor.js');
 
-    /**
-     * Sets up the MediaRecorder to handle microphone audio recording
-     */
-    async setupMediaRecorder() {
-      // Request microphone access and define audio constraints
-      const constraints = {
-        audio: {
-          sampleRate: 48000,
-          echoCancellation: false,
-          noiseSuppression: false,
-          channelCount: 2
-        }
-      };
+      // Create AudioWorkletNode
+      this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
 
-      // Capture the audio stream from the user's microphone
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      // Connect nodes
+      source.connect(this.audioWorkletNode);
+      // Uncomment if you want to hear the audio playback
+      // this.audioWorkletNode.connect(this.audioContext.destination);
 
-      // Initialize the MediaRecorder with the captured audio stream
-      this.mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm; codecs=opus',
-        audioBitsPerSecond: 192000 // 192 kbps for high-quality audio
-      });
-      // Warm up the media recorder
-      this.mediaRecorder.start();
-      this.mediaRecorder.stop();
-      // Set up event handler for capturing audio chunks when data is available
-      this.mediaRecorder.ondataavailable = event => {
-        if (event.data.size > 0) {
-          // Store the recorded chunk in the recordedChunks array
-          this.recordedChunks.push(event.data);
-        } else {
-          console.log('No data available:', event);
+      // Handle messages from the processor
+      this.audioWorkletNode.port.onmessage = (event) => {
+        if (this.isRecording) {
+          const audioData = event.data;
+          this.recordedSamples.push(...audioData);
         }
       };
     },
-    /**
-     * Saves the recorded audio chunk as a WAV file locally
-     * @param {Blob} blob - The audio blob to be saved
-     * @param {string} fileName - The name of the file to save
-     */
-    saveWavLocally(blob, fileName) {
-      // Create a temporary URL for the audio blob
-      const url = URL.createObjectURL(blob);
-
-      // Create a hidden anchor element to trigger the download
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = fileName;  // Set the desired file name
-
-      // Append the anchor to the DOM and trigger the download
-      document.body.appendChild(a);
-      a.click();
-
-      // Revoke the object URL and clean up the DOM after the download
-      URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    },
-    /**
-     * Converts a WebM audio file to WAV format using FFmpeg
-     * @param {Blob} blob - The WebM audio blob to be converted
-     * @returns {Promise<Blob>} - A promise that resolves with the WAV blob
-     */
-    async convertWebmToWav(blob) {
-      try {
-        const ffmpeg = new FFmpeg({
-          corePath: '/libs/ffmpeg-core.js',  // Path to the locally stored core file
-        });
-
-        // Load the FFmpeg core into memory
-        await ffmpeg.load();
-        console.log('ffmpeg loaded successfully');
-
-        // Read the WebM blob data and write it into FFmpeg's virtual filesystem
-        const webmFileData = await blob.arrayBuffer();
-        await ffmpeg.writeFile('input.webm', new Uint8Array(webmFileData));
-
-        // Execute FFmpeg command to convert WebM to WAV with high-quality settings
-        await ffmpeg.exec(['-i', 'input.webm', '-ar', '48000', '-ac', '2', '-b:a', '320k', 'output.wav']);
-
-        // Read the converted WAV data back into a blob
-        const wavData = await ffmpeg.readFile('output.wav');
-        const wavBlob = new Blob([wavData.buffer], {type: 'audio/wav'});
-
-        // Clean up the FFmpeg instance and return the WAV blob
-        ffmpeg.terminate();
-        return wavBlob;
-      } catch (e) {
-        console.error('could not load ffmpeg core');
-      }
-    }
-    ,
     /**
      * Updates the rolling buffer with the latest audio data from the AnalyserNode
      */
@@ -369,7 +269,7 @@ export default {
      */
     drawWaveformLine() {
       this.canvasCtx.lineWidth = 2;
-      this.canvasCtx.strokeStyle = '#00FFCC';  // Color of the waveform line
+      this.canvasCtx.strokeStyle = '#00FFCC'; // Color of the waveform line
       this.canvasCtx.beginPath();
 
       const sliceWidth = this.canvas.width / this.totalSlices;
@@ -388,8 +288,9 @@ export default {
         }
         x += sliceWidth;
       }
-      this.canvasCtx.stroke();  // Draw the waveform
-    }, /**
+      this.canvasCtx.stroke(); // Draw the waveform
+    },
+    /**
      * Draws the min and max value lines on the canvas to indicate signal extremes
      */
     drawMinMaxLines() {
@@ -425,7 +326,7 @@ export default {
       const activationThresholdY = this.canvas.height * (this.thresholdPercentage / 2);
 
       // Draw the upper threshold line
-      this.canvasCtx.strokeStyle = '#919b07';  // Yellow color for threshold lines
+      this.canvasCtx.strokeStyle = '#919b07'; // Yellow color for threshold lines
       this.canvasCtx.beginPath();
       this.canvasCtx.moveTo(0, centerY - activationThresholdY);
       this.canvasCtx.lineTo(this.canvas.width, centerY - activationThresholdY);
@@ -442,7 +343,6 @@ export default {
       const centerY = this.canvas.height / 2 - this.verticalOffset;
       const centerThreshold = this.canvas.height * this.thresholdPercentage;
       let reducedThreshold = centerThreshold * this.sensitivity['reduced']; // Make it more responsive to changes
-
 
       // Get the current min and max values from the rolling buffer
       const {min: normalizedMinValue, max: normalizedMaxValue} = updateMinMax(
@@ -475,7 +375,7 @@ export default {
         if (!this.isActive && !this.chunkSent) {
           this.activateRecording();
         }
-        this.conditionCounter = 0;  // Reset the counter if the signal exceeds the threshold
+        this.conditionCounter = 0; // Reset the counter if the signal exceeds the threshold
 
         // Clear the inactivity timer if it exists
         if (this.inactiveTimer) {
@@ -483,13 +383,13 @@ export default {
           this.inactiveTimer = null;
         }
       }
-    }, /**
-     * Activates recording by starting the media recorder and updating the UI
+    },
+    /**
+     * Activates recording by starting to collect audio data and updating the UI
      */
     activateRecording() {
       console.log('Activating recording');
 
-      // this.chunkSent = true;
       this.isActive = true;
       this.isRecording = true;
       this.recordingStartTime = Date.now();
@@ -507,17 +407,13 @@ export default {
       }, this.forceSendDuration);
 
       // Update recording time
-      this.recordingTime = 0;  // Reset recording time when starting
+      this.recordingTime = 0; // Reset recording time when starting
 
-      // Start the media recorder if it is inactive
-      if (this.mediaRecorder.state === 'inactive') {
-        this.mediaRecorder.start();
-      }
       // Reset chunkSent flag since we are starting a new recording
       this.chunkSent = false;
     },
     /**
-     * Deactivates recording by stopping the media recorder and updating the UI
+     * Deactivates recording by stopping the collection of audio data and updating the UI
      */
     deactivateRecording() {
       console.log('Deactivating recording');
@@ -559,17 +455,7 @@ export default {
       this.chunkSent = false;
 
       // Update the UI (referencing the refs)
-      if (this.$refs.recordingTime) {
-        this.$refs.recordingTime.textContent = 'Recording Time: 0s';
-      }
-      if (this.$refs.delayTime) {
-        this.$refs.delayTime.textContent = 'Delay Time Left: 0s';
-      }
-      if (this.$refs.reactivationsLeft) {
-        this.$refs.reactivationsLeft.textContent = `Re-activations Left: ${this.maxReactivations}`;
-      }
-
-
+      // ... (Update any UI elements if needed)
     },
     /**
      * Forces the current chunk to be sent when a threshold or duration limit is reached
@@ -578,13 +464,8 @@ export default {
     forceSendChunk(reason) {
       console.log(`Chunk sent due to ${reason}`);
 
-      // Stop the media recorder to trigger chunk sending
-      this.mediaRecorder.stop();
-
-      // After stopping, send the chunk to the console and server
-      this.mediaRecorder.onstop = () => {
-        this.sendChunkToConsole();
-      };
+      // Process the recorded samples
+      this.sendChunkToConsole();
 
       // Reset the recording state
       this.resetState();
@@ -599,7 +480,7 @@ export default {
 
       // Reset the chunk sent button after a short beep duration
       this.resetTimer = setTimeout(() => {
-        this.chunkSent = false
+        this.chunkSent = false;
       }, this.chunkBeepDuration);
       // Mark the chunk as sent and light up the button
       this.isActive = false; // Set button to inactive state
@@ -608,48 +489,45 @@ export default {
      * Sends the recorded audio chunk to the backend for transcription
      */
     sendChunkToConsole() {
-      if (this.recordedChunks.length) {
-        const blob = new Blob(this.recordedChunks, {type: 'audio/webm'});
-        console.log('Chunk', this.chunkNumber, 'sent:', blob); // Add log for the chunk
+      if (this.recordedSamples.length) {
+        const wavBlob = this.encodeWAV(this.recordedSamples, this.sampleRate);
+        console.log('Chunk', this.chunkNumber, 'sent:', wavBlob);
 
-        this.convertWebmToWav(blob).then((wavBlob) => {
-          const formData = new FormData();
-          formData.append('file', wavBlob, `chunk_${this.chunkNumber}.wav`);
-          console.log('Sending WAV blob:', wavBlob); // Log the WAV blob before sending
+        const formData = new FormData();
+        formData.append('file', wavBlob, `chunk_${this.chunkNumber}.wav`);
+        console.log('Sending WAV blob:', wavBlob);
 
-          // Save the WAV file locally before sending it
-          const fileName = `chunk_${this.chunkNumber}.wav`;
-          // this.saveWavLocally(wavBlob, fileName);
-          const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYXRsYXN1c2VyIiwiZXhwIjoxNzI2NTg3NjUxfQ.1N7yP-q4NSXO6dnQPhOrBHZXkBXZAb3mg88AQ7XvDS4';
-          fetch(this.backendURI, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'Authorization': `Bearer ${token}`, // Add Bearer token to the Authorization header
-            },
-          })
-              .then((response) => {
-                if (response.ok) {
-                  return response.headers.get('content-type').includes('application/json')
-                      ? response.json()
-                      : response.text();
-                }
-                throw new Error('Network response was not ok.');
-              })
-              .then((data) => {
-                console.log('Transcription result:', data); // Log the transcription result
-                // Emit the transcription data to the parent component (App.vue)\
-                if (data.transcription !== 'false activation') {
-                  // this.$emit('transcription-received', data.transcription || 'Transcription failed');
-                  this.$emit('transcription-received', data.transcription)
-                }
-              })
-              .catch((error) => {
-                console.error('Error sending the chunk:', error); // Log any error
-              });
-        });
+        // Save the WAV file locally before sending it
+        // const fileName = `chunk_${this.chunkNumber}.wav`;
+        // this.saveWavLocally(wavBlob, fileName);
+        const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYXRsYXN1c2VyIiwiZXhwIjoxNzI2NTg3NjUxfQ.1N7yP-q4NSXO6dnQPhOrBHZXkBXZAb3mg88AQ7XvDS4';
+        fetch(this.backendURI, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            Authorization: `Bearer ${token}`, // Add Bearer token to the Authorization header
+          },
+        })
+            .then((response) => {
+              if (response.ok) {
+                return response.headers.get('content-type').includes('application/json')
+                    ? response.json()
+                    : response.text();
+              }
+              throw new Error('Network response was not ok.');
+            })
+            .then((data) => {
+              console.log('Transcription result:', data); // Log the transcription result
+              // Emit the transcription data to the parent component (App.vue)
+              if (data.transcription !== 'false activation') {
+                this.$emit('transcription-received', data.transcription);
+              }
+            })
+            .catch((error) => {
+              console.error('Error sending the chunk:', error); // Log any error
+            });
 
-        this.recordedChunks = []; // Clear the array for the next chunk
+        this.recordedSamples = []; // Clear the array for the next chunk
       }
       this.chunkNumber++;
     },
@@ -661,17 +539,8 @@ export default {
 
       // Set the inactive timer
       this.inactiveTimer = setTimeout(() => {
-        // Check if the MediaRecorder is currently recording and stop it
-        if (this.mediaRecorder.state === 'recording') {
-          this.mediaRecorder.stop();
-        } else {
-          console.log('MediaRecorder is not in recording state:', this.mediaRecorder.state);
-        }
-
-        // Set up the 'onstop' event to send the audio chunk when recording stops
-        this.mediaRecorder.onstop = () => {
-          this.sendChunkToConsole(); // Log and send the chunk data
-        };
+        // Process the recorded samples
+        this.sendChunkToConsole();
 
         // Reset the reactivation count
         this.reactivationCount = 0;
@@ -691,6 +560,13 @@ export default {
 
     drawWaveform() {
       requestAnimationFrame(this.drawWaveform);
+      if (!this.rollingBuffer) {
+        // Initialize the rolling buffer
+        this.totalSlices = 20 * this.fps;
+        this.rollingBuffer = new Float32Array(this.totalSlices * this.bufferLength).fill(128);
+        this.slicesFor4Seconds = 4 * this.fps;
+        this.activationThreshold = this.sensitivity['activity'] * this.fps;
+      }
       this.updateRollingBuffer();
       this.clearCanvas();
       this.drawWaveformLine();
@@ -698,8 +574,83 @@ export default {
       this.drawActivationThresholdLines();
       this.checkThresholdCondition();
     },
+    /**
+     * Encodes the recorded samples into a WAV Blob
+     * @param {Float32Array} samples - The recorded audio samples
+     * @param {number} sampleRate - The sample rate of the audio context
+     * @returns {Blob} - The WAV file blob
+     */
+    encodeWAV(samples, sampleRate) {
+      const buffer = new ArrayBuffer(44 + samples.length * 2);
+      const view = new DataView(buffer);
 
+      /* RIFF identifier */
+      this.writeString(view, 0, 'RIFF');
+      /* file length */
+      view.setUint32(4, 36 + samples.length * 2, true);
+      /* RIFF type */
+      this.writeString(view, 8, 'WAVE');
+      /* format chunk identifier */
+      this.writeString(view, 12, 'fmt ');
+      /* format chunk length */
+      view.setUint32(16, 16, true);
+      /* sample format (raw) */
+      view.setUint16(20, 1, true);
+      /* channel count */
+      view.setUint16(22, 1, true);
+      /* sample rate */
+      view.setUint32(24, sampleRate, true);
+      /* byte rate (sample rate * block align) */
+      view.setUint32(28, sampleRate * 2, true);
+      /* block align (channel count * bytes per sample) */
+      view.setUint16(32, 2, true);
+      /* bits per sample */
+      view.setUint16(34, 16, true);
+      /* data chunk identifier */
+      this.writeString(view, 36, 'data');
+      /* data chunk length */
+      view.setUint32(40, samples.length * 2, true);
+
+      // Write the PCM samples
+      let offset = 44;
+      for (let i = 0; i < samples.length; i++, offset += 2) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      }
+
+      return new Blob([view], {type: 'audio/wav'});
+    },
+    /**
+     * Helper function to write strings to the DataView
+     */
+    writeString(view, offset, string) {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    },
+    /**
+     * Saves the recorded audio chunk as a WAV file locally
+     * @param {Blob} blob - The audio blob to be saved
+     * @param {string} fileName - The name of the file to save
+     */
+    saveWavLocally(blob, fileName) {
+      // Create a temporary URL for the audio blob
+      const url = URL.createObjectURL(blob);
+
+      // Create a hidden anchor element to trigger the download
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = fileName; // Set the desired file name
+
+      // Append the anchor to the DOM and trigger the download
+      document.body.appendChild(a);
+      a.click();
+
+      // Revoke the object URL and clean up the DOM after the download
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    },
   },
-
 };
 </script>
