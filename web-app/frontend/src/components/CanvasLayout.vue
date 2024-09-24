@@ -146,13 +146,15 @@ export default {
     };
   },
   mounted() {
-    this.$nextTick(() => {
-      this.setupCanvas();
-      this.setupAudio();
+    this.setupCanvas();
+    const initialize = async () => {
+      await this.setupAudio(); // Wait for setupAudio to complete
       this.drawWaveform();
       this.startUpdatingTimers();
-    });
+    };
+    initialize();
   },
+
   methods: {
 
     updateTimerValues(recordingTime, delayTime, reactivationsLeft) {
@@ -208,54 +210,53 @@ export default {
      * Initializes the audio context and sets up the AudioWorkletNode
      */
     async setupAudio() {
-      // Request microphone access
-      this.audioStream = await navigator.mediaDevices.getUserMedia({audio: true});
+      try {
+        // Request microphone access
+        this.audioStream = await navigator.mediaDevices.getUserMedia({audio: true});
 
-      // Create AudioContext
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: this.sampleRate,
-      });
+        // Create AudioContext without specifying sample rate
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-      // Create MediaStreamSource
-      const source = this.audioContext.createMediaStreamSource(this.audioStream);
+        // Retrieve the actual sample rate
+        this.sampleRate = this.audioContext.sampleRate;
 
-      // Set up analyser for visualization
-      this.analyser = this.audioContext.createAnalyser();
-      source.connect(this.analyser);
-      this.bufferLength = this.analyser.frequencyBinCount;
-      this.dataArray = new Uint8Array(this.bufferLength);
+        // Create MediaStreamSource
+        const source = this.audioContext.createMediaStreamSource(this.audioStream);
 
-      // Load the AudioWorkletProcessor
-      await this.audioContext.audioWorklet.addModule('@/audio/processor.js');
+        // Set up analyser for visualization
+        this.analyser = this.audioContext.createAnalyser();
+        source.connect(this.analyser);
+        this.bufferLength = this.analyser.frequencyBinCount;
+        this.dataArray = new Uint8Array(this.bufferLength);
 
-      // Create AudioWorkletNode
-      this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
+        // Initialize the rolling buffer and related properties after bufferLength is set
+        this.totalSlices = 20 * this.fps;
+        this.rollingBuffer = new Float32Array(this.totalSlices * this.bufferLength).fill(128);
+        this.slicesFor4Seconds = 4 * this.fps;
+        this.activationThreshold = this.sensitivity['activity'] * this.fps;
 
-      // Connect nodes
-      source.connect(this.audioWorkletNode);
-      // Uncomment if you want to hear the audio playback
-      // this.audioWorkletNode.connect(this.audioContext.destination);
+        // Load the AudioWorkletProcessor
+        await this.audioContext.audioWorklet.addModule('@/audio/processor.js');
 
-      // Handle messages from the processor
-      this.audioWorkletNode.port.onmessage = (event) => {
-        if (this.isRecording) {
-          const audioData = event.data;
-          this.recordedSamples.push(...audioData);
-        }
-      };
-    },
-    /**
-     * Updates the rolling buffer with the latest audio data from the AnalyserNode
-     */
-    updateRollingBuffer() {
-      // Fetch time-domain audio data from the analyser
-      this.analyser.getByteTimeDomainData(this.dataArray);
 
-      // Shift the rolling buffer to make room for new data
-      this.rollingBuffer.set(this.rollingBuffer.subarray(this.bufferLength), 0);
+        // Create AudioWorkletNode
+        this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
 
-      // Append the latest audio data to the end of the rolling buffer
-      this.rollingBuffer.set(this.dataArray, this.rollingBuffer.length - this.bufferLength);
+        // Connect nodes
+        source.connect(this.audioWorkletNode);
+        // Uncomment if you want to hear the audio playback
+        // this.audioWorkletNode.connect(this.audioContext.destination);
+
+        // Handle messages from the processor
+        this.audioWorkletNode.port.onmessage = (event) => {
+          if (this.isRecording) {
+            const audioData = event.data;
+            this.recordedSamples.push(...audioData);
+          }
+        };
+      } catch (error) {
+        console.error('Error in setupAudio:', error);
+      }
     },
     /**
      * Clears the canvas to prepare it for the next frame of the waveform
@@ -498,8 +499,8 @@ export default {
         console.log('Sending WAV blob:', wavBlob);
 
         // Save the WAV file locally before sending it
-        // const fileName = `chunk_${this.chunkNumber}.wav`;
-        // this.saveWavLocally(wavBlob, fileName);
+        const fileName = `chunk_${this.chunkNumber}.wav`;
+        this.saveWavLocally(wavBlob, fileName);
         const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYXRsYXN1c2VyIiwiZXhwIjoxNzI2NTg3NjUxfQ.1N7yP-q4NSXO6dnQPhOrBHZXkBXZAb3mg88AQ7XvDS4';
         fetch(this.backendURI, {
           method: 'POST',
@@ -560,13 +561,11 @@ export default {
 
     drawWaveform() {
       requestAnimationFrame(this.drawWaveform);
-      if (!this.rollingBuffer) {
-        // Initialize the rolling buffer
-        this.totalSlices = 20 * this.fps;
-        this.rollingBuffer = new Float32Array(this.totalSlices * this.bufferLength).fill(128);
-        this.slicesFor4Seconds = 4 * this.fps;
-        this.activationThreshold = this.sensitivity['activity'] * this.fps;
+      // Ensure that analyser is initialized
+      if (!this.analyser) {
+        return; // Exit if analyser is not ready
       }
+
       this.updateRollingBuffer();
       this.clearCanvas();
       this.drawWaveformLine();

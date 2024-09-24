@@ -1,16 +1,11 @@
-// processor.js
+// public/audio/processor.js
+
 class RecorderProcessor extends AudioWorkletProcessor {
   process(inputs, outputs, parameters) {
     const input = inputs[0];
     if (input && input[0]) {
       // Send the input audio samples to the main thread
-      const samples = input[0];
-
-      // Clone the samples to avoid issues with transferring
-      const clonedSamples = new Float32Array(samples.length);
-      clonedSamples.set(samples);
-
-      this.port.postMessage(clonedSamples);
+      this.port.postMessage(input[0]);
     }
     return true; // Keep processor alive
   }
