@@ -9,4 +9,8 @@ scipy
 pysoundfile
 fuzzywuzzy[speedup]
 pyjwt
+bs4
+lxml
+pyarrow
+fastparquet
 # sox

@@ -1,5 +1,5 @@
 # transcription.py
-
+import pandas as pd
 import re
 import logging
 from fuzzywuzzy import fuzz, process
@@ -147,7 +147,7 @@ def remove_whisper_artifacts(transcription):
 	for pattern, replacement, description in artifacts:
 		transcription_before = transcription
 		transcription = re.sub(pattern, replacement, transcription, flags=re.IGNORECASE)
-		# log_transcription_change(description, transcription_before, transcription)
+	# log_transcription_change(description, transcription_before, transcription)
 
 	transcription = re.sub(r'\s*\.\s*$', '.', transcription)
 	transcription = re.sub(r'\.\.', '.', transcription)
@@ -187,7 +187,7 @@ def standardize_directions(transcription):
 	for pattern, replacement, description in transformations:
 		transcription_before = transcription
 		transcription = re.sub(pattern, replacement, transcription, flags=re.IGNORECASE)
-		# log_transcription_change(description, transcription_before, transcription)
+	# log_transcription_change(description, transcription_before, transcription)
 
 	transcription = re.sub(r'(\d+)\s+([LRC])\b', r'\1\2', transcription, flags=re.IGNORECASE)
 	return transcription
@@ -237,7 +237,7 @@ def combine_adjacent_digits_for_callsigns(transcription):
 	for pattern, replacement, description in digit_patterns:
 		transcription_before = transcription
 		transcription = re.sub(pattern, replacement, transcription, flags=re.IGNORECASE)
-		# log_transcription_change(description, transcription_before, transcription)
+	# log_transcription_change(description, transcription_before, transcription)
 	return transcription
 
 
@@ -294,7 +294,7 @@ def combine_numbers_with_units(transcription):
 	for pattern, replacement, description in combinations:
 		transcription_before = transcription
 		transcription = re.sub(pattern, replacement, transcription, flags=re.IGNORECASE)
-		# log_transcription_change(description, transcription_before, transcription)
+	# log_transcription_change(description, transcription_before, transcription)
 	return transcription
 
 
@@ -346,7 +346,7 @@ def combine_remaining_adjacent_digits(transcription):
 	for pattern, replacement, description in patterns:
 		transcription_before = transcription
 		transcription = re.sub(pattern, replacement, transcription, flags=re.IGNORECASE)
-		# log_transcription_change(description, transcription_before, transcription)
+	# log_transcription_change(description, transcription_before, transcription)
 	return transcription
 
 
@@ -369,6 +369,27 @@ def validate_transcription(transcription):
 		return "false activation"
 	return transcription
 
+
+def handle_icao_callsign(transcription):
+	parquet_file = './aircraft_callsign.parquet'
+	df = pd.read_parquet(parquet_file)
+
+	def replace_callsign_with_icao(text: str, df: pd.DataFrame) -> str:
+		# Create a dictionary mapping callsigns to ICAO codes
+		callsign_to_icao = dict(zip(df['Callsign'], df['ICAO']))
+
+		# Replace callsigns with ICAO codes in the text
+		for callsign, icao in callsign_to_icao.items():
+			# Use regex to replace callsign followed by a space and a number with ICAO followed by the number
+			pattern = r'\b' + re.escape(callsign) + r'\b\s*(\d+)'
+			replacement = icao + r'\1'
+			text = re.sub(pattern, replacement, text)
+
+		return text
+
+	transcription = replace_callsign_with_icao(transcription, df)
+
+	return transcription
 
 def capitalize_first_word(transcription):
 	transcription_before = transcription
@@ -415,5 +436,7 @@ def apply_custom_fixes(transcription):
 	transcription = validate_transcription(transcription)
 	transcription = capitalize_first_word(transcription)
 
+	# 7. Handle Aircraft Callsign
+	transcription = handle_icao_callsign(transcription)
 	logging.info(f"Final transcription: '{transcription}'")
 	return transcription

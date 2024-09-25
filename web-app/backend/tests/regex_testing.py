@@ -351,11 +351,11 @@ test_cases = [
 	("Maintain speed one hundred knots", "Maintain speed 100kts"),
 
 	# Callsigns
-	("American twelve three", "American 123"),
-	("Delta five sixty seven", "Delta 567"),
+	("American twelve three", "AAL123"),
+	("Delta five sixty seven", "DAL567"),
 	("Cessna four five nine", "Cessna 459"),
 	("Air Force one", "Air Force 1"),
-	("Navy six three", "Navy 63"),
+	("Navy six three", "NVY63"),
 
 	# Runway Identifiers
 	("Cleared for runway eighteen left", "Cleared for runway 18L"),
@@ -406,6 +406,7 @@ test_cases = [
 	("Descend and maintain four thousand feet", "Descend and maintain 4000ft"),
 	("Climb to flight level two ninety", "Climb to FL290"),
 	("Taxi to alpha thirteen", "Taxi to Alpha 13"),
+	("Singapore 638 how do you read?", "SIA638 how do you read?"),
 
 ]
 
