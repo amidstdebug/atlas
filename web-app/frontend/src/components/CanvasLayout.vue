@@ -143,6 +143,11 @@ export default {
       recordedSamples: [],
       sampleRate: 48000,
       audioStream: null,
+      /* Pre-buffer properties */
+      preBufferDuration: 0.3, // Duration in seconds for pre-buffering
+      preBufferSize: null,
+      preBuffer: null,
+      preBufferIndex: 0,
     };
   },
   mounted() {
@@ -154,9 +159,7 @@ export default {
     };
     initialize();
   },
-
   methods: {
-
     updateTimerValues(recordingTime, delayTime, reactivationsLeft) {
       this.recordingTime = recordingTime;
       this.delayTime = delayTime;
@@ -231,13 +234,12 @@ export default {
 
         // Initialize the rolling buffer and related properties after bufferLength is set
         this.totalSlices = 20 * this.fps;
-        this.rollingBuffer = new Float32Array(this.totalSlices * this.bufferLength).fill(128);
+        this.rollingBuffer = new Uint8Array(this.totalSlices * this.bufferLength).fill(128); // Changed to Uint8Array
         this.slicesFor4Seconds = 4 * this.fps;
         this.activationThreshold = this.sensitivity['activity'] * this.fps;
 
         // Load the AudioWorkletProcessor
-        await this.audioContext.audioWorklet.addModule('@/audio/processor.js');
-
+        await this.audioContext.audioWorklet.addModule('audio/processor.js');
 
         // Create AudioWorkletNode
         this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
@@ -247,16 +249,41 @@ export default {
         // Uncomment if you want to hear the audio playback
         // this.audioWorkletNode.connect(this.audioContext.destination);
 
+        // Initialize pre-buffer
+        this.preBufferSize = this.preBufferDuration * this.sampleRate;
+        this.preBuffer = new Float32Array(this.preBufferSize);
+        this.preBufferIndex = 0;
+
         // Handle messages from the processor
         this.audioWorkletNode.port.onmessage = (event) => {
-          if (this.isRecording) {
-            const audioData = event.data;
-            this.recordedSamples.push(...audioData);
+          const audioData = event.data;
+          if (audioData.length > 0) {
+            // Store audio data in pre-buffer
+            this.storeInPreBuffer(audioData);
+
+            if (this.isRecording) {
+              this.recordedSamples.push(...audioData);
+            }
           }
         };
       } catch (error) {
         console.error('Error in setupAudio:', error);
       }
+    },
+    /**
+     * Stores audio data in the pre-buffer
+     */
+    storeInPreBuffer(audioData) {
+      const dataLength = audioData.length;
+      if (dataLength + this.preBufferIndex > this.preBufferSize) {
+        // Shift existing data to make room
+        const shiftAmount = dataLength + this.preBufferIndex - this.preBufferSize;
+        this.preBuffer.copyWithin(0, shiftAmount, this.preBufferIndex);
+        this.preBufferIndex -= shiftAmount;
+      }
+      // Copy new data into pre-buffer
+      this.preBuffer.set(audioData, this.preBufferIndex);
+      this.preBufferIndex += dataLength;
     },
     /**
      * Clears the canvas to prepare it for the next frame of the waveform
@@ -402,6 +429,13 @@ export default {
         this.delayTimer = null;
       }
 
+      // Include pre-buffered audio data
+      const preBufferData = this.preBuffer.slice(0, this.preBufferIndex);
+      this.recordedSamples.push(...preBufferData);
+
+      // Reset pre-buffer index
+      this.preBufferIndex = 0;
+
       // Start a timer to forcefully send a chunk after the max duration
       this.forceSendTimer = setTimeout(() => {
         this.forceSendChunk('time');
@@ -445,6 +479,9 @@ export default {
 
       this.chunkSent = false; // Set button to inactive state
     },
+    /**
+     * Resets the state after recording is stopped or chunk is sent
+     */
     resetState() {
       // Resetting the state
       this.isRecording = false;
@@ -455,8 +492,8 @@ export default {
       this.conditionCounter = 0;
       this.chunkSent = false;
 
-      // Update the UI (referencing the refs)
-      // ... (Update any UI elements if needed)
+      // Clear pre-buffer
+      this.preBufferIndex = 0;
     },
     /**
      * Forces the current chunk to be sent when a threshold or duration limit is reached
@@ -499,8 +536,8 @@ export default {
         console.log('Sending WAV blob:', wavBlob);
 
         // Save the WAV file locally before sending it
-        const fileName = `chunk_${this.chunkNumber}.wav`;
-        this.saveWavLocally(wavBlob, fileName);
+        // const fileName = `chunk_${this.chunkNumber}.wav`;
+        // this.saveWavLocally(wavBlob, fileName);
         const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYXRsYXN1c2VyIiwiZXhwIjoxNzI2NTg3NjUxfQ.1N7yP-q4NSXO6dnQPhOrBHZXkBXZAb3mg88AQ7XvDS4';
         fetch(this.backendURI, {
           method: 'POST',
@@ -558,7 +595,19 @@ export default {
         this.inactiveTimer = null;
       }, this.delayDuration);
     },
+    /**
+     * Updates the rolling buffer with the latest audio data from the analyser
+     */
+    updateRollingBuffer() {
+      // Get the latest frequency data from the analyser
+      this.analyser.getByteTimeDomainData(this.dataArray);
 
+      // Shift the rolling buffer to make room for new data
+      this.rollingBuffer.copyWithin(0, this.bufferLength);
+
+      // Append the new data at the end of the rolling buffer
+      this.rollingBuffer.set(this.dataArray, this.rollingBuffer.length - this.bufferLength);
+    },
     drawWaveform() {
       requestAnimationFrame(this.drawWaveform);
       // Ensure that analyser is initialized
