@@ -75,7 +75,8 @@ collated_list_string = ' '.join(collated_list)
 # Number mappings
 number_mapping = {
     r'\bzero\b': '0',
-    r'\bone\b': '1',
+	r'\boh\b': '0',
+	r'\bone\b': '1',
     r'\btwo\b': '2',
     r'\bthree\b': '3',
     r'\bfour\b': '4',
