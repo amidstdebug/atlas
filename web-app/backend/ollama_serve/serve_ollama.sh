@@ -12,7 +12,7 @@ ollama pull llama3.1
 
 echo "Creating the atc model..."
 # Create the model
-ollama create atc -f /root/ollama_serve/Modelfile_adw
+ollama create atc -f /root/ollama_serve/Modelfile_atc
 
 # Wait for background jobs (i.e., ollama serve) to keep the container alive
 wait
