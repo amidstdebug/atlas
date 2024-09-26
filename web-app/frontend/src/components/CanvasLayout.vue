@@ -245,6 +245,10 @@ export default {
   },
   methods: {
     startRecording() {
+      // Optional: Log the buffer states for debugging
+      console.log('Starting new recording. Recorded Samples Length:', this.recordedSamples.length);
+      console.log('PreBuffer Index:', this.preBufferIndex);
+
       this.initializeAudio();
       this.showOverlay = false;
       this.showLiveRecordButton = false;
@@ -338,7 +342,7 @@ export default {
         this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
         source.connect(this.audioWorkletNode);
 
-        this.preBufferSize = this.preBufferDuration * this.sampleRate;
+        this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
         this.preBuffer = new Float32Array(this.preBufferSize);
         this.preBufferIndex = 0;
 
@@ -358,9 +362,10 @@ export default {
     storeInPreBuffer(audioData) {
       const dataLength = audioData.length;
       if (dataLength + this.preBufferIndex > this.preBufferSize) {
-        const shiftAmount = dataLength + this.preBufferIndex - this.preBufferSize;
-        this.preBuffer.copyWithin(0, shiftAmount, this.preBufferIndex);
-        this.preBufferIndex -= shiftAmount;
+        const overflow = dataLength + this.preBufferIndex - this.preBufferSize;
+        // Shift the buffer to discard the oldest data
+        this.preBuffer.copyWithin(0, overflow, this.preBufferIndex);
+        this.preBufferIndex -= overflow;
       }
       this.preBuffer.set(audioData, this.preBufferIndex);
       this.preBufferIndex += dataLength;
@@ -477,10 +482,12 @@ export default {
         this.delayTimer = null;
       }
 
+      // Include the retained pre-buffer data in the new recording
       const preBufferData = this.preBuffer.slice(0, this.preBufferIndex);
       this.recordedSamples.push(...preBufferData);
 
-      this.preBufferIndex = 0;
+      // Reset preBufferIndex to allow new data to be written after retained data
+      this.preBufferIndex = this.preBufferSize;
 
       this.forceSendTimer = setTimeout(() => {
         this.forceSendChunk('time');
@@ -516,6 +523,7 @@ export default {
       this.chunkSent = false;
     },
     resetState() {
+      // Reset recording state variables
       this.isRecording = false;
       this.isActive = false;
       this.reactivationCount = 0;
@@ -524,14 +532,20 @@ export default {
       this.conditionCounter = 0;
       this.chunkSent = false;
 
-      this.preBufferIndex = 0;
+      // Clear audio buffers but retain the last preBufferDuration seconds
+      this.clearAudioBuffers();
+
+      // Note: clearAudioBuffers now retains the last preBufferDuration seconds
     },
     forceSendChunk(reason) {
       console.log(`Chunk sent due to ${reason}`);
 
       this.sendChunkToConsole();
 
-      this.resetState();
+      // Reset the state after sending the chunk
+      // Note: `clearAudioBuffers` is already called in `sendChunkToConsole`'s finally block
+      // So you might not need to reset state here again
+      // However, ensure that no additional state needs to be reset
 
       if (this.forceSendTimer) {
         clearTimeout(this.forceSendTimer);
@@ -578,10 +592,47 @@ export default {
         } catch (error) {
           console.error('Error sending the chunk:', error);
         } finally {
-          this.recordedSamples = [];
+          // Clear audio buffers but retain the last preBufferDuration seconds
+          this.clearAudioBuffers();
           this.chunkNumber++;
         }
       }
+    },
+    clearAudioBuffers() {
+      // Clear the recorded samples
+      this.recordedSamples = [];
+
+      // Retain the last 'preBufferDuration' seconds of audio
+      if (this.preBuffer) {
+        const retainSamples = this.preBufferSize; // Number of samples to retain
+        const start = this.preBufferIndex - retainSamples;
+        const end = this.preBufferIndex;
+
+        if (start < 0) {
+          // Handle buffer wrap-around
+          const part1 = this.preBuffer.slice(start + this.preBuffer.length, this.preBuffer.length);
+          const part2 = this.preBuffer.slice(0, end);
+          this.preBuffer.fill(0);
+          this.preBuffer.set(part1, 0);
+          this.preBuffer.set(part2, part1.length);
+        } else {
+          const retainedBuffer = this.preBuffer.slice(start, end);
+          this.preBuffer.fill(0); // Clear the buffer
+          this.preBuffer.set(retainedBuffer, 0); // Retain the last 'preBufferSize' samples
+        }
+
+        // Reset preBufferIndex to the end of the retained data
+        this.preBufferIndex = Math.min(end - start, this.preBufferSize);
+      }
+
+      // Reset recording state variables
+      this.isRecording = false;
+      this.isActive = false;
+      this.reactivationCount = 0;
+      this.recordingStartTime = null;
+      this.delayStartTime = null;
+      this.conditionCounter = 0;
+      this.chunkSent = false;
     },
     startInactiveTimer() {
       if (this.inactiveTimer) {

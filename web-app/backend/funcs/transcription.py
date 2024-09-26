@@ -32,7 +32,7 @@ def log_transcription_change(description, old_transcription, new_transcription):
 
 units = {
 	'zero': 0, 'oh': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-	'six': 6, 'seven': 7, 'eight': 8, 'nine': 9
+	'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'niner':9
 }
 teens = {
 	'ten': 10, 'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14,
