@@ -14,7 +14,9 @@ services:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
     command: python app.py
     depends_on:
       - ollama  # Ensure that 'app' waits for 'ollama' to be ready
@@ -34,7 +36,9 @@ services:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
     restart: "no"
     entrypoint: ["bash", "/root/ollama_serve/serve_ollama.sh"]  # Run the custom script to create and serve the model
 

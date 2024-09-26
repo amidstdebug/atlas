@@ -395,7 +395,6 @@ test_cases = [
 	("Maintain ten thousand feet of separation", "Maintain 10000ft of separation"),
 	# ("Maintain one zero ten thousand feet", "Maintain 10000ft"),
 
-	# Teens and "Ty" Numbers
 	("Flight level one fifty", "FL150"),
 	("Climb to three thousand feet", "Climb to 3000ft"),
 	("Reduce speed to one forty knots", "Reduce speed to 140kts"),

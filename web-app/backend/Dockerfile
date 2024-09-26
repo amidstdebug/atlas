@@ -24,6 +24,5 @@ EXPOSE 5000
 # Set environment variables for Flask
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=development
-
-# Command to run the Flask app
-CMD ["flask", "run", "--host=0.0.0.0"]
+ENV PYTHONUNBUFFERED=1
+ENV NVIDIA_VISIBLE_DEVICES=all

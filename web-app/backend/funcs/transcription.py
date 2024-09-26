@@ -9,6 +9,12 @@ from .lists import nato  # Removed number_mapping import
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
+# Define ANSI escape codes for colors
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RESET = "\033[0m"
+
 # History trackers
 transcription_history = defaultdict(int)
 pattern_history = defaultdict(lambda: {'count': 0, 'correct_format': ''})
@@ -109,7 +115,7 @@ def parse_number(text):
 
 
 def replace_number_words(transcription):
-	logging.info("Replacing number words with digits...")
+	# logging.info("Replacing number words with digits...")
 	number_words_pattern = r'\b(?:' + '|'.join(number_words) + r')\b(?:\s+\b(?:' + '|'.join(number_words) + r')\b)*'
 	pattern = re.compile(number_words_pattern, flags=re.IGNORECASE)
 
@@ -125,7 +131,7 @@ def replace_number_words(transcription):
 
 
 def remove_and_between_number_words(transcription):
-	logging.info("Removing 'and' between number words...")
+	# logging.info("Removing 'and' between number words...")
 	number_word_pattern = r'\b(?:' + '|'.join(number_words) + r')\b'
 	pattern = re.compile(rf'({number_word_pattern})\s+and\s+({number_word_pattern})', flags=re.IGNORECASE)
 	transcription_before = transcription
@@ -139,7 +145,7 @@ def remove_and_between_number_words(transcription):
 # ============================
 
 def remove_whisper_artifacts(transcription):
-	logging.info("Removing whisper artifacts...")
+	# logging.info("Removing whisper artifacts...")
 	artifacts = [
 		(r'\bthanks for watching\b[\.\!\?]?', '', "Removed 'thanks for watching'"),
 		(r'\bfor watching\b[\.\!\?]?', '', "Removed 'for watching'"),
@@ -161,7 +167,7 @@ def remove_whisper_artifacts(transcription):
 # ============================
 
 def standardize_units(transcription):
-	logging.info("Standardizing units...")
+	# logging.info("Standardizing units...")
 
 	# Replace ' feet' with 'ft'
 	transcription_before = transcription
@@ -177,7 +183,7 @@ def standardize_units(transcription):
 
 
 def standardize_directions(transcription):
-	logging.info("Standardizing directional terms...")
+	# logging.info("Standardizing directional terms...")
 	transformations = [
 		(r'\b(\d+)\s+left\b', r'\1L', "Transformed 'left' to 'L'"),
 		(r'\b(\d+)\s+right\b', r'\1R', "Transformed 'right' to 'R'"),
@@ -198,7 +204,7 @@ def standardize_directions(transcription):
 # ============================
 
 def capitalize_nato_and_first_word(transcription):
-	logging.info("Capitalizing NATO words and the first word...")
+	# logging.info("Capitalizing NATO words and the first word...")
 	nato_pattern = r'\b(' + '|'.join(nato) + r')\b'
 	transcription_before = transcription
 	transcription = re.sub(
@@ -212,7 +218,7 @@ def capitalize_nato_and_first_word(transcription):
 
 
 def replace_zulu_with_z(transcription):
-	logging.info("Replacing 'Zulu' with 'Z' and concatenating...")
+	# logging.info("Replacing 'Zulu' with 'Z' and concatenating...")
 	transcription_before = transcription
 	transcription = re.sub(
 		r'\b(\d+)\s*Zulu\b',
@@ -229,7 +235,7 @@ def replace_zulu_with_z(transcription):
 # ============================
 
 def combine_adjacent_digits_for_callsigns(transcription):
-	logging.info("Combining adjacent digits for callsigns...")
+	# logging.info("Combining adjacent digits for callsigns...")
 	digit_patterns = [
 		(r'\b(\d)\s+(\d)\s+(\d)\s+(\d)\b', r'\1\2\3\4', "Combined four adjacent digits"),
 		(r'\b(\d)\s+(\d)\s+(\d)(?=\s|$|[A-Za-z])', r'\1\2\3', "Combined three adjacent digits"),
@@ -242,7 +248,7 @@ def combine_adjacent_digits_for_callsigns(transcription):
 
 
 def combine_letter_and_number(transcription):
-	logging.info("Combining letter and number patterns...")
+	# logging.info("Combining letter and number patterns...")
 	transcription_before = transcription
 	transcription = re.sub(r'\b([A-Z])\s+(\d+)\b', r'\1\2', transcription, flags=re.IGNORECASE)
 	# log_transcription_change("Combined letter and number patterns", transcription_before, transcription)
@@ -250,7 +256,7 @@ def combine_letter_and_number(transcription):
 
 
 def handle_flight_levels(transcription):
-	logging.info("Handling flight levels...")
+	# logging.info("Handling flight levels...")
 	transcription_before = transcription
 	transcription = re.sub(
 		r'\bflight level\s*(\d{3})(?=\s|\.|,|$)',
@@ -272,7 +278,7 @@ def handle_flight_levels(transcription):
 
 
 def handle_squawk_codes(transcription):
-	logging.info("Handling squawk codes...")
+	# logging.info("Handling squawk codes...")
 	transcription_before = transcription
 	transcription = re.sub(
 		r'\bsquawk\s+(\d)\s*(\d)\s*(\d)\s*(\d)\b',
@@ -285,7 +291,7 @@ def handle_squawk_codes(transcription):
 
 
 def combine_numbers_with_units(transcription):
-	logging.info("Combining numbers with units...")
+	# logging.info("Combining numbers with units...")
 	combinations = [
 		(r'(\d{1,2})\s+(\d{2,3})\s*ft\b', r'\1\2ft', "Combined numbers with 'ft'"),
 		(r'(\d{1,2})\s+(\d{2,3})\s*kts\b', r'\1\2kts', "Combined numbers with 'kts'"),
@@ -299,7 +305,7 @@ def combine_numbers_with_units(transcription):
 
 
 def replace_point_or_decimal(transcription):
-	logging.info("Replacing 'point' or 'decimal' with '.' ...")
+	# logging.info("Replacing 'point' or 'decimal' with '.' ...")
 	transcription_before = transcription
 	transcription = re.sub(r'\s*(point|decimal)\s*', '.', transcription, flags=re.IGNORECASE)
 	# log_transcription_change("Replaced 'point' or 'decimal' with '.'", transcription_before, transcription)
@@ -307,7 +313,7 @@ def replace_point_or_decimal(transcription):
 
 
 def handle_decimal_followups(transcription):
-	logging.info("Fixing decimal follow-ups...")
+	# logging.info("Fixing decimal follow-ups...")
 	transcription_before = transcription
 	pattern = r'(\d+\.\d{1,2})\s*(\d+)'
 	matches = re.findall(pattern, transcription)
@@ -338,7 +344,7 @@ def handle_decimal_followups(transcription):
 
 
 def combine_remaining_adjacent_digits(transcription):
-	logging.info("Combining remaining adjacent digits...")
+	# logging.info("Combining remaining adjacent digits...")
 	patterns = [
 		(r'\b(\d)\s+(\d+)\b', r'\1\2', "Combined single digit with multi-digit number"),
 		(r'\b(\d)\s+(\d)([A-Z])\b', r'\1\2\3', "Combined digits and letter for runway designations"),
@@ -355,7 +361,7 @@ def combine_remaining_adjacent_digits(transcription):
 # ============================
 
 def validate_transcription(transcription):
-	logging.info("Validating transcription for false activations...")
+	# logging.info("Validating transcription for false activations...")
 	repeated_pattern = r'\b(\w+)(\s+\1){3,}\b'
 	if (re.search(repeated_pattern, transcription) or
 			transcription.lower() in [
@@ -365,13 +371,13 @@ def validate_transcription(transcription):
 				'thank you so much.'
 			] or
 			(len(transcription.split()) == 1 and 'FL' not in transcription)):
-		logging.info(f"Transcription '{transcription}' identified as 'false activation'")
+		# logging.info(f"Transcription '{transcription}' identified as 'false activation'")
 		return "false activation"
 	return transcription
 
 
 def handle_icao_callsign(transcription):
-	parquet_file = './aircraft_callsign.parquet'
+	parquet_file = './funcs/aircraft_callsign.parquet'
 	df = pd.read_parquet(parquet_file)
 
 	def replace_callsign_with_icao(text: str, df: pd.DataFrame) -> str:
@@ -404,7 +410,7 @@ def capitalize_first_word(transcription):
 # ============================
 
 def apply_custom_fixes(transcription):
-	logging.info(f"Original transcription: '{transcription}'")
+	logging.info(f"Original transcription: {YELLOW}'{transcription}'{RESET}")
 
 	# 1. Initial Cleanup
 	transcription = remove_whisper_artifacts(transcription)
@@ -438,5 +444,5 @@ def apply_custom_fixes(transcription):
 
 	# 7. Handle Aircraft Callsign
 	transcription = handle_icao_callsign(transcription)
-	logging.info(f"Final transcription: '{transcription}'")
+	logging.info(f"Final transcription: {GREEN}'{transcription}'{RESET}")
 	return transcription

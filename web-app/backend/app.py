@@ -2,6 +2,8 @@
 import os
 from collections import defaultdict
 import torch
+
+print('CUDA:', torch.cuda.is_available())
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import io
@@ -16,6 +18,7 @@ import jwt
 import datetime
 from functools import wraps
 import requests
+
 # import sox
 # Initialize the Flask application
 app = Flask(__name__)
@@ -39,7 +42,7 @@ JWT_ALGORITHM = 'HS256'  # Recommended for JWT signing
 def generate_jwt_token(user_id):
 	payload = {
 		'user_id': user_id,
-		'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)  # Token expires in 1 hour
+		'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=0.1)  # Token expires in 1 hour
 	}
 	# Use PyJWT's encode method
 	token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -61,15 +64,14 @@ def token_required(func):
 			return jsonify({'error': 'Token is missing!'}), 401
 
 		# TODO: FIX THIS SECURITY VULNERABILITY
-		# try:
-		# 	# Decode the token
-		# 	data = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-		# # You can access `data['user_id']` here to get user info, if needed
-		# except jwt.ExpiredSignatureError:
-		# 	return jsonify({'error': 'Token has expired!'}), 401
-		# except jwt.InvalidTokenError:
-		# 	return jsonify({'error': 'Invalid token!'}), 401
-		if token != "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYXRsYXN1c2VyIiwiZXhwIjoxNzI2NTg3NjUxfQ.1N7yP-q4NSXO6dnQPhOrBHZXkBXZAb3mg88AQ7XvDS4":
+		try:
+			# Decode the token
+			data = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+			print(data)
+		# You can access `data['user_id']` here to get user info, if needed
+		except jwt.ExpiredSignatureError:
+			return jsonify({'error': 'Token has expired!'}), 401
+		except jwt.InvalidTokenError:
 			return jsonify({'error': 'Invalid token!'}), 401
 
 		return func(*args, **kwargs)
@@ -78,7 +80,7 @@ def token_required(func):
 
 
 # Route to get a JWT token with user_id and password validation
-@app.route('/login', methods=['POST'])
+@app.route('/auth/login', methods=['POST'])
 def login():
 	# Get user_id and password from the request
 	user_id = request.json.get('user_id')
@@ -98,6 +100,47 @@ def login():
 		return jsonify({'error': 'Invalid user_id or password!'}), 401
 
 
+@app.route('/auth/refresh', methods=['POST'])
+def refresh_token():
+	token = None
+
+	# Check if the token is passed in the 'Authorization' header
+	if 'Authorization' in request.headers:
+		token = request.headers['Authorization'].split(" ")[1]  # Expecting Bearer <token>
+
+	if not token:
+		return jsonify({'error': 'Token is missing!'}), 401
+
+	try:
+		# Decode the token without verifying the expiration
+		payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"verify_exp": False})
+		exp = datetime.datetime.utcfromtimestamp(payload['exp'])
+		now = datetime.datetime.utcnow()
+
+		# Check how long the token has been expired
+		time_since_expiry = now - exp
+
+		if time_since_expiry <= datetime.timedelta(hours=1):
+			# Token expired less than an hour ago, so we can renew it
+			new_payload = {
+				'user_id': payload['user_id'],
+				'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)  # Extend the expiration by 1 hour
+			}
+			new_token = jwt.encode(new_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+			return jsonify({'token': new_token if isinstance(new_token, str) else new_token.decode('utf-8')})
+
+		else:
+			# Token expired more than an hour ago, so it's no longer secure to renew it
+			return jsonify(
+				{'error': 'Token is no longer secure!'}), 403  # Using 403 Forbidden to indicate security issue
+
+	except jwt.ExpiredSignatureError:
+		# This should not happen as we are not verifying exp, but added for safety
+		return jsonify({'error': 'Token has expired!'}), 401
+	except jwt.InvalidTokenError:
+		return jsonify({'error': 'Invalid token!'}), 401
+
+
 @app.route('/transcribe', methods=['POST'])
 @token_required
 def transcribe_audio():
@@ -107,7 +150,6 @@ def transcribe_audio():
 			return
 		audio_file = request.files['file']
 		wav_io = io.BytesIO(audio_file.read())
-
 		# Check if the file is empty
 		if wav_io.getbuffer().nbytes == 0:
 			return jsonify({"error": "No file data received"}), 400
@@ -178,7 +220,7 @@ def transcribe_audio():
 		return jsonify({"transcription": transcription})
 
 	except Exception as e:
-		print('error,',e)
+		print('error,', e)
 		return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
 
@@ -271,8 +313,8 @@ if __name__ == '__main__':
 				transcription = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
 				transcription = apply_custom_fixes(transcription)
 
-				# Log or print the transcription result
-				print(f"Transcription of './misc/startup.wav': {transcription}")
+			# Log or print the transcription result
+			# print(f"Transcription of './misc/startup.wav': {transcription}")
 
 			return True  # Indicate success
 

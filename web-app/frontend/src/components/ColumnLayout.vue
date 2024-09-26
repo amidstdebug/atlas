@@ -7,7 +7,7 @@
         <el-col :span="12" class="left-column">
           <el-card class="box-card">
             <template #header>
-              <span>Live Transcription</span>
+              <span style="color:#29353C">Live Transcription</span>
             </template>
             <div class="transcription-box" ref="transcriptionBox">
               <!-- Display live transcription -->
@@ -25,16 +25,16 @@
         <el-col :span="12" class="right-column">
           <el-card class="box-card">
             <template #header>
-              <span>Live Summary</span>
+              <span style="color:#29353C">Live Summary</span>
             </template>
             <div class="content-box">
               <el-carousel
-                :interval="0"
-                arrow="never"
-                indicator-position="outside"
-                height="600px"
-                :loop="false"
-                :trigger="'click'"
+                  :interval="0"
+                  arrow="never"
+                  indicator-position="outside"
+                  height="600px"
+                  :loop="false"
+                  :trigger="'click'"
               >
                 <!-- Initial Carousel Item when no summaries are available -->
                 <el-carousel-item v-if="summaries.length === 0">
@@ -45,19 +45,19 @@
 
                 <!-- Carousel Items for each summary -->
                 <el-carousel-item
-                  v-for="(summary, index) in summaries"
-                  :key="index"
-                  class="summary-item"
-                  v-else
+                    v-for="(summary, index) in summaries"
+                    :key="index"
+                    class="summary-item"
+                    v-else
                 >
                   <div class="summary-content" ref='summaryContent'>
                     <el-tag type="info" size="small" class="timestamp-tag">
                       {{ summary.timestamp }}
                     </el-tag>
                     <div
-                      v-html="summary.formattedContent"
-                      class="formatted-summary"
-                      
+                        v-html="summary.formattedContent"
+                        class="formatted-summary"
+
                     ></div>
                   </div>
                 </el-carousel-item>
@@ -69,34 +69,23 @@
 
       <!-- Button Group -->
       <div class="button-group">
-        <!-- Live Record Button -->
-        <el-button
-          :style="{ color: liveRecordColor }"
-          class="centered-button same-width-button"
-          @click="startLiveRecord"
-        >
-          <el-icon class="icon-group">
-            <MicrophoneIcon />
-          </el-icon>
-          Live Record
-        </el-button>
 
         <!-- Upload Recording Button -->
         <el-button
-          :style="{ color: uploadColor }"
-          class="centered-button same-width-button"
-          @click="uploadRecording"
+            :style="{ color: uploadColor }"
+            class="centered-button same-width-button"
+            @click="uploadRecording"
         >
           <el-icon class="icon-group">
-            <UploadIcon />
+            <UploadIcon/>
           </el-icon>
           Upload Recording
         </el-button>
 
         <!-- Clear Transcript Button -->
         <el-button
-          class="centered-button same-width-button"
-          @click="clearTranscription"
+            class="centered-button same-width-button"
+            @click="clearTranscription"
         >
           Clear Transcript
         </el-button>
@@ -119,17 +108,16 @@ import {
   ElCarouselItem,
   ElMessage,
 } from 'element-plus';
-import { Microphone, Upload } from '@element-plus/icons-vue';
-import axios from 'axios';
+import {Microphone, Upload} from '@element-plus/icons-vue';
 import debounce from 'lodash.debounce';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism.css';
 import DOMPurify from 'dompurify';
+import apiClient from "@/router/apiClient";
 
 export default {
   name: 'ColumnLayout',
   components: {
-    MicrophoneIcon: Microphone,
     UploadIcon: Upload,
     ElContainer,
     ElMain,
@@ -169,8 +157,8 @@ export default {
   computed: {
     formattedTranscription() {
       return this.transcriptionBuffer
-        ? DOMPurify.sanitize(this.transcriptionBuffer.replace(/\n/g, '<br>'))
-        : '';
+          ? DOMPurify.sanitize(this.transcriptionBuffer.replace(/\n/g, '<br>'))
+          : '';
     },
   },
   watch: {
@@ -199,14 +187,14 @@ export default {
       this.transcriptionBuffer += newText + '\n';
       if (this.transcriptionBuffer.length > this.maxBufferLength) {
         this.transcriptionBuffer = this.transcriptionBuffer.slice(
-          -this.maxBufferLength
+            -this.maxBufferLength
         );
       }
       this.scrollToBottom();
 
       const lineCount = this.transcriptionBuffer
-        .split('\n')
-        .filter((line) => line.trim() !== '').length;
+          .split('\n')
+          .filter((line) => line.trim() !== '').length;
 
       if (lineCount >= 3) {
         this.debouncedGenerateSummary();
@@ -258,18 +246,17 @@ export default {
           payload.previous_report = previousReport;
         }
 
-        const response = await axios.post(this.apiEndpoint, payload, {
+        const response = await apiClient.post(this.apiEndpoint, payload, {
           headers: {
             'Content-Type': 'application/json',
-            Authorization:
-              'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYXRsYXN1c2VyIiwiZXhwIjoxNzI2NTg3NjUxfQ.1N7yP-q4NSXO6dnQPhOrBHZXkBXZAb3mg88AQ7XvDS4', // Replace with your actual token
           },
         });
 
+
         if (
-          response.data &&
-          response.data.message &&
-          response.data.message.content
+            response.data &&
+            response.data.message &&
+            response.data.message.content
         ) {
           const apiResponse = response.data.message.content;
           const summaryObj = this.extractSummary(apiResponse);
@@ -289,12 +276,12 @@ export default {
             ElMessage.error('Unauthorized: Please check your API credentials.');
           } else {
             ElMessage.error(
-              `Error ${error.response.status}: ${error.response.statusText}`
+                `Error ${error.response.status}: ${error.response.statusText}`
             );
           }
         } else if (error.request) {
           ElMessage.error(
-            'No response from the server. Please check your network.'
+              'No response from the server. Please check your network.'
           );
         } else {
           ElMessage.error(`Request error: ${error.message}`);
@@ -312,9 +299,9 @@ export default {
         let extractedContent = apiResponse.substring(start + 3, end).trim();
 
         extractedContent = extractedContent
-          .replace(/\\n/g, '')
-          .replace(/\\\\/g, '\\')
-          .replace(/\\"/g, '"');
+            .replace(/\\n/g, '')
+            .replace(/\\\\/g, '\\')
+            .replace(/\\"/g, '"');
         console.log(extractedContent);
         const jsonObj = JSON.parse(extractedContent);
         return jsonObj;
@@ -326,7 +313,7 @@ export default {
     addSummary(summaryObj) {
       const timestamp = new Date().toLocaleString();
       const formattedContent = this.formatSummary(summaryObj);
-      this.summaries.unshift({ timestamp, formattedContent, rawContent: summaryObj });
+      this.summaries.unshift({timestamp, formattedContent, rawContent: summaryObj});
       if (this.summaries.length > 10) {
         this.summaries.pop();
       }
@@ -337,7 +324,7 @@ export default {
 
         Object.entries(summaryObj).forEach(([key, value]) => {
           const formattedKey = this.capitalizeFirstLetter(
-            this.convertCamelCase(key)
+              this.convertCamelCase(key)
           );
 
           if (typeof value === 'object' && !Array.isArray(value)) {
@@ -373,9 +360,9 @@ export default {
     },
     convertCamelCase(text) {
       return text
-        .replace(/([A-Z])/g, ' $1')
-        .replace(/_/g, ' ')
-        .trim();
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/_/g, ' ')
+          .trim();
     },
     capitalizeFirstLetter(text) {
       if (!text) return '';
@@ -387,12 +374,12 @@ export default {
   },
   mounted() {
     this.$watch(
-      () => this.summaries,
-      () => {
-        this.$nextTick(() => {
-          Prism.highlightAll();
-        });
-      }
+        () => this.summaries,
+        () => {
+          this.$nextTick(() => {
+            Prism.highlightAll();
+          });
+        }
     );
   },
 };
