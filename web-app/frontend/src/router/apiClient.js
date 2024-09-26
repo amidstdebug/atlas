@@ -4,7 +4,8 @@ import router from './router'; // Assuming you have your router setup
 
 // Create an Axios instance
 const apiClient = axios.create({
-  baseURL: 'http://localhost:5000/', // Your API base URL
+  // baseURL: 'http://localhost:5000/', // Your API base URL
+  baseURL: 'https://jwong.dev/api/'
 });
 
 let isRefreshing = false;
