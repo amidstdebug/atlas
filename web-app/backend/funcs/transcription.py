@@ -377,25 +377,26 @@ def validate_transcription(transcription):
 
 
 def handle_icao_callsign(transcription):
-	parquet_file = './funcs/aircraft_callsign.parquet'
-	df = pd.read_parquet(parquet_file)
+    parquet_file = './funcs/aircraft_callsign.parquet'
+    df = pd.read_parquet(parquet_file)
 
-	def replace_callsign_with_icao(text: str, df: pd.DataFrame) -> str:
-		# Create a dictionary mapping callsigns to ICAO codes
-		callsign_to_icao = dict(zip(df['Callsign'], df['ICAO']))
+    def replace_callsign_with_icao(text: str, df: pd.DataFrame) -> str:
+        # Create a dictionary mapping callsigns to ICAO codes
+        callsign_to_icao = dict(zip(df['Callsign'], df['ICAO']))
 
-		# Replace callsigns with ICAO codes in the text
-		for callsign, icao in callsign_to_icao.items():
-			# Use regex to replace callsign followed by a space and a number with ICAO followed by the number
-			pattern = r'\b' + re.escape(callsign) + r'\b\s*(\d+)'
-			replacement = icao + r'\1'
-			text = re.sub(pattern, replacement, text)
+        # Replace callsigns with ICAO codes in the text
+        for callsign, icao in callsign_to_icao.items():
+            # Use regex to replace callsign followed by a space and a number with ICAO followed by the number
+            pattern = r'\b' + re.escape(callsign) + r'\b\s*(\d+)'
+            replacement = icao + r'\1'
+            # Add re.IGNORECASE to make the replacement case-insensitive
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
 
-		return text
+        return text
 
-	transcription = replace_callsign_with_icao(transcription, df)
+    transcription = replace_callsign_with_icao(transcription, df)
 
-	return transcription
+    return transcription
 
 def capitalize_first_word(transcription):
 	transcription_before = transcription

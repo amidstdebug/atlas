@@ -238,6 +238,7 @@ export default {
       showOverlay: true,
       showLiveRecordButton: true,
       showStopButton: false,
+      isSending: false, // New flag to track sending state
     };
   },
   mounted() {
@@ -561,11 +562,17 @@ export default {
       this.isActive = false;
     },
     async sendChunkToConsole() {
+      if (this.isSending) {
+        console.log('Already sending a chunk, skipping send.');
+        return;
+      }
+
       if (this.recordedSamples.length) {
+        this.isSending = true; // Start sending
         try {
           const wavBlob = this.encodeWAV(this.recordedSamples, this.sampleRate);
           console.log('Chunk', this.chunkNumber, 'sent:', wavBlob);
-
+          this.saveWavLocally(wavBlob,`chunk_${this.chunkNumber}.wav`)
           const formData = new FormData();
           formData.append('file', wavBlob, `chunk_${this.chunkNumber}.wav`);
           console.log('Sending WAV blob:', wavBlob);
@@ -595,6 +602,7 @@ export default {
           // Clear audio buffers but retain the last preBufferDuration seconds
           this.clearAudioBuffers();
           this.chunkNumber++;
+          this.isSending = false; // Reset sending flag
         }
       }
     },
