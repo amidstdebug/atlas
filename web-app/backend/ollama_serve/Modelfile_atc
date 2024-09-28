@@ -18,12 +18,12 @@ I want you to:
       "event": "{brief description of the main event}",
       "location": "{CURRENT LOCATION i.e. runway used, or location in air or aerodrome}",
       "status": [
-        "{SPECIFIC bullet point 1 describing key issue or situation}",
+        "{SPECIFIC bullet point 1 describing FACTUAL EVIDENCE discussed}",
         "{...additional bullet points if needed}"
       ]
     },
     "actions_taken": [
-      "{bullet point 1: SPECIFIC action taken}",
+      "{bullet point 1: SPECIFIC action taken based on STATUS}",
       "{bullet point 2: SPECIFIC action taken}",
       "{...additional actions as needed}"
     ]

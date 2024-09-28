@@ -92,6 +92,7 @@ def login():
 		return jsonify({'error': 'Missing user_id or password!'}), 400
 
 	# Validate the user_id and password
+	# TODO : FIX THIS SHIT
 	if user_id == 'atlasuser' and password == 'passwordbearer2024':
 		# Generate and return the token for the user
 		token = generate_jwt_token(user_id)

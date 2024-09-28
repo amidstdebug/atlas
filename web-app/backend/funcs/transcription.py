@@ -32,7 +32,7 @@ def log_transcription_change(description, old_transcription, new_transcription):
 
 units = {
 	'zero': 0, 'oh': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-	'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'niner':9
+	'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'niner': 9
 }
 teens = {
 	'ten': 10, 'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14,
@@ -377,26 +377,27 @@ def validate_transcription(transcription):
 
 
 def handle_icao_callsign(transcription):
-    parquet_file = './funcs/aircraft_callsign.parquet'
-    df = pd.read_parquet(parquet_file)
+	parquet_file = './funcs/aircraft_callsign.parquet'
+	df = pd.read_parquet(parquet_file)
 
-    def replace_callsign_with_icao(text: str, df: pd.DataFrame) -> str:
-        # Create a dictionary mapping callsigns to ICAO codes
-        callsign_to_icao = dict(zip(df['Callsign'], df['ICAO']))
+	def replace_callsign_with_icao(text: str, df: pd.DataFrame) -> str:
+		# Create a dictionary mapping callsigns to ICAO codes
+		callsign_to_icao = dict(zip(df['Callsign'], df['ICAO']))
 
-        # Replace callsigns with ICAO codes in the text
-        for callsign, icao in callsign_to_icao.items():
-            # Use regex to replace callsign followed by a space and a number with ICAO followed by the number
-            pattern = r'\b' + re.escape(callsign) + r'\b\s*(\d+)'
-            replacement = icao + r'\1'
-            # Add re.IGNORECASE to make the replacement case-insensitive
-            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+		# Replace callsigns with ICAO codes in the text
+		for callsign, icao in callsign_to_icao.items():
+			# Use regex to replace callsign followed by a space and a number with ICAO followed by the number
+			pattern = r'\b' + re.escape(callsign) + r'\b\s*(\d+)'
+			replacement = icao + r'\1'
+			# Add re.IGNORECASE to make the replacement case-insensitive
+			text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
 
-        return text
+		return text
 
-    transcription = replace_callsign_with_icao(transcription, df)
+	transcription = replace_callsign_with_icao(transcription, df)
 
-    return transcription
+	return transcription
+
 
 def capitalize_first_word(transcription):
 	transcription_before = transcription
@@ -404,6 +405,31 @@ def capitalize_first_word(transcription):
 		transcription = transcription[0].upper() + transcription[1:]
 	# log_transcription_change("Capitalized first word", transcription_before, transcription)
 	return transcription
+
+
+def validate_atc_transcription(transcription):
+	# Dictionary mapping common misheard words to the correct ATC terms
+	misheard_words = {
+		"soles": "souls",
+		"rodger": "roger",
+		"Everett": "Emirates",
+		"tree": "three",
+	}
+
+	words = transcription.split()
+	corrected_words = []
+
+	for word in words:
+		corrected_words.append(misheard_words.get(word, word))
+
+	transcription = ' '.join(corrected_words)
+	return transcription
+
+
+# Example usage
+transcription = "We have 200 soles on board, rodger that."
+corrected_transcription = validate_atc_transcription(transcription)
+print(corrected_transcription)
 
 
 # ============================
@@ -442,7 +468,7 @@ def apply_custom_fixes(transcription):
 	# 6. Final Cleanup and Validation
 	transcription = validate_transcription(transcription)
 	transcription = capitalize_first_word(transcription)
-
+	transcription = validate_atc_transcription(transcription)
 	# 7. Handle Aircraft Callsign
 	transcription = handle_icao_callsign(transcription)
 	logging.info(f"Final transcription: {GREEN}'{transcription}'{RESET}")
