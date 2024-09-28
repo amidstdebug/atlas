@@ -3,7 +3,7 @@
     <el-row justify="center" gutter="40" style="background:#44576D; margin: 0">
       <el-header height="100px">
         <div class="header-content" style="margin-top:35px">
-          <h1 style="color:#e6e6e6">ATLAS - Automated Transmission and Logging Analysis System</h1>
+          <h1 style="color:#e6e6e6">ATLAS - Automated Transmission Language Analysis System</h1>
         </div>
       </el-header>
     </el-row>

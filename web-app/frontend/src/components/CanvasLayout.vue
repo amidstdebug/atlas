@@ -1,41 +1,45 @@
 <template>
+  <!-- Main container for the component -->
   <div class="container">
+    <!-- Container for the waveform canvas and overlay -->
     <div class="canvas-container">
+      <!-- Canvas element to draw the waveform -->
       <canvas ref="waveform"></canvas>
-      <!-- Grey Translucent Overlay -->
+      <!-- Grey Translucent Overlay displayed when not recording -->
       <div v-if="showOverlay" class="overlay"></div>
-      <!-- Live Record Button -->
+      <!-- Live Record Button, displayed when not recording -->
       <el-button
-          :style="{ color: liveRecordColor }"
-          v-if="showLiveRecordButton"
-          class="live-record-button centered-button same-width-button"
-          @click="startRecording"
+        :style="{ color: liveRecordColor }"
+        v-if="showLiveRecordButton"
+        class="live-record-button centered-button same-width-button"
+        @click="startRecording"
       >
         <el-icon class="icon-group">
-          <MicrophoneIcon/>
+          <MicrophoneIcon />
         </el-icon>
         Start Recording
       </el-button>
     </div>
 
+    <!-- Row containing control buttons -->
     <el-row class="button-row">
-      <!-- Stop Recording Button -->
+      <!-- Stop Recording Button, displayed when recording -->
       <el-button
-          v-if="showStopButton"
-          class="stop-button centered-button same-width-button"
-          @click="stopRecording"
+        v-if="showStopButton"
+        class="stop-button centered-button same-width-button"
+        @click="stopRecording"
       >
         Stop Recording
       </el-button>
-      <!-- Activate Button -->
+      <!-- Activation Status Button, indicates whether recording is active -->
       <el-button
-          :class="['statusButton', 'no-click', isActive ? 'active' : 'inactive']"
+        :class="['statusButton', 'no-click', isActive ? 'active' : 'inactive']"
       >
         Activated
       </el-button>
-      <!-- Chunk Sent Button -->
+      <!-- Chunk Sent Indicator Button, indicates whether a chunk has been sent -->
       <el-button
-          :class="['chunkSentButton', 'no-click', chunkSent ? 'red' : 'grey']"
+        :class="['chunkSentButton', 'no-click', chunkSent ? 'red' : 'grey']"
       >
         Chunk Sent
       </el-button>
@@ -44,6 +48,7 @@
 </template>
 
 <style scoped>
+/* Global body styles */
 body {
   background-color: #121212;
   display: flex;
@@ -54,12 +59,15 @@ body {
   flex-direction: column;
 }
 
+/* Container for canvas and overlay */
 .canvas-container {
   position: relative;
-  //width: 600px; /* Or any desired width */
-  //height: 400px; /* Or any desired height */
+  /* Uncomment and adjust width and height as needed */
+  /* width: 600px; /* Or any desired width */
+  /* height: 400px; /* Or any desired height */
 }
 
+/* Styles for canvas and overlay */
 canvas,
 .overlay {
   width: 100%;
@@ -83,6 +91,7 @@ canvas {
   border-radius: 10px;
 }
 
+/* Positioning for the live record button */
 .live-record-button {
   position: absolute;
   top: 50%;
@@ -90,11 +99,13 @@ canvas {
   transform: translate(-50%, -50%);
 }
 
+/* Styles for the stop button */
 .stop-button {
   /* Adjust styles as needed */
   margin-right: 10px;
 }
 
+/* Common styles for status and chunk sent buttons */
 .statusButton,
 .chunkSentButton {
   padding: 10px 20px;
@@ -104,6 +115,7 @@ canvas {
   color: white;
 }
 
+/* Main container styles */
 .container {
   display: flex;
   flex-direction: column;
@@ -114,41 +126,48 @@ canvas {
   margin-top: 45px;
 }
 
+/* Styles for the button row */
 .button-row {
   display: flex;
   align-items: center;
 }
 
+/* Disable pointer events for certain buttons */
 .no-click {
   pointer-events: none;
 }
 
+/* Background colors for status indicators */
 .inactive {
   background-color: #555 !important;
 }
 
 .active {
-  background-color: #4CAF50 !important;
+  background-color: #4caf50 !important;
 }
 
+/* Background colors for chunk sent indicator */
 .grey {
   background-color: #555 !important;
 }
 
 .red {
-  background-color: #FF6347 !important;
+  background-color: #ff6347 !important;
 }
 
+/* Styles for timer text */
 .timer {
-  color: #FFF;
+  color: #fff;
   font-size: 18px;
   margin-top: 10px;
 }
 
+/* Text color utility class */
 .text-color {
   color: black;
 }
 
+/* Utility class for centering buttons */
 .centered-button {
   display: flex;
   align-items: center;
@@ -158,6 +177,7 @@ canvas {
   box-sizing: border-box;
 }
 
+/* Utility class to ensure buttons have the same width */
 .same-width-button {
   min-width: 130px;
   max-width: 130px;
@@ -165,44 +185,57 @@ canvas {
 </style>
 
 <script>
-import {resizeCanvas} from '@/methods/waveform/setupCanvas';
-import {updateMinMax} from '@/methods/utils/updateMinMax';
-import {updateTimers} from '@/methods/utils/updateTimers';
+// Import necessary modules and components
+import { resizeCanvas } from '@/methods/waveform/setupCanvas';
+import { updateMinMax } from '@/methods/utils/updateMinMax';
+import { updateTimers } from '@/methods/utils/updateTimers';
 import Cookies from 'js-cookie';
 import apiClient from '@/router/apiClient';
-import {Microphone} from "@element-plus/icons-vue";
+import { Microphone } from '@element-plus/icons-vue';
 
 export default {
+  // Register components used in the template
   components: {
     MicrophoneIcon: Microphone,
   },
+  // Define component props
   props: {
     liveRecordColor: {
       type: String,
       default: '#29353C',
     },
   },
+  // Component data properties
   data() {
     return {
+      // Initial transcription text
       transcription: 'This is where the live transcriptions will appear...',
+      // Backend endpoint URI
       backendURI: '/transcribe',
+      // Threshold percentage for activation detection
       thresholdPercentage: 0.1,
+      // Sensitivity settings for activity detection
       sensitivity: {
         activity: 0.5,
         reduced: 0.5,
       },
+      // Recording time trackers
       recordingTime: 0,
       delayTime: 0,
       reactivationsLeft: 1,
-      delayDuration: 250,
-      forceSendDuration: 8000,
+      // Duration settings
+      delayDuration: 250, // in milliseconds
+      forceSendDuration: 8000, // in milliseconds
+      // Canvas elements
       canvas: null,
       canvasCtx: null,
+      // UI elements
       activateButton: null,
       chunkSentButton: null,
       recordingTimeDisplay: null,
       delayTimeDisplay: null,
       reactivationsLeftDisplay: null,
+      // Audio analysis
       analyser: null,
       bufferLength: null,
       dataArray: null,
@@ -210,14 +243,19 @@ export default {
       totalSlices: null,
       slicesFor4Seconds: null,
       activationThreshold: null,
+      // Frame rate and offsets
       fps: 60,
       verticalOffset: 120,
+      // Timers
       inactiveTimer: null,
       resetTimer: null,
       delayTimer: null,
+      // Reactivation counters
       reactivationCount: 0,
       maxReactivations: 1,
-      chunkBeepDuration: 250,
+      // Beep duration for chunk sent indication
+      chunkBeepDuration: 250, // in milliseconds
+      // Recording state
       isRecording: false,
       recordingStartTime: null,
       delayStartTime: null,
@@ -226,27 +264,38 @@ export default {
       chunkSent: false,
       chunkNumber: 1,
       forceSendTimer: null,
+      // Audio processing
       audioContext: null,
       audioWorkletNode: null,
       recordedSamples: [],
       sampleRate: 48000,
       audioStream: null,
-      preBufferDuration: 0.4,
+      preBufferDuration: 0.4, // in seconds
       preBufferSize: null,
       preBuffer: null,
       preBufferIndex: 0,
+      // UI visibility flags
       showOverlay: true,
       showLiveRecordButton: true,
       showStopButton: false,
+      // Flag to prevent multiple sends
+      isSending: false,
     };
   },
+  // Lifecycle hook - called when component is mounted
   mounted() {
     this.setupCanvas();
   },
   methods: {
+    /**
+     * Start recording audio and initialize audio processing.
+     */
     startRecording() {
       // Optional: Log the buffer states for debugging
-      console.log('Starting new recording. Recorded Samples Length:', this.recordedSamples.length);
+      console.log(
+        'Starting new recording. Recorded Samples Length:',
+        this.recordedSamples.length
+      );
       console.log('PreBuffer Index:', this.preBufferIndex);
 
       this.initializeAudio();
@@ -254,6 +303,9 @@ export default {
       this.showLiveRecordButton = false;
       this.showStopButton = true;
     },
+    /**
+     * Stop recording audio and reset the recording state.
+     */
     async stopRecording() {
       this.showOverlay = true;
       this.showLiveRecordButton = true;
@@ -263,6 +315,9 @@ export default {
       }
       this.resetState();
     },
+    /**
+     * Initialize audio context and start audio processing.
+     */
     initializeAudio() {
       const initialize = async () => {
         if (this.audioContext) {
@@ -277,26 +332,38 @@ export default {
       };
       initialize();
     },
+    /**
+     * Update timer values for recording and delay times.
+     * @param {number} recordingTime - Current recording time in milliseconds.
+     * @param {number} delayTime - Current delay time in milliseconds.
+     * @param {number} reactivationsLeft - Number of reactivations left.
+     */
     updateTimerValues(recordingTime, delayTime, reactivationsLeft) {
       this.recordingTime = recordingTime;
       this.delayTime = delayTime;
       this.reactivationsLeft = reactivationsLeft;
     },
+    /**
+     * Start updating the timers for recording and delays.
+     */
     startUpdatingTimers() {
       const update = () => {
         updateTimers(
-            this.isRecording,
-            this.recordingStartTime,
-            this.delayStartTime,
-            this.delayDuration,
-            this.maxReactivations,
-            this.reactivationCount,
-            this.updateTimerValues
+          this.isRecording,
+          this.recordingStartTime,
+          this.delayStartTime,
+          this.delayDuration,
+          this.maxReactivations,
+          this.reactivationCount,
+          this.updateTimerValues
         );
         requestAnimationFrame(update);
       };
       update();
     },
+    /**
+     * Set up the canvas for waveform drawing.
+     */
     setupCanvas() {
       const canvas = this.$refs.waveform;
       if (!canvas) {
@@ -312,40 +379,63 @@ export default {
       this.canvasCtx = canvasCtx;
       resizeCanvas(this.canvas, this.canvasCtx);
     },
+    /**
+     * Set up audio context, audio nodes, and start processing audio.
+     */
     async setupAudio() {
       try {
         console.log('Connecting audio nodes');
-        this.audioStream = await navigator.mediaDevices.getUserMedia({audio: true});
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Get user media (microphone input)
+        this.audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        this.audioContext = new (window.AudioContext ||
+          window.webkitAudioContext)();
 
         if (this.audioContext.state === 'suspended') {
           await this.audioContext.resume();
         }
 
         this.sampleRate = this.audioContext.sampleRate;
-        const source = this.audioContext.createMediaStreamSource(this.audioStream);
+        const source = this.audioContext.createMediaStreamSource(
+          this.audioStream
+        );
 
+        // Create an analyser node for audio visualization
         this.analyser = this.audioContext.createAnalyser();
         source.connect(this.analyser);
         this.bufferLength = this.analyser.frequencyBinCount;
         this.dataArray = new Uint8Array(this.bufferLength);
 
+        // Initialize rolling buffer for waveform visualization
         this.totalSlices = 20 * this.fps;
-        this.rollingBuffer = new Uint8Array(this.totalSlices * this.bufferLength).fill(128);
+        this.rollingBuffer = new Uint8Array(
+            this.totalSlices * this.bufferLength
+        ).fill(128);
         this.slicesFor4Seconds = 4 * this.fps;
         this.activationThreshold = this.sensitivity['activity'] * this.fps;
 
-        await this.audioContext.audioWorklet.addModule('/atlas/audio/processor.js').catch((error) => {
-          console.error('Error loading AudioWorkletProcessor:', error);
-        });
+        // Load audio worklet processor for recording
+        await this.audioContext.audioWorklet
+            .addModule('/atlas/audio/processor.js')
+            .catch((error) => {
+              console.error('Error loading AudioWorkletProcessor:', error);
+            });
 
-        this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
+        this.audioWorkletNode = new AudioWorkletNode(
+            this.audioContext,
+            'recorder-processor'
+        );
         source.connect(this.audioWorkletNode);
 
-        this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
+        // Initialize pre-buffer for retaining audio before activation
+        this.preBufferSize = Math.floor(
+            this.preBufferDuration * this.sampleRate
+        );
         this.preBuffer = new Float32Array(this.preBufferSize);
         this.preBufferIndex = 0;
 
+        // Handle incoming audio data from the worklet processor
         this.audioWorkletNode.port.onmessage = (event) => {
           const audioData = event.data;
           if (audioData.length > 0) {
@@ -359,6 +449,10 @@ export default {
         console.error('Error in setupAudio:', error);
       }
     },
+    /**
+     * Store incoming audio data into the pre-buffer.
+     * @param {Float32Array} audioData - Audio data samples.
+     */
     storeInPreBuffer(audioData) {
       const dataLength = audioData.length;
       if (dataLength + this.preBufferIndex > this.preBufferSize) {
@@ -370,9 +464,15 @@ export default {
       this.preBuffer.set(audioData, this.preBufferIndex);
       this.preBufferIndex += dataLength;
     },
+    /**
+     * Clear the canvas for waveform drawing.
+     */
     clearCanvas() {
       this.canvasCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     },
+    /**
+     * Draw the waveform line on the canvas.
+     */
     drawWaveformLine() {
       this.canvasCtx.lineWidth = 2;
       this.canvasCtx.strokeStyle = '#00FFCC';
@@ -395,6 +495,9 @@ export default {
       }
       this.canvasCtx.stroke();
     },
+    /**
+     * Draw minimum and maximum lines on the waveform for visualization.
+     */
     drawMinMaxLines() {
       const {min: normalizedMinValue, max: normalizedMaxValue} = updateMinMax(
           this.rollingBuffer,
@@ -404,6 +507,7 @@ export default {
           this.verticalOffset
       );
 
+      // Draw max line
       this.canvasCtx.strokeStyle = '#f83030';
       this.canvasCtx.lineWidth = 1;
       this.canvasCtx.beginPath();
@@ -411,15 +515,20 @@ export default {
       this.canvasCtx.lineTo(this.canvas.width, normalizedMaxValue);
       this.canvasCtx.stroke();
 
+      // Draw min line
       this.canvasCtx.strokeStyle = '#21219a';
       this.canvasCtx.beginPath();
       this.canvasCtx.moveTo(0, normalizedMinValue);
       this.canvasCtx.lineTo(this.canvas.width, normalizedMinValue);
       this.canvasCtx.stroke();
     },
+    /**
+     * Draw activation threshold lines on the waveform.
+     */
     drawActivationThresholdLines() {
       const centerY = this.canvas.height / 2 - this.verticalOffset;
-      const activationThresholdY = this.canvas.height * (this.thresholdPercentage / 2);
+      const activationThresholdY =
+          this.canvas.height * (this.thresholdPercentage / 2);
 
       this.canvasCtx.strokeStyle = '#919b07';
       this.canvasCtx.beginPath();
@@ -430,6 +539,10 @@ export default {
       this.canvasCtx.lineTo(this.canvas.width, centerY + activationThresholdY);
       this.canvasCtx.stroke();
     },
+    /**
+     * Check if the audio signal is within the activation threshold.
+     * If conditions are met, activate or deactivate recording accordingly.
+     */
     checkThresholdCondition() {
       const centerY = this.canvas.height / 2 - this.verticalOffset;
       const centerThreshold = this.canvas.height * this.thresholdPercentage;
@@ -469,6 +582,9 @@ export default {
         }
       }
     },
+    /**
+     * Activate recording when the audio signal exceeds the threshold.
+     */
     activateRecording() {
       console.log('Activating recording');
 
@@ -489,6 +605,7 @@ export default {
       // Reset preBufferIndex to allow new data to be written after retained data
       this.preBufferIndex = this.preBufferSize;
 
+      // Set a timer to force send the chunk after a certain duration
       this.forceSendTimer = setTimeout(() => {
         this.forceSendChunk('time');
       }, this.forceSendDuration);
@@ -497,6 +614,9 @@ export default {
 
       this.chunkSent = false;
     },
+    /**
+     * Deactivate recording when the audio signal falls below the threshold.
+     */
     deactivateRecording() {
       console.log('Deactivating recording');
 
@@ -516,12 +636,16 @@ export default {
         this.forceSendTimer = null;
       }
 
+      // Start a delay timer before considering the recording inactive
       this.delayTimer = setTimeout(() => {
         this.startInactiveTimer();
       }, this.delayDuration);
 
       this.chunkSent = false;
     },
+    /**
+     * Reset the recording state and clear audio buffers.
+     */
     resetState() {
       // Reset recording state variables
       this.isRecording = false;
@@ -534,19 +658,17 @@ export default {
 
       // Clear audio buffers but retain the last preBufferDuration seconds
       this.clearAudioBuffers();
-
-      // Note: clearAudioBuffers now retains the last preBufferDuration seconds
     },
+    /**
+     * Force send the recorded audio chunk due to specified reason.
+     * @param {string} reason - Reason for forcing the chunk send ('max' or 'time').
+     */
     forceSendChunk(reason) {
       console.log(`Chunk sent due to ${reason}`);
 
       this.sendChunkToConsole();
 
       // Reset the state after sending the chunk
-      // Note: `clearAudioBuffers` is already called in `sendChunkToConsole`'s finally block
-      // So you might not need to reset state here again
-      // However, ensure that no additional state needs to be reset
-
       if (this.forceSendTimer) {
         clearTimeout(this.forceSendTimer);
         this.forceSendTimer = null;
@@ -554,22 +676,38 @@ export default {
 
       this.chunkSent = true;
 
+      // Indicate that the chunk was sent (e.g., for UI feedback)
       this.resetTimer = setTimeout(() => {
         this.chunkSent = false;
       }, this.chunkBeepDuration);
 
       this.isActive = false;
     },
+    /**
+     * Send the recorded audio chunk to the backend API.
+     */
     async sendChunkToConsole() {
+      if (this.isSending) {
+        console.log('Already sending a chunk, skipping send.');
+        return;
+      }
+
       if (this.recordedSamples.length) {
+        this.isSending = true; // Start sending
         try {
+          // Encode recorded samples into WAV format
           const wavBlob = this.encodeWAV(this.recordedSamples, this.sampleRate);
           console.log('Chunk', this.chunkNumber, 'sent:', wavBlob);
 
+          // Optionally save the WAV file locally (for debugging)
+          this.saveWavLocally(wavBlob, `chunk_${this.chunkNumber}.wav`);
+
+          // Prepare form data for API request
           const formData = new FormData();
           formData.append('file', wavBlob, `chunk_${this.chunkNumber}.wav`);
           console.log('Sending WAV blob:', wavBlob);
 
+          // Send the audio file to the backend API
           const response = await apiClient.post(this.backendURI, formData);
 
           if (response && response.status === 200) {
@@ -583,7 +721,11 @@ export default {
             }
 
             console.log('Transcription result:', data);
-            if (data.transcription && data.transcription !== 'False activation') {
+            if (
+                data.transcription &&
+                data.transcription !== 'False activation'
+            ) {
+              // Emit an event with the transcription result
               this.$emit('transcription-received', data.transcription);
             }
           } else {
@@ -595,9 +737,13 @@ export default {
           // Clear audio buffers but retain the last preBufferDuration seconds
           this.clearAudioBuffers();
           this.chunkNumber++;
+          this.isSending = false; // Reset sending flag
         }
       }
     },
+    /**
+     * Clear audio buffers while retaining the last preBufferDuration seconds.
+     */
     clearAudioBuffers() {
       // Clear the recorded samples
       this.recordedSamples = [];
@@ -610,7 +756,10 @@ export default {
 
         if (start < 0) {
           // Handle buffer wrap-around
-          const part1 = this.preBuffer.slice(start + this.preBuffer.length, this.preBuffer.length);
+          const part1 = this.preBuffer.slice(
+              start + this.preBuffer.length,
+              this.preBuffer.length
+          );
           const part2 = this.preBuffer.slice(0, end);
           this.preBuffer.fill(0);
           this.preBuffer.set(part1, 0);
@@ -634,6 +783,9 @@ export default {
       this.conditionCounter = 0;
       this.chunkSent = false;
     },
+    /**
+     * Start an inactive timer to determine when to send the audio chunk after inactivity.
+     */
     startInactiveTimer() {
       if (this.inactiveTimer) {
         return;
@@ -652,11 +804,20 @@ export default {
         this.inactiveTimer = null;
       }, this.delayDuration);
     },
+    /**
+     * Update the rolling buffer with new audio data for visualization.
+     */
     updateRollingBuffer() {
       this.analyser.getByteTimeDomainData(this.dataArray);
       this.rollingBuffer.copyWithin(0, this.bufferLength);
-      this.rollingBuffer.set(this.dataArray, this.rollingBuffer.length - this.bufferLength);
+      this.rollingBuffer.set(
+          this.dataArray,
+          this.rollingBuffer.length - this.bufferLength
+      );
     },
+    /**
+     * Main loop for drawing the waveform and checking activation conditions.
+     */
     drawWaveform() {
       requestAnimationFrame(this.drawWaveform);
       if (!this.analyser) {
@@ -670,37 +831,62 @@ export default {
       this.drawActivationThresholdLines();
       this.checkThresholdCondition();
     },
+    /**
+     * Encode recorded audio samples into WAV format.
+     * @param {Float32Array} samples - Recorded audio samples.
+     * @param {number} sampleRate - Audio sample rate.
+     * @returns {Blob} - WAV audio blob.
+     */
     encodeWAV(samples, sampleRate) {
       const buffer = new ArrayBuffer(44 + samples.length * 2);
       const view = new DataView(buffer);
 
+      // RIFF chunk descriptor
       this.writeString(view, 0, 'RIFF');
       view.setUint32(4, 36 + samples.length * 2, true);
       this.writeString(view, 8, 'WAVE');
+      // FMT sub-chunk
       this.writeString(view, 12, 'fmt ');
       view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true);
-      view.setUint16(22, 1, true);
+      view.setUint16(20, 1, true); // PCM format
+      view.setUint16(22, 1, true); // Mono channel
       view.setUint32(24, sampleRate, true);
-      view.setUint32(28, sampleRate * 2, true);
-      view.setUint16(32, 2, true);
-      view.setUint16(34, 16, true);
+      view.setUint32(28, sampleRate * 2, true); // Byte rate
+      view.setUint16(32, 2, true); // Block align
+      view.setUint16(34, 16, true); // Bits per sample
+      // Data sub-chunk
       this.writeString(view, 36, 'data');
       view.setUint32(40, samples.length * 2, true);
 
+      // Write PCM samples
       let offset = 44;
       for (let i = 0; i < samples.length; i++, offset += 2) {
         const s = Math.max(-1, Math.min(1, samples[i]));
-        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        view.setInt16(
+            offset,
+            s < 0 ? s * 0x8000 : s * 0x7fff,
+            true
+        );
       }
 
       return new Blob([view], {type: 'audio/wav'});
     },
+    /**
+     * Helper function to write strings to DataView.
+     * @param {DataView} view - DataView to write to.
+     * @param {number} offset - Offset position.
+     * @param {string} string - String to write.
+     */
     writeString(view, offset, string) {
       for (let i = 0; i < string.length; i++) {
         view.setUint8(offset + i, string.charCodeAt(i));
       }
     },
+    /**
+     * Save WAV audio blob locally (for debugging purposes).
+     * @param {Blob} blob - WAV audio blob.
+     * @param {string} fileName - File name for the saved audio.
+     */
     saveWavLocally(blob, fileName) {
       const url = URL.createObjectURL(blob);
 
