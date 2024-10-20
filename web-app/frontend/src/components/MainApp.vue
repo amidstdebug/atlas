@@ -12,8 +12,8 @@
         <!-- Tabs centered in the header -->
         <div style="flex: 6; display: flex; justify-content: center; margin-left: 100px;">
           <!-- Ensure v-model is correctly bound -->
-          <el-tabs v-model="activeTab" class="header-tabs" @tab-click="handleTabClick" style="width: fit-content;">
-            <el-tab-pane label="Automated Air Incident Investigation" name="incident"></el-tab-pane>
+          <el-tabs v-model="activeTab" class="header-tabs" @tab-click="handleTabClick" style="width: fit-content; ">
+            <el-tab-pane  label="Automated Air Incident Investigation" name="incident"></el-tab-pane>
             <el-tab-pane label="Automated Meeting Minutes" name="minutes"></el-tab-pane>
           </el-tabs>
         </div>
@@ -98,7 +98,7 @@ export default {
         this.headerColor = '#8ba4b3'; // Light color for meeting minutes
         document.documentElement.style.setProperty('--el-color-primary', '#28343b'); // primary text color for incident
         document.documentElement.style.setProperty('--el-color-secondary', '#557488'); // Secondary color for minutes
-        document.documentElement.style.setProperty('--el-text-color-primary', '#e9f0f7'); // text color for inactive
+        document.documentElement.style.setProperty('--el-text-color-primary', '#e4e7ed'); // text color for inactive
       }
 
       console.log('Tab clicked:', tabName, 'Active Tab:', this.activeTab, 'Header color:', this.headerColor);
@@ -165,6 +165,7 @@ html, body {
   color: #fff !important; /* Force white color for the active tab */
   background-color: transparent !important; /* Ensure no background color change */
   border-bottom: 2px solid #fff !important; /* Optional: add a bottom border if desired */
+  font-size:20px !important;
 }
 
 .el-tabs__content {

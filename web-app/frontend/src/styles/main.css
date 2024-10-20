@@ -11,7 +11,7 @@ body {
   --el-color-primary: #dfebf6; /* Example: Change to your desired primary color */
   --el-color-secondary: #768a96;
   --el-text-color-primary:#29353c;
-  --el-font-size-base:15px;
+  /* --el-font-size-base:17px; */
 }
 
 .el-tabs__active-bar {
