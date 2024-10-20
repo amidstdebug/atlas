@@ -109,7 +109,7 @@ export default {
       reactivationsLeft: 1,
       // Duration settings
       delayDuration: 250, // in milliseconds
-      forceSendDuration: 8000, // in milliseconds
+      forceSendDuration: 4000, // in milliseconds
       // Canvas elements
       canvas: null,
       canvasCtx: null,
@@ -154,7 +154,7 @@ export default {
       recordedSamples: [],
       sampleRate: 48000,
       audioStream: null,
-      preBufferDuration: 0.4, // in seconds
+      preBufferDuration: 0.55, // in seconds
       preBufferSize: null,
       preBuffer: null,
       preBufferIndex: 0,
@@ -622,6 +622,8 @@ export default {
           // Optionally save the WAV file locally (for debugging)
           saveBlobLocally(wavBlob, `chunk_${this.chunkNumber}.wav`);
 
+          this.clearAudioBuffers();
+
           // Prepare form data for API request
           const formData = new FormData();
           formData.append('file', wavBlob, `chunk_${this.chunkNumber}.wav`);
@@ -646,6 +648,7 @@ export default {
                 data.transcription !== 'False activation'
             ) {
               // Emit an event with the transcription result
+							console.log("Emitted:", data.transcription)
               this.$emit('transcription-received', data.transcription);
             }
           } else {
@@ -655,7 +658,6 @@ export default {
           console.error('Error sending the chunk:', error);
         } finally {
           // Clear audio buffers but retain the last preBufferDuration seconds
-          this.clearAudioBuffers();
           this.chunkNumber++;
           this.isSending = false; // Reset sending flag
         }
