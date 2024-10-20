@@ -326,7 +326,7 @@ if __name__ == '__main__':
 
 
 	# Function to load model into memory via Ollama server
-	def load_ollama_model():
+	def check_ollama_model_status():
 		try:
 			# Define a sample payload to send to Ollama server to load the model into memory
 			payload = {
@@ -360,7 +360,7 @@ if __name__ == '__main__':
 	transcribe_success = transcribe_startup_file()
 
 	# Step 2: Send a request to Ollama server to load the model into memory
-	ollama_success = load_ollama_model()
+	ollama_success = check_ollama_model_status()
 
 	# Step 3: Print success message if both steps succeeded
 	if transcribe_success and ollama_success:

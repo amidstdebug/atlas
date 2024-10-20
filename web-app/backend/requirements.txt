@@ -2,7 +2,7 @@ flask
 flask-cors
 torch
 torchaudio
-transformers
+transformers==4.36.2 # Otherwise, runs into index -2 out of bound issue because using jlvdoorn/whisper-medium.en-atco2-asr
 numpy
 librosa
 scipy

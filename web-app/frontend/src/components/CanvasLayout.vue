@@ -620,7 +620,7 @@ export default {
           console.log('Chunk', this.chunkNumber, 'sent:', wavBlob);
 
           // Optionally save the WAV file locally (for debugging)
-          saveBlobLocally(wavBlob, `chunk_${this.chunkNumber}.wav`);
+          // saveBlobLocally(wavBlob, `chunk_${this.chunkNumber}.wav`);
 
           this.clearAudioBuffers();
 

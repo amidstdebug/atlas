@@ -425,13 +425,6 @@ def validate_atc_transcription(transcription):
 	transcription = ' '.join(corrected_words)
 	return transcription
 
-
-# Example usage
-transcription = "We have 200 soles on board, rodger that."
-corrected_transcription = validate_atc_transcription(transcription)
-print(corrected_transcription)
-
-
 # ============================
 # Main Transformation Function
 # ============================

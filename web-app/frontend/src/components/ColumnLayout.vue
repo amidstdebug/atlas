@@ -181,17 +181,10 @@ export default {
   },
   data() {
     return {
-      // transcriptionBuffer: '',
-      // summaries: [],
-      // maxBufferLength: 2000,
-      // apiEndpoint: 'https://jwong.dev/api/summary',
-      // isRecording: false,
-      // debouncedGenerateSummary: null,
-
       transcriptionBuffer: '',
       summaries: [],
       maxBufferLength: 2000,
-      apiEndpoint: 'https://jwong.dev/api/summary',
+      summaryApiEndpoint: '/summary',
       isRecording: false,
       debouncedGenerateSummary: null,
       transcribeApiEndpoint: '/transcribe',
@@ -342,7 +335,7 @@ export default {
 		formData.append('file', wavBlob, 'audio_chunk.wav');
 
 		// Make the POST request to your backend
-		const response = await apiClient.post(this.apiEndpoint, formData, {
+		const response = await apiClient.post(this.transcribeApiEndpoint, formData, {
 			headers: {
 			'Content-Type': 'multipart/form-data', // Ensure multipart form data
 			},
@@ -474,7 +467,7 @@ export default {
           payload.previous_report = previousReport;
         }
 
-        const response = await apiClient.post(this.apiEndpoint, payload, {
+        const response = await apiClient.post(this.summaryApiEndpoint, payload, {
           headers: {
             'Content-Type': 'application/json',
           },
