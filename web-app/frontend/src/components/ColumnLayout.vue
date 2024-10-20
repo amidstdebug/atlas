@@ -114,6 +114,29 @@ import Prism from 'prismjs';
 import 'prismjs/themes/prism.css';
 import DOMPurify from 'dompurify';
 import apiClient from "@/router/apiClient";
+import {typeWriterMultiple} from '@/methods/utils/typeWriter'; // Ensure this path is correct
+import {tabConfigurations} from '@/config/columnConfig'; // Ensure this path is correct
+
+// Define typingMappings outside the component for reusability
+const typingMappings = [
+  {configPath: ['headers', 'leftBoxHeader'], dataKey: 'leftBoxHeader'},
+  {configPath: ['headers', 'rightBoxHeader'], dataKey: 'rightBoxHeader'},
+  {configPath: ['initials', 'leftBoxInitial'], dataKey: 'leftBoxInitial'},
+  {configPath: ['initials', 'rightBoxInitial'], dataKey: 'rightBoxInitial'},
+];
+
+/**
+ * Retrieves a nested property value from an object based on the provided path.
+ *
+ * @param {Object} obj - The object to traverse.
+ * @param {Array} path - An array representing the path to the desired property.
+ * @returns {*} - The value of the nested property or undefined if not found.
+ */
+function getNestedProperty(obj, path) {
+  return path.reduce((accumulator, key) => {
+    return accumulator && accumulator[key] ? accumulator[key] : undefined;
+  }, obj);
+}
 
 export default {
   name: 'ColumnLayout',
@@ -160,7 +183,7 @@ export default {
       rightBoxHeader: "Live Summary",
       rightBoxInitial: "This is where the live summary will appear...",
       typingSpeed: 11, // Speed for typewriter effect
-      typingTimeouts: [], // Array to store timeout IDs
+      cancelTypingFunctions: [], // Array to hold cancellation functions
     };
   },
   computed: {
@@ -190,59 +213,52 @@ export default {
       }
     },
     activeTab(newTab) {
-      if (newTab === 'incident') {
-        this.typewriterEffect('Live Transcription', 'Live Summary');
-        this.updateInitials(
-            'This is where the live transcriptions will appear...',
-            'This is where the live summary will appear...'
-        );
-      } else if (newTab === 'minutes') {
-        this.typewriterEffect('Meeting Transcription', 'Meeting Minutes');
-        this.updateInitials(
-            'This is where the meeting transcriptions will appear...',
-            'This is where the meeting minutes will appear...'
-        );
-      }
+      this.handleActiveTabChange(newTab);
     },
   },
 
+
   methods: {
-    updateInitials(leftInitial, rightInitial) {
-      this.leftBoxInitial = leftInitial;
-      this.rightBoxInitial = rightInitial;
-    },
-    // Typewriter function to update headers
-    typewriterEffect(leftText, rightText) {
-      // Clear any existing timeouts
-      this.typingTimeouts.forEach(timeout => clearTimeout(timeout));
-      this.typingTimeouts = []; // Reset the array
+    /**
+     * Handles changes to the activeTab prop.
+     * Initiates typewriter effects for headers and initials based on the newTab configuration.
+     *
+     * @param {String} newTab - The new activeTab value.
+     */
+    handleActiveTabChange(newTab) {
+      // Clear existing typewriter effects
+      this.cancelTypingFunctions.forEach(cancelFn => cancelFn());
+      this.cancelTypingFunctions = [];
 
-      this.leftBoxHeader = '';
-      this.rightBoxHeader = '';
+      // Get the configuration for the new tab
+      const config = tabConfigurations[newTab];
 
-      let leftIndex = 0;
-      let rightIndex = 0;
+      if (config) {
+        // Define typing tasks dynamically based on the mapping
+        const typingTasks = typingMappings.map(mapping => {
+          const text = getNestedProperty(config, mapping.configPath);
+          const dataKey = mapping.dataKey;
 
-      const typeLeftHeader = () => {
-        if (leftIndex < leftText.length) {
-          this.leftBoxHeader += leftText[leftIndex];
-          leftIndex++;
-          const timeoutId = setTimeout(typeLeftHeader, this.typingSpeed);
-          this.typingTimeouts.push(timeoutId);
-        }
-      };
+          // Reset the target data property to empty string
+          this[dataKey] = '';
 
-      const typeRightHeader = () => {
-        if (rightIndex < rightText.length) {
-          this.rightBoxHeader += rightText[rightIndex];
-          rightIndex++;
-          const timeoutId = setTimeout(typeRightHeader, this.typingSpeed);
-          this.typingTimeouts.push(timeoutId);
-        }
-      };
+          return {
+            text: text,
+            typingSpeed: this.typingSpeed,
+            onUpdate: (currentText) => {
+              this[dataKey] = currentText;
+            },
+            onComplete: () => {
+              // Optional: Actions after typing completes for each task
+            },
+          };
+        });
 
-      typeLeftHeader();
-      typeRightHeader();
+        // Start typewriter effects and store cancellation functions
+        this.cancelTypingFunctions = typeWriterMultiple(typingTasks);
+      } else {
+        console.warn(`No configuration found for activeTab: ${newTab}`);
+      }
     },
     addTranscription(newText) {
       this.transcriptionBuffer += newText + '\n';
@@ -442,6 +458,17 @@ export default {
           });
         }
     );
+
+    // If activeTab is already set when the component mounts, handle it
+    if (this.activeTab) {
+      this.handleActiveTabChange(this.activeTab);
+    }
+  },
+  beforeUnmount() {
+    // Clean up any pending typing effects when the component is destroyed
+    this.cancelTypingFunctions.forEach((cancelFn) => cancelFn());
+
+    // Additional cleanup if necessary
   },
 };
 </script>
