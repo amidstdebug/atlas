@@ -9,15 +9,15 @@
       <div v-if="showOverlay" class="overlay"></div>
       <!-- Live Record Button, displayed when not recording -->
       <el-button
-        :style="{ color: liveRecordColor }"
-        v-if="showLiveRecordButton"
-        class="live-record-button centered-button same-width-button"
-        @click="startRecording"
+          :style="{ color: liveRecordColor }"
+          v-if="showLiveRecordButton"
+          class="live-record-button centered-button same-width-button"
+          @click="startRecording"
       >
         <el-icon class="icon-group">
-          <MicrophoneIcon />
+          <MicrophoneIcon/>
         </el-icon>
-        Start Recording
+        {{ recordingButton }}
       </el-button>
     </div>
 
@@ -25,21 +25,21 @@
     <el-row class="button-row">
       <!-- Stop Recording Button, displayed when recording -->
       <el-button
-        v-if="showStopButton"
-        class="stop-button centered-button same-width-button"
-        @click="stopRecording"
+          v-if="showStopButton"
+          class="stop-button centered-button same-width-button"
+          @click="stopRecording"
       >
-        Stop Recording
+        {{ stopRecordingButton }}
       </el-button>
       <!-- Activation Status Button, indicates whether recording is active -->
       <el-button
-        :class="['statusButton', 'no-click', isActive ? 'active' : 'inactive']"
+          :class="['statusButton', 'no-click', isActive ? 'active' : 'inactive']"
       >
         Activated
       </el-button>
       <!-- Chunk Sent Indicator Button, indicates whether a chunk has been sent -->
       <el-button
-        :class="['chunkSentButton', 'no-click', chunkSent ? 'red' : 'grey']"
+          :class="['chunkSentButton', 'no-click', chunkSent ? 'red' : 'grey']"
       >
         Chunk Sent
       </el-button>
@@ -47,153 +47,27 @@
   </div>
 </template>
 
-<style scoped>
-/* Global body styles */
-body {
-  background-color: #121212;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  margin: 0;
-  flex-direction: column;
-}
-
-/* Container for canvas and overlay */
-.canvas-container {
-  position: relative;
-  /* Uncomment and adjust width and height as needed */
-  /* width: 600px; /* Or any desired width */
-  /* height: 400px; /* Or any desired height */
-}
-
-/* Styles for canvas and overlay */
-canvas,
-.overlay {
-  width: 100%;
-  height: 100%;
-  display: block;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-canvas {
-  border: 1px solid #333;
-  border-radius: 10px;
-}
-
-.overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  background-color: rgba(41, 53, 60, 0.71);
-  border-radius: 10px;
-}
-
-/* Positioning for the live record button */
-.live-record-button {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-/* Styles for the stop button */
-.stop-button {
-  /* Adjust styles as needed */
-  margin-right: 10px;
-}
-
-/* Common styles for status and chunk sent buttons */
-.statusButton,
-.chunkSentButton {
-  padding: 10px 20px;
-  font-size: 15px;
-  border-radius: 8px;
-  margin: 10px;
-  color: white;
-}
-
-/* Main container styles */
-.container {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  margin-left: 20px;
-  margin-top: 45px;
-}
-
-/* Styles for the button row */
-.button-row {
-  display: flex;
-  align-items: center;
-}
-
-/* Disable pointer events for certain buttons */
-.no-click {
-  pointer-events: none;
-}
-
-/* Background colors for status indicators */
-.inactive {
-  background-color: #555 !important;
-}
-
-.active {
-  background-color: #4caf50 !important;
-}
-
-/* Background colors for chunk sent indicator */
-.grey {
-  background-color: #555 !important;
-}
-
-.red {
-  background-color: #ff6347 !important;
-}
-
-/* Styles for timer text */
-.timer {
-  color: #fff;
-  font-size: 18px;
-  margin-top: 10px;
-}
-
-/* Text color utility class */
-.text-color {
-  color: black;
-}
-
-/* Utility class for centering buttons */
-.centered-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 10px;
-  box-sizing: border-box;
-}
-
-/* Utility class to ensure buttons have the same width */
-.same-width-button {
-  min-width: 130px;
-  max-width: 130px;
-}
-</style>
 
 <script>
 // Import necessary modules and components
-import { resizeCanvas } from '@/methods/waveform/setupCanvas';
-import { updateMinMax } from '@/methods/utils/updateMinMax';
-import { updateTimers } from '@/methods/utils/updateTimers';
+import {resizeCanvas} from '@/methods/waveform/setupCanvas';
+import {updateMinMax} from '@/methods/utils/updateMinMax';
+import {updateTimers} from '@/methods/utils/updateTimers';
+import {encodeWAV} from '@/methods/utils/audioUtils';
+import {saveBlobLocally} from '@/methods/utils/fileUtils';
+import {
+  drawWaveformLine,
+  drawMinMaxLines,
+  drawActivationThresholdLines,
+  updateRollingBuffer
+} from "@/methods/utils/canvasUtils";
 import Cookies from 'js-cookie';
 import apiClient from '@/router/apiClient';
-import { Microphone } from '@element-plus/icons-vue';
-
+import {Microphone} from '@element-plus/icons-vue';
+import {typeWriterMultiple} from '@/methods/utils/typeWriter'; // Import the enhanced typeWriterMultiple function
+import {tabConfigurations} from '@/config/canvasConfig'; // Adjust the path as necessary
 export default {
+  name: 'CanvasLayout',
   // Register components used in the template
   components: {
     MicrophoneIcon: Microphone,
@@ -204,10 +78,20 @@ export default {
       type: String,
       default: '#29353C',
     },
+    activeTab: {
+      type: String,
+    },
+  },
+  watch: {
+    activeTab(newTab) {
+      this.handleActiveTabChange(newTab);
+    },
   },
   // Component data properties
   data() {
     return {
+      recordingButton: 'Start Recording',
+      stopRecordingButton: 'Stop Recording',
       // Initial transcription text
       transcription: 'This is where the live transcriptions will appear...',
       // Backend endpoint URI
@@ -280,6 +164,9 @@ export default {
       showStopButton: false,
       // Flag to prevent multiple sends
       isSending: false,
+      typingSpeed: 12,
+      // Cancellation functions for typewriter effects
+      cancelTypingFunctions: [], // Array to hold cancellation functions
     };
   },
   // Lifecycle hook - called when component is mounted
@@ -288,13 +175,60 @@ export default {
   },
   methods: {
     /**
+     * Handle changes to the activeTab prop.
+     * @param {String} newTab - The new activeTab value.
+     */
+    handleActiveTabChange(newTab) {
+      // Cancel existing typewriter effects
+      this.cancelTypingFunctions.forEach((cancelFn) => cancelFn());
+      this.cancelTypingFunctions = [];
+
+      // Get the configuration for the new tab
+      const config = tabConfigurations[newTab];
+
+      if (config && config.buttons) {
+        // Clear existing button labels
+        this.recordingButton = '';
+        this.stopRecordingButton = '';
+
+        // Define typing tasks for buttons
+        const typingTasks = [
+          {
+            text: config.buttons.recordingButton,
+            typingSpeed: this.typingSpeed, // Adjust as needed
+            onUpdate: (currentText) => {
+              this.recordingButton = currentText;
+            },
+            onComplete: () => {
+              // Optional: Actions after recordingButton typing completes
+            },
+          },
+          {
+            text: config.buttons.stopRecordingButton,
+            typingSpeed: this.typingSpeed, // Adjust as needed
+            onUpdate: (currentText) => {
+              this.stopRecordingButton = currentText;
+            },
+            onComplete: () => {
+              // Optional: Actions after stopRecordingButton typing completes
+            },
+          },
+        ];
+
+        // Start typewriter effects
+        this.cancelTypingFunctions = typeWriterMultiple(typingTasks);
+      } else {
+        console.warn(`No configuration found for activeTab: ${newTab}`);
+      }
+    },
+    /**
      * Start recording audio and initialize audio processing.
      */
     startRecording() {
       // Optional: Log the buffer states for debugging
       console.log(
-        'Starting new recording. Recorded Samples Length:',
-        this.recordedSamples.length
+          'Starting new recording. Recorded Samples Length:',
+          this.recordedSamples.length
       );
       console.log('PreBuffer Index:', this.preBufferIndex);
 
@@ -349,13 +283,13 @@ export default {
     startUpdatingTimers() {
       const update = () => {
         updateTimers(
-          this.isRecording,
-          this.recordingStartTime,
-          this.delayStartTime,
-          this.delayDuration,
-          this.maxReactivations,
-          this.reactivationCount,
-          this.updateTimerValues
+            this.isRecording,
+            this.recordingStartTime,
+            this.delayStartTime,
+            this.delayDuration,
+            this.maxReactivations,
+            this.reactivationCount,
+            this.updateTimerValues
         );
         requestAnimationFrame(update);
       };
@@ -390,7 +324,7 @@ export default {
           audio: true,
         });
         this.audioContext = new (window.AudioContext ||
-          window.webkitAudioContext)();
+            window.webkitAudioContext)();
 
         if (this.audioContext.state === 'suspended') {
           await this.audioContext.resume();
@@ -398,7 +332,7 @@ export default {
 
         this.sampleRate = this.audioContext.sampleRate;
         const source = this.audioContext.createMediaStreamSource(
-          this.audioStream
+            this.audioStream
         );
 
         // Create an analyser node for audio visualization
@@ -474,26 +408,17 @@ export default {
      * Draw the waveform line on the canvas.
      */
     drawWaveformLine() {
-      this.canvasCtx.lineWidth = 2;
-      this.canvasCtx.strokeStyle = '#00FFCC';
-      this.canvasCtx.beginPath();
-
-      const sliceWidth = this.canvas.width / this.totalSlices;
-      let x = 0;
-      const centerY = this.canvas.height / 2 - this.verticalOffset;
-
-      for (let i = 0; i < this.rollingBuffer.length; i += this.bufferLength) {
-        const v = this.rollingBuffer[i] / 128.0 - 1.0;
-        const y = centerY + v * (this.canvas.height / 4);
-
-        if (i === 0) {
-          this.canvasCtx.moveTo(x, y);
-        } else {
-          this.canvasCtx.lineTo(x, y);
-        }
-        x += sliceWidth;
-      }
-      this.canvasCtx.stroke();
+      drawWaveformLine({
+        canvasCtx: this.canvasCtx,
+        canvasWidth: this.canvas.width,
+        canvasHeight: this.canvas.height,
+        rollingBuffer: this.rollingBuffer,
+        bufferLength: this.bufferLength,
+        totalSlices: this.totalSlices,
+        verticalOffset: this.verticalOffset,
+        strokeStyle: '#00FFCC', // Optional: Customize as needed
+        lineWidth: 2,            // Optional: Customize as needed
+      });
     },
     /**
      * Draw minimum and maximum lines on the waveform for visualization.
@@ -507,20 +432,15 @@ export default {
           this.verticalOffset
       );
 
-      // Draw max line
-      this.canvasCtx.strokeStyle = '#f83030';
-      this.canvasCtx.lineWidth = 1;
-      this.canvasCtx.beginPath();
-      this.canvasCtx.moveTo(0, normalizedMaxValue);
-      this.canvasCtx.lineTo(this.canvas.width, normalizedMaxValue);
-      this.canvasCtx.stroke();
-
-      // Draw min line
-      this.canvasCtx.strokeStyle = '#21219a';
-      this.canvasCtx.beginPath();
-      this.canvasCtx.moveTo(0, normalizedMinValue);
-      this.canvasCtx.lineTo(this.canvas.width, normalizedMinValue);
-      this.canvasCtx.stroke();
+      drawMinMaxLines({
+        canvasCtx: this.canvasCtx,
+        canvasWidth: this.canvas.width,
+        normalizedMinValue,
+        normalizedMaxValue,
+        minLineColor: '#21219a', // Optional: Customize as needed
+        maxLineColor: '#f83030', // Optional: Customize as needed
+        lineWidth: 1,             // Optional: Customize as needed
+      });
     },
     /**
      * Draw activation threshold lines on the waveform.
@@ -530,14 +450,14 @@ export default {
       const activationThresholdY =
           this.canvas.height * (this.thresholdPercentage / 2);
 
-      this.canvasCtx.strokeStyle = '#919b07';
-      this.canvasCtx.beginPath();
-      this.canvasCtx.moveTo(0, centerY - activationThresholdY);
-      this.canvasCtx.lineTo(this.canvas.width, centerY - activationThresholdY);
-
-      this.canvasCtx.moveTo(0, centerY + activationThresholdY);
-      this.canvasCtx.lineTo(this.canvas.width, centerY + activationThresholdY);
-      this.canvasCtx.stroke();
+      drawActivationThresholdLines({
+        canvasCtx: this.canvasCtx,
+        canvasWidth: this.canvas.width,
+        centerY,
+        activationThresholdY,
+        strokeStyle: '#919b07',    // Optional: Customize as needed
+        lineWidth: 1,               // Optional: Customize as needed
+      });
     },
     /**
      * Check if the audio signal is within the activation threshold.
@@ -696,11 +616,11 @@ export default {
         this.isSending = true; // Start sending
         try {
           // Encode recorded samples into WAV format
-          const wavBlob = this.encodeWAV(this.recordedSamples, this.sampleRate);
+          const wavBlob = encodeWAV(this.recordedSamples, this.sampleRate);
           console.log('Chunk', this.chunkNumber, 'sent:', wavBlob);
 
           // Optionally save the WAV file locally (for debugging)
-          this.saveWavLocally(wavBlob, `chunk_${this.chunkNumber}.wav`);
+          saveBlobLocally(wavBlob, `chunk_${this.chunkNumber}.wav`);
 
           this.clearAudioBuffers();
 
@@ -810,12 +730,12 @@ export default {
      * Update the rolling buffer with new audio data for visualization.
      */
     updateRollingBuffer() {
-      this.analyser.getByteTimeDomainData(this.dataArray);
-      this.rollingBuffer.copyWithin(0, this.bufferLength);
-      this.rollingBuffer.set(
-          this.dataArray,
-          this.rollingBuffer.length - this.bufferLength
-      );
+      updateRollingBuffer({
+        analyser: this.analyser,
+        dataArray: this.dataArray,
+        rollingBuffer: this.rollingBuffer,
+        bufferLength: this.bufferLength,
+      });
     },
     /**
      * Main loop for drawing the waveform and checking activation conditions.
@@ -832,57 +752,6 @@ export default {
       this.drawMinMaxLines();
       this.drawActivationThresholdLines();
       this.checkThresholdCondition();
-    },
-    /**
-     * Encode recorded audio samples into WAV format.
-     * @param {Float32Array} samples - Recorded audio samples.
-     * @param {number} sampleRate - Audio sample rate.
-     * @returns {Blob} - WAV audio blob.
-     */
-    encodeWAV(samples, sampleRate) {
-      const buffer = new ArrayBuffer(44 + samples.length * 2);
-      const view = new DataView(buffer);
-
-      // RIFF chunk descriptor
-      this.writeString(view, 0, 'RIFF');
-      view.setUint32(4, 36 + samples.length * 2, true);
-      this.writeString(view, 8, 'WAVE');
-      // FMT sub-chunk
-      this.writeString(view, 12, 'fmt ');
-      view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true); // PCM format
-      view.setUint16(22, 1, true); // Mono channel
-      view.setUint32(24, sampleRate, true);
-      view.setUint32(28, sampleRate * 2, true); // Byte rate
-      view.setUint16(32, 2, true); // Block align
-      view.setUint16(34, 16, true); // Bits per sample
-      // Data sub-chunk
-      this.writeString(view, 36, 'data');
-      view.setUint32(40, samples.length * 2, true);
-
-      // Write PCM samples
-      let offset = 44;
-      for (let i = 0; i < samples.length; i++, offset += 2) {
-        const s = Math.max(-1, Math.min(1, samples[i]));
-        view.setInt16(
-            offset,
-            s < 0 ? s * 0x8000 : s * 0x7fff,
-            true
-        );
-      }
-
-      return new Blob([view], {type: 'audio/wav'});
-    },
-    /**
-     * Helper function to write strings to DataView.
-     * @param {DataView} view - DataView to write to.
-     * @param {number} offset - Offset position.
-     * @param {string} string - String to write.
-     */
-    writeString(view, offset, string) {
-      for (let i = 0; i < string.length; i++) {
-        view.setUint8(offset + i, string.charCodeAt(i));
-      }
     },
     /**
      * Save WAV audio blob locally (for debugging purposes).
@@ -904,5 +773,150 @@ export default {
       document.body.removeChild(a);
     },
   },
-};
+  beforeUnmount() {
+    // Clean up any pending typing effects when the component is destroyed
+    this.cancelTypingFunctions.forEach((cancelFn) => cancelFn());
+
+    // Additional cleanup if necessary
+    if (this.audioContext) {
+      this.audioContext.close();
+    }
+  },
+}
 </script>
+<style scoped>
+/* Global body styles */
+body {
+  background-color: #121212;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+  flex-direction: column;
+}
+
+/* Container for canvas and overlay */
+.canvas-container {
+  position: relative;
+  /* Uncomment and adjust width and height as needed */
+  /* width: 600px; /* Or any desired width */
+  /* height: 400px; /* Or any desired height */
+}
+
+/* Styles for canvas and overlay */
+canvas,
+.overlay {
+  width: 100%;
+  height: 100%;
+  display: block;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+canvas {
+  border: 1px solid #333;
+  border-radius: 10px;
+}
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: rgba(41, 53, 60, 0.71);
+  border-radius: 10px;
+}
+
+/* Positioning for the live record button */
+.live-record-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Styles for the stop button */
+.stop-button {
+  /* Adjust styles as needed */
+  margin-right: 10px;
+}
+
+/* Common styles for status and chunk sent buttons */
+.statusButton,
+.chunkSentButton {
+  padding: 10px 20px;
+  font-size: 15px;
+  border-radius: 8px;
+  margin: 10px;
+  color: white;
+}
+
+/* Main container styles */
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin-left: 20px;
+  margin-top: 45px;
+}
+
+/* Styles for the button row */
+.button-row {
+  display: flex;
+  align-items: center;
+}
+
+/* Disable pointer events for certain buttons */
+.no-click {
+  pointer-events: none;
+}
+
+/* Background colors for status indicators */
+.inactive {
+  background-color: #555 !important;
+}
+
+.active {
+  background-color: #4caf50 !important;
+}
+
+/* Background colors for chunk sent indicator */
+.grey {
+  background-color: #555 !important;
+}
+
+.red {
+  background-color: #ff6347 !important;
+}
+
+/* Styles for timer text */
+.timer {
+  color: #fff;
+  font-size: 18px;
+  margin-top: 10px;
+}
+
+/* Text color utility class */
+.text-color {
+  color: black;
+}
+
+/* Utility class for centering buttons */
+.centered-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+/* Utility class to ensure buttons have the same width */
+.same-width-button {
+  min-width: 130px;
+  max-width: 130px;
+}
+</style>

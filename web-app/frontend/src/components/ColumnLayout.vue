@@ -7,7 +7,7 @@
         <el-col :span="12" class="left-column">
           <el-card class="box-card">
             <template #header>
-              <span style="color:#29353C">Live Transcription</span>
+              <span style="color:#29353C">{{ leftBoxHeader }}</span>
             </template>
             <div class="transcription-box" ref="transcriptionBox">
               <!-- Display live transcription -->
@@ -15,7 +15,7 @@
                 <p v-html="formattedTranscription"></p>
               </div>
               <div v-else class="initial-text">
-                <p>This is where the live transcriptions will appear...</p>
+                <p>{{ leftBoxInitial }}</p>
               </div>
             </div>
           </el-card>
@@ -25,7 +25,7 @@
         <el-col :span="12" class="right-column">
           <el-card class="box-card">
             <template #header>
-              <span style="color:#29353C">Live Summary</span>
+              <span style="color:#29353C">{{ rightBoxHeader }}</span>
             </template>
             <div class="content-box">
               <el-carousel
@@ -39,7 +39,7 @@
                 <!-- Initial Carousel Item when no summaries are available -->
                 <el-carousel-item v-if="summaries.length === 0">
                   <div class="initial-text">
-                    <p>This is where the live summary will appear...</p>
+                    <p>{{ rightBoxInitial }}</p>
                   </div>
                 </el-carousel-item>
 
@@ -123,6 +123,29 @@ import Prism from 'prismjs';
 import 'prismjs/themes/prism.css';
 import DOMPurify from 'dompurify';
 import apiClient from "@/router/apiClient";
+import {typeWriterMultiple} from '@/methods/utils/typeWriter'; // Ensure this path is correct
+import {tabConfigurations} from '@/config/columnConfig'; // Ensure this path is correct
+
+// Define typingMappings outside the component for reusability
+const typingMappings = [
+  {configPath: ['headers', 'leftBoxHeader'], dataKey: 'leftBoxHeader'},
+  {configPath: ['headers', 'rightBoxHeader'], dataKey: 'rightBoxHeader'},
+  {configPath: ['initials', 'leftBoxInitial'], dataKey: 'leftBoxInitial'},
+  {configPath: ['initials', 'rightBoxInitial'], dataKey: 'rightBoxInitial'},
+];
+
+/**
+ * Retrieves a nested property value from an object based on the provided path.
+ *
+ * @param {Object} obj - The object to traverse.
+ * @param {Array} path - An array representing the path to the desired property.
+ * @returns {*} - The value of the nested property or undefined if not found.
+ */
+function getNestedProperty(obj, path) {
+  return path.reduce((accumulator, key) => {
+    return accumulator && accumulator[key] ? accumulator[key] : undefined;
+  }, obj);
+}
 
 export default {
   name: 'ColumnLayout',
@@ -152,6 +175,9 @@ export default {
       type: String,
       default: '',
     },
+    activeTab: {
+      type: String,
+    },
   },
   data() {
     return {
@@ -165,13 +191,22 @@ export default {
       transcriptionBuffer: '',
       summaries: [],
       maxBufferLength: 2000,
-      apiEndpoint: '/transcribe',
+      apiEndpoint: 'https://jwong.dev/api/summary',
+      isRecording: false,
+      debouncedGenerateSummary: null,
+      transcribeApiEndpoint: '/transcribe',
       audioContext: null,
       audioWorkletNode: null,
       recordedSamples: [],
       sampleRate: 48000,
       chunkSize: 1600000, // Approx. 1 second of audio at 16kHz
       isProcessing: false,
+      leftBoxHeader: "Live Transcription",
+      leftBoxInitial: "This is where the live transcriptions will appear...",
+      rightBoxHeader: "Live Summary",
+      rightBoxInitial: "This is where the live summary will appear...",
+      typingSpeed: 11, // Speed for typewriter effect
+      cancelTypingFunctions: [], // Array to hold cancellation functions
     };
   },
   computed: {
@@ -200,9 +235,54 @@ export default {
         }
       }
     },
+    activeTab(newTab) {
+      this.handleActiveTabChange(newTab);
+    },
   },
 
+
   methods: {
+    /**
+     * Handles changes to the activeTab prop.
+     * Initiates typewriter effects for headers and initials based on the newTab configuration.
+     *
+     * @param {String} newTab - The new activeTab value.
+     */
+    handleActiveTabChange(newTab) {
+      // Clear existing typewriter effects
+      this.cancelTypingFunctions.forEach(cancelFn => cancelFn());
+      this.cancelTypingFunctions = [];
+
+      // Get the configuration for the new tab
+      const config = tabConfigurations[newTab];
+
+      if (config) {
+        // Define typing tasks dynamically based on the mapping
+        const typingTasks = typingMappings.map(mapping => {
+          const text = getNestedProperty(config, mapping.configPath);
+          const dataKey = mapping.dataKey;
+
+          // Reset the target data property to empty string
+          this[dataKey] = '';
+
+          return {
+            text: text,
+            typingSpeed: this.typingSpeed,
+            onUpdate: (currentText) => {
+              this[dataKey] = currentText;
+            },
+            onComplete: () => {
+              // Optional: Actions after typing completes for each task
+            },
+          };
+        });
+
+        // Start typewriter effects and store cancellation functions
+        this.cancelTypingFunctions = typeWriterMultiple(typingTasks);
+      } else {
+        console.warn(`No configuration found for activeTab: ${newTab}`);
+      }
+    },
     /**
      * Open the file selection dialog to upload audio.
      */
@@ -290,13 +370,13 @@ export default {
       }
       this.scrollToBottom();
 
-      // const lineCount = this.transcriptionBuffer
-      //     .split('\n')
-      //     .filter((line) => line.trim() !== '').length;
+      const lineCount = this.transcriptionBuffer
+          .split('\n')
+          .filter((line) => line.trim() !== '').length;
 
-      // if (lineCount >= 3) {
-      //   this.debouncedGenerateSummary(); TODO: Uncomment this line
-      // }
+      if (lineCount >= 3) {
+        this.debouncedGenerateSummary();
+      }
     },
     clearTranscription() {
       this.transcriptionBuffer = '';
@@ -529,6 +609,17 @@ export default {
           });
         }
     );
+
+    // If activeTab is already set when the component mounts, handle it
+    if (this.activeTab) {
+      this.handleActiveTabChange(this.activeTab);
+    }
+  },
+  beforeUnmount() {
+    // Clean up any pending typing effects when the component is destroyed
+    this.cancelTypingFunctions.forEach((cancelFn) => cancelFn());
+
+    // Additional cleanup if necessary
   },
 };
 </script>
