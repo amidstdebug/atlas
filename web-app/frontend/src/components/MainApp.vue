@@ -25,6 +25,7 @@
       <el-col :span="7" :offset="1">
         <div class="canvas-container">
           <CanvasLayout
+            :activeTab="activeTab"
             ref="canvasLayout"
             @transcription-received="updateTranscription"
           />
@@ -34,6 +35,7 @@
       <!-- Transcription and Summary Column -->
       <el-col :span="16">
         <ColumnLayout
+          :activeTab="activeTab"
           :liveRecordColor="liveRecordColor"
           :uploadColor="uploadColor"
           :transcription="transcription"
@@ -46,10 +48,12 @@
 
 
 
+
 <script>
 import ColumnLayout from './ColumnLayout.vue';
 import CanvasLayout from './CanvasLayout.vue';
 
+/* eslint-disable */
 export default {
   name: 'MainApp',
   components: {
@@ -84,7 +88,7 @@ export default {
 
       // Map the tab index to the corresponding tab name
       const tabName = this.mapTabIndexToName(tab.index);
-      
+
       this.activeTab = tabName; // Set the active tab based on the mapped tab name
 
       // Update header color and other settings based on the active tab

@@ -7,7 +7,7 @@
         <el-col :span="12" class="left-column">
           <el-card class="box-card">
             <template #header>
-              <span style="color:#29353C">Live Transcription</span>
+              <span style="color:#29353C">{{ leftBoxHeader }}</span>
             </template>
             <div class="transcription-box" ref="transcriptionBox">
               <!-- Display live transcription -->
@@ -15,7 +15,7 @@
                 <p v-html="formattedTranscription"></p>
               </div>
               <div v-else class="initial-text">
-                <p>This is where the live transcriptions will appear...</p>
+                <p>{{ leftBoxInitial }}</p>
               </div>
             </div>
           </el-card>
@@ -25,7 +25,7 @@
         <el-col :span="12" class="right-column">
           <el-card class="box-card">
             <template #header>
-              <span style="color:#29353C">Live Summary</span>
+              <span style="color:#29353C">{{ rightBoxHeader }}</span>
             </template>
             <div class="content-box">
               <el-carousel
@@ -39,7 +39,7 @@
                 <!-- Initial Carousel Item when no summaries are available -->
                 <el-carousel-item v-if="summaries.length === 0">
                   <div class="initial-text">
-                    <p>This is where the live summary will appear...</p>
+                    <p>{{ rightBoxInitial }}</p>
                   </div>
                 </el-carousel-item>
 
@@ -143,6 +143,9 @@ export default {
       type: String,
       default: '',
     },
+    activeTab: {
+      type: String,
+    },
   },
   data() {
     return {
@@ -152,6 +155,12 @@ export default {
       apiEndpoint: 'https://jwong.dev/api/summary',
       isRecording: false,
       debouncedGenerateSummary: null,
+      leftBoxHeader: "Live Transcription",
+      leftBoxInitial: "This is where the live transcriptions will appear...",
+      rightBoxHeader: "Live Summary",
+      rightBoxInitial: "This is where the live summary will appear...",
+      typingSpeed: 11, // Speed for typewriter effect
+      typingTimeouts: [], // Array to store timeout IDs
     };
   },
   computed: {
@@ -180,9 +189,61 @@ export default {
         }
       }
     },
+    activeTab(newTab) {
+      if (newTab === 'incident') {
+        this.typewriterEffect('Live Transcription', 'Live Summary');
+        this.updateInitials(
+            'This is where the live transcriptions will appear...',
+            'This is where the live summary will appear...'
+        );
+      } else if (newTab === 'minutes') {
+        this.typewriterEffect('Meeting Transcription', 'Meeting Minutes');
+        this.updateInitials(
+            'This is where the meeting transcriptions will appear...',
+            'This is where the meeting minutes will appear...'
+        );
+      }
+    },
   },
 
   methods: {
+    updateInitials(leftInitial, rightInitial) {
+      this.leftBoxInitial = leftInitial;
+      this.rightBoxInitial = rightInitial;
+    },
+    // Typewriter function to update headers
+    typewriterEffect(leftText, rightText) {
+      // Clear any existing timeouts
+      this.typingTimeouts.forEach(timeout => clearTimeout(timeout));
+      this.typingTimeouts = []; // Reset the array
+
+      this.leftBoxHeader = '';
+      this.rightBoxHeader = '';
+
+      let leftIndex = 0;
+      let rightIndex = 0;
+
+      const typeLeftHeader = () => {
+        if (leftIndex < leftText.length) {
+          this.leftBoxHeader += leftText[leftIndex];
+          leftIndex++;
+          const timeoutId = setTimeout(typeLeftHeader, this.typingSpeed);
+          this.typingTimeouts.push(timeoutId);
+        }
+      };
+
+      const typeRightHeader = () => {
+        if (rightIndex < rightText.length) {
+          this.rightBoxHeader += rightText[rightIndex];
+          rightIndex++;
+          const timeoutId = setTimeout(typeRightHeader, this.typingSpeed);
+          this.typingTimeouts.push(timeoutId);
+        }
+      };
+
+      typeLeftHeader();
+      typeRightHeader();
+    },
     addTranscription(newText) {
       this.transcriptionBuffer += newText + '\n';
       if (this.transcriptionBuffer.length > this.maxBufferLength) {

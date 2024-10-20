@@ -17,7 +17,7 @@
         <el-icon class="icon-group">
           <MicrophoneIcon />
         </el-icon>
-        Start Recording
+        {{ recordingButton }}
       </el-button>
     </div>
 
@@ -47,142 +47,7 @@
   </div>
 </template>
 
-<style scoped>
-/* Global body styles */
-body {
-  background-color: #121212;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  margin: 0;
-  flex-direction: column;
-}
 
-/* Container for canvas and overlay */
-.canvas-container {
-  position: relative;
-  /* Uncomment and adjust width and height as needed */
-  /* width: 600px; /* Or any desired width */
-  /* height: 400px; /* Or any desired height */
-}
-
-/* Styles for canvas and overlay */
-canvas,
-.overlay {
-  width: 100%;
-  height: 100%;
-  display: block;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-canvas {
-  border: 1px solid #333;
-  border-radius: 10px;
-}
-
-.overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  background-color: rgba(41, 53, 60, 0.71);
-  border-radius: 10px;
-}
-
-/* Positioning for the live record button */
-.live-record-button {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-/* Styles for the stop button */
-.stop-button {
-  /* Adjust styles as needed */
-  margin-right: 10px;
-}
-
-/* Common styles for status and chunk sent buttons */
-.statusButton,
-.chunkSentButton {
-  padding: 10px 20px;
-  font-size: 15px;
-  border-radius: 8px;
-  margin: 10px;
-  color: white;
-}
-
-/* Main container styles */
-.container {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  margin-left: 20px;
-  margin-top: 45px;
-}
-
-/* Styles for the button row */
-.button-row {
-  display: flex;
-  align-items: center;
-}
-
-/* Disable pointer events for certain buttons */
-.no-click {
-  pointer-events: none;
-}
-
-/* Background colors for status indicators */
-.inactive {
-  background-color: #555 !important;
-}
-
-.active {
-  background-color: #4caf50 !important;
-}
-
-/* Background colors for chunk sent indicator */
-.grey {
-  background-color: #555 !important;
-}
-
-.red {
-  background-color: #ff6347 !important;
-}
-
-/* Styles for timer text */
-.timer {
-  color: #fff;
-  font-size: 18px;
-  margin-top: 10px;
-}
-
-/* Text color utility class */
-.text-color {
-  color: black;
-}
-
-/* Utility class for centering buttons */
-.centered-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 10px;
-  box-sizing: border-box;
-}
-
-/* Utility class to ensure buttons have the same width */
-.same-width-button {
-  min-width: 130px;
-  max-width: 130px;
-}
-</style>
 
 <script>
 // Import necessary modules and components
@@ -204,10 +69,23 @@ export default {
       type: String,
       default: '#29353C',
     },
+    activeTab: {
+      type: String,
+    },
+  },
+  watch: {
+    activeTab(newTab) {
+      if (newTab === 'incident') {
+        this.recordingButton = 'Start Recording'
+      } else if (newTab === 'minutes') {
+        this.recordingButton = 'Start Meeting'
+      }
+    },
   },
   // Component data properties
   data() {
     return {
+      recordingButton : "Start Recording",
       // Initial transcription text
       transcription: 'This is where the live transcriptions will appear...',
       // Backend endpoint URI
@@ -902,5 +780,141 @@ export default {
       document.body.removeChild(a);
     },
   },
-};
+}
 </script>
+<style scoped>
+/* Global body styles */
+body {
+  background-color: #121212;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+  flex-direction: column;
+}
+
+/* Container for canvas and overlay */
+.canvas-container {
+  position: relative;
+  /* Uncomment and adjust width and height as needed */
+  /* width: 600px; /* Or any desired width */
+  /* height: 400px; /* Or any desired height */
+}
+
+/* Styles for canvas and overlay */
+canvas,
+.overlay {
+  width: 100%;
+  height: 100%;
+  display: block;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+canvas {
+  border: 1px solid #333;
+  border-radius: 10px;
+}
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: rgba(41, 53, 60, 0.71);
+  border-radius: 10px;
+}
+
+/* Positioning for the live record button */
+.live-record-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Styles for the stop button */
+.stop-button {
+  /* Adjust styles as needed */
+  margin-right: 10px;
+}
+
+/* Common styles for status and chunk sent buttons */
+.statusButton,
+.chunkSentButton {
+  padding: 10px 20px;
+  font-size: 15px;
+  border-radius: 8px;
+  margin: 10px;
+  color: white;
+}
+
+/* Main container styles */
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin-left: 20px;
+  margin-top: 45px;
+}
+
+/* Styles for the button row */
+.button-row {
+  display: flex;
+  align-items: center;
+}
+
+/* Disable pointer events for certain buttons */
+.no-click {
+  pointer-events: none;
+}
+
+/* Background colors for status indicators */
+.inactive {
+  background-color: #555 !important;
+}
+
+.active {
+  background-color: #4caf50 !important;
+}
+
+/* Background colors for chunk sent indicator */
+.grey {
+  background-color: #555 !important;
+}
+
+.red {
+  background-color: #ff6347 !important;
+}
+
+/* Styles for timer text */
+.timer {
+  color: #fff;
+  font-size: 18px;
+  margin-top: 10px;
+}
+
+/* Text color utility class */
+.text-color {
+  color: black;
+}
+
+/* Utility class for centering buttons */
+.centered-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+/* Utility class to ensure buttons have the same width */
+.same-width-button {
+  min-width: 130px;
+  max-width: 130px;
+}
+</style>
