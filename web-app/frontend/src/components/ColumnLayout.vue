@@ -37,20 +37,22 @@
                   :trigger="'click'"
               >
                 <!-- Initial Carousel Item when no summaries are available -->
-                <el-carousel-item v-if="summaries.length === 0">
+                <template v-if="summaries.length === 0">
+                  <el-carousel-item>
                   <div class="initial-text">
                     <p>{{ rightBoxInitial }}</p>
                   </div>
                 </el-carousel-item>
+                </template>
 
                 <!-- Carousel Items for each summary -->
+                <template v-else>
                 <el-carousel-item
                     v-for="(summary, index) in summaries"
-                    :key="index"
+                      :key="summary.id"
                     class="summary-item"
-                    v-else
                 >
-                  <div class="summary-content" ref='summaryContent'>
+                    <div class="summary-content" ref="summaryContent">
                     <el-tag type="info" size="small" class="timestamp-tag">
                       {{ summary.timestamp }}
                     </el-tag>
@@ -61,6 +63,7 @@
                     ></div>
                   </div>
                 </el-carousel-item>
+                </template>
               </el-carousel>
             </div>
           </el-card>
@@ -118,7 +121,6 @@ import {
   ElMessage,
 } from 'element-plus';
 import {Microphone, Upload} from '@element-plus/icons-vue';
-import debounce from 'lodash.debounce';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism.css';
 import DOMPurify from 'dompurify';
@@ -186,14 +188,6 @@ export default {
       maxBufferLength: 2000,
       summaryApiEndpoint: '/summary',
       isRecording: false,
-      debouncedGenerateSummary: null,
-      transcribeApiEndpoint: '/transcribe',
-      audioContext: null,
-      audioWorkletNode: null,
-      recordedSamples: [],
-      sampleRate: 48000,
-      chunkSize: 1600000, // Approx. 1 second of audio at 16kHz
-      isProcessing: false,
       leftBoxHeader: "Live Transcription",
       leftBoxInitial: "This is where the live transcriptions will appear...",
       rightBoxHeader: "Live Summary",
@@ -329,7 +323,7 @@ export default {
 		try {
 		// Encode the chunk into WAV format
 		const wavBlob = this.encodeWAV(chunk, this.sampleRate);
-		
+
 		// Create form data for the request
 		const formData = new FormData();
 		formData.append('file', wavBlob, 'audio_chunk.wav');
@@ -368,7 +362,7 @@ export default {
           .filter((line) => line.trim() !== '').length;
 
       if (lineCount >= 3) {
-        this.debouncedGenerateSummary();
+        this.generateSummary()
       }
     },
     clearTranscription() {
@@ -534,9 +528,20 @@ export default {
     addSummary(summaryObj) {
       const timestamp = new Date().toLocaleString();
       const formattedContent = this.formatSummary(summaryObj);
-      this.summaries.unshift({timestamp, formattedContent, rawContent: summaryObj});
+
+      // Generate a unique ID for each summary
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      this.summaries.unshift({
+        id: uniqueId, // Add unique ID
+        timestamp,
+        formattedContent,
+        rawContent: summaryObj
+      });
+      console.log(`Summary added. Total summaries: ${this.summaries.length}`);
       if (this.summaries.length > 10) {
         this.summaries.pop();
+        console.log(`Summary removed. Total summaries: ${this.summaries.length}`);
       }
     },
     formatSummary(summaryObj) {
@@ -589,9 +594,6 @@ export default {
       if (!text) return '';
       return text.charAt(0).toUpperCase() + text.slice(1);
     },
-  },
-  created() {
-    this.debouncedGenerateSummary = debounce(this.generateSummary, 3000);
   },
   mounted() {
     this.$watch(

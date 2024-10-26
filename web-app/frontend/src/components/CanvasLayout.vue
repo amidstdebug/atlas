@@ -109,7 +109,7 @@ export default {
       reactivationsLeft: 1,
       // Duration settings
       delayDuration: 250, // in milliseconds
-      forceSendDuration: 4000, // in milliseconds
+      forceSendDuration: 8000, // in milliseconds
       // Canvas elements
       canvas: null,
       canvasCtx: null,
@@ -154,7 +154,7 @@ export default {
       recordedSamples: [],
       sampleRate: 48000,
       audioStream: null,
-      preBufferDuration: 0.55, // in seconds
+      preBufferDuration: 0.4, // in seconds
       preBufferSize: null,
       preBuffer: null,
       preBufferIndex: 0,
