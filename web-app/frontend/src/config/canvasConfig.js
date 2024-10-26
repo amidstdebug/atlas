@@ -1,7 +1,7 @@
 // src/config/canvasConfig.js
 
 export const tabConfigurations = {
-  incident: {
+  atc: {
     buttons: {
       recordingButton: 'Start Recording',
       stopRecordingButton: 'Stop Recording',

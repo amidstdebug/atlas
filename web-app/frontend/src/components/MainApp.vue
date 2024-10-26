@@ -13,7 +13,7 @@
         <div style="flex: 6; display: flex; justify-content: center; margin-left: 100px;">
           <!-- Ensure v-model is correctly bound -->
           <el-tabs v-model="activeTab" class="header-tabs" @tab-click="handleTabClick" style="width: fit-content; ">
-            <el-tab-pane  label="Automated Air Incident Investigation" name="incident"></el-tab-pane>
+            <el-tab-pane  label="Automated Air Incident Investigation" name="atc"></el-tab-pane>
             <el-tab-pane label="Automated Meeting Minutes" name="minutes"></el-tab-pane>
           </el-tabs>
         </div>
@@ -62,24 +62,24 @@ export default {
   },
   data() {
     return {
-      activeTab: 'incident', // Default active tab
+      activeTab: 'atc', // Default active tab
       liveRecordColor: '#e34660',
       uploadColor: '#5773d9',
       transcription: '', // Store the transcription data
-      headerColor: '#44576D', // Default color for air incident
+      headerColor: '#44576D', // Default color for atc
     };
   },
   computed: {
     // Dynamically set the logo based on the active tab with a transition effect
     logo() {
-      return this.activeTab === 'incident'
+      return this.activeTab === 'atc'
         ? require('../assets/ATLAS_light.png')
         : require('../assets/ATLAS_dark.png');
     },
   },
   methods: {
     mapTabIndexToName(index) {
-      const tabNames = ['incident', 'minutes']; // Add more tab names if needed
+      const tabNames = ['atc', 'minutes']; // Add more tab names if needed
       return tabNames[index] || ''; // Return an empty string if the index is out of bounds
     },
 
@@ -92,17 +92,17 @@ export default {
       this.activeTab = tabName; // Set the active tab based on the mapped tab name
 
       // Update header color and other settings based on the active tab
-      if (tabName === 'incident') {
-        this.headerColor = '#44576D'; // Dark color for incident
-        document.documentElement.style.setProperty('--el-color-primary', '#dfebf6'); // primary text color for incident
-        document.documentElement.style.setProperty('--el-color-secondary', '#768a96'); // Secondary color for incident
-        document.documentElement.style.setProperty('--el-text-color-primary', '#29353c'); // text color for inactive
+      if (tabName === 'atc') {
+        this.headerColor = '#44576D'; // Dark color for atc
+        document.documentElement.style.setProperty('--el-color-primary', '#dfebf6'); // primary text color for atc
+        document.documentElement.style.setProperty('--el-color-secondary', '#768a96'); // Secondary color for atc
+        document.documentElement.style.setProperty('--el-text-color-primary', '#29353c'); // text color for atc
 
       } else if (tabName === 'minutes') {
         this.headerColor = '#8ba4b3'; // Light color for meeting minutes
-        document.documentElement.style.setProperty('--el-color-primary', '#28343b'); // primary text color for incident
+        document.documentElement.style.setProperty('--el-color-primary', '#28343b'); // primary text color for minutes
         document.documentElement.style.setProperty('--el-color-secondary', '#557488'); // Secondary color for minutes
-        document.documentElement.style.setProperty('--el-text-color-primary', '#e4e7ed'); // text color for inactive
+        document.documentElement.style.setProperty('--el-text-color-primary', '#e4e7ed'); // text color for minutes
       }
 
       console.log('Tab clicked:', tabName, 'Active Tab:', this.activeTab, 'Header color:', this.headerColor);

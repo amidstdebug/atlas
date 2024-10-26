@@ -1,7 +1,7 @@
 // src/config/columnConfig.js
 
 export const tabConfigurations = {
-  incident: {
+  atc: {
     headers: {
       leftBoxHeader: 'Live Transcription',
       rightBoxHeader: 'Live Summary',
