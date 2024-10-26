@@ -6,13 +6,11 @@ ollama serve &
 # Wait a bit to ensure the server has time to start (you can adjust the sleep time if necessary)
 sleep 10
 
-echo "Pulling model llama3.1..."
-# Pull the 3.1 model
-ollama run qwen2.5:3b-instruct-q2_K
 
-echo "Creating the atc model..."
+echo "Creating the llm model..."
 # Create the model
-ollama create atlas_llm
+# ollama create atlas_llm -f ./ollama_serve/Modelfile_atlas
+ollama run qwen2.5
 
 # Wait for background jobs (i.e., ollama serve) to keep the container alive
 wait
