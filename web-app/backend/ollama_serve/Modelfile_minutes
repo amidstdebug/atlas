@@ -11,6 +11,7 @@ I want you to:
             {
                 "agenda_item_title": "{Title of the Agenda Item}",
                 "discussion_summary": "{Concise summary of the discussion}",
+                "information_discussed": "{Justification and explanation of information in meeting}",
                 "decisions_made": "{Resolutions or conclusions reached}",
                 "action_items": [
                     {
