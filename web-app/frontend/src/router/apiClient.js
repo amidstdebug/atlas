@@ -45,7 +45,7 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config;
 
     // Handle token expiration
-    if ((error.response.status === 401 || error.response.status === 403) && !originalRequest._retry) {
+	if (error.response && (error.response.status === 401 || error.response.status === 403) && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });

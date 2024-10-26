@@ -72,25 +72,25 @@
 
       <!-- Button Group -->
       <div class="button-group">
-
         <!-- Upload Recording Button -->
         <el-button
-            :style="{ color: uploadColor }"
-            class="centered-button same-width-button"
-            @click="uploadRecording"
+          :disabled="isTranscribing"
+          :style="{ color: uploadColor }"
+          class="centered-button same-width-button"
+          @click="uploadRecording"
         >
           <el-icon class="icon-group">
-            <UploadIcon/>
+            <UploadIcon />
           </el-icon>
-          Upload Recording
+          {{ isTranscribing ? 'Transcribing...' : 'Upload Recording' }}
         </el-button>
 
-        <!-- Clear Transcript Button -->
+        <!-- Clear Transcript / Stop Transcribing Button -->
         <el-button
-            class="centered-button same-width-button"
-            @click="clearTranscription"
+          class="centered-button same-width-button"
+          @click="clearTranscription"
         >
-          Clear Transcript
+          {{ isTranscribing ? 'Stop Transcribing' : 'Clear Transcript' }}
         </el-button>
       </div>
 
@@ -127,6 +127,7 @@ import DOMPurify from 'dompurify';
 import apiClient from "@/router/apiClient";
 import {typeWriterMultiple} from '@/methods/utils/typeWriter'; // Ensure this path is correct
 import {tabConfigurations} from '@/config/columnConfig'; // Ensure this path is correct
+import axios from 'axios'; // Import axios for cancel tokens
 
 // Define typingMappings outside the component for reusability
 const typingMappings = [
@@ -195,7 +196,10 @@ export default {
       isProcessing: false,
       maxBufferLength: 2000,
       summaryApiEndpoint: '/summary',
-      isRecording: false,
+      isTranscribing: false,
+      isGeneratingSummary: false,
+      cancelTokenSource: null,
+      summaryCancelTokenSource: null,
       leftBoxHeader: "Live Transcription",
       leftBoxInitial: "This is where the live transcriptions will appear...",
       rightBoxHeader: "Live Summary",
@@ -291,6 +295,10 @@ export default {
     async handleFileUpload(event) {
       const file = event.target.files[0];
       if (file) {
+        // Start transcription process
+        this.isTranscribing = true;
+        // Create a cancel token source
+        this.cancelTokenSource = axios.CancelToken.source();
         await this.processAudioFile(file);
       }
     },
@@ -307,7 +315,11 @@ export default {
       this.sampleRate = audioBuffer.sampleRate;
 
       this.recordedSamples = Array.from(audioBuffer.getChannelData(0)); // Assume mono audio
-      this.chunkAndSendAudio();
+      await this.chunkAndSendAudio(); // Await to ensure completion
+
+      // After processing, reset transcription state
+      this.isTranscribing = false;
+      this.cancelTokenSource = null;
     },
 
     /**
@@ -316,8 +328,14 @@ export default {
     async chunkAndSendAudio() {
       let offset = 0;
 
-      while (offset < this.recordedSamples.length) {
-        const chunk = this.recordedSamples.slice(offset, offset + this.chunkSize);
+      while (
+        offset < this.recordedSamples.length &&
+        this.isTranscribing
+      ) {
+        const chunk = this.recordedSamples.slice(
+          offset,
+          offset + this.chunkSize
+        );
         await this.sendChunk(chunk);
         offset += this.chunkSize;
       }
@@ -328,7 +346,7 @@ export default {
     * @param {Float32Array} chunk - Audio data chunk.
     */
     async sendChunk(chunk) {
-        try {
+      try {
         // Encode the chunk into WAV format
         const wavBlob = this.encodeWAV(chunk, this.sampleRate);
 
@@ -336,12 +354,17 @@ export default {
         const formData = new FormData();
         formData.append('file', wavBlob, 'audio_chunk.wav');
 
-        // Make the POST request to your backend
-        const response = await apiClient.post(this.transcribeApiEndpoint, formData, {
+        // Make the POST request
+        const response = await apiClient.post(
+          this.transcribeApiEndpoint,
+          formData,
+          {
             headers: {
-            'Content-Type': 'multipart/form-data', // Ensure multipart form data
+              'Content-Type': 'multipart/form-data',
             },
-        });
+            cancelToken: this.cancelTokenSource.token,
+          }
+        );
 
         // Handle the backend response
         if (response.status === 200 && response.data.transcription) {
@@ -351,9 +374,13 @@ export default {
         } else {
             console.error('Error in transcription response:', response);
         }
-        } catch (error) {
-        console.error('Error sending audio chunk:', error);
+      } catch (error) {
+        if (axios.isCancel(error)) {
+          console.log('Transcription request canceled:', error.message);
+        } else {
+          console.error('Error sending audio chunk:', error);
         }
+      }
     },
 
     addTranscription(newText) {
@@ -369,16 +396,45 @@ export default {
           .split('\n')
           .filter((line) => line.trim() !== '').length;
 
-      if (lineCount >= 3) {
+      if (lineCount >= 3 && this.isTranscribing) {
+        console.log("Calling generateSummary")
         this.generateSummary()
       }
     },
+
     clearTranscription() {
-      this.transcriptionBuffer = '';
-      this.summaries = [];
-      this.$emit('transcription-cleared');
-      ElMessage.success('Transcription and summaries cleared.');
+      if (this.isTranscribing) {
+        // Stop transcribing
+        this.isTranscribing = false;
+
+        // Cancel any ongoing transcription requests
+        if (this.cancelTokenSource) {
+          this.cancelTokenSource.cancel('Transcription stopped by user.');
+          this.cancelTokenSource = null;
+        }
+
+        // Cancel any ongoing summary generation
+        if (this.summaryCancelTokenSource) {
+          this.summaryCancelTokenSource.cancel('Summary generation stopped by user.');
+          this.summaryCancelTokenSource = null;
+        }
+
+        ElMessage.success('Transcription stopped.');
+      } else {
+        this.transcriptionBuffer = '';
+        this.summaries = [];
+        this.$emit('transcription-cleared');
+        ElMessage.success('Transcription and summaries cleared.');
+      }
+
+      // Reset file input to allow re-uploading
+      this.$refs.audioFileInput.value = '';  // Ensures re-selection works
+
+      // Explicitly set `isTranscribing` to false to make sure button is not disabled
+      this.isTranscribing = false;
     },
+
+
     scrollToBottom() {
       this.$nextTick(() => {
         const box = this.$refs.transcriptionBox;
@@ -391,17 +447,6 @@ export default {
         }
       });
     },
-    startLiveRecord() {
-      this.isRecording = !this.isRecording;
-      if (this.isRecording) {
-        ElMessage.success('Live recording started.');
-        // Implement actual recording logic here
-      } else {
-        ElMessage.info('Live recording stopped.');
-        // Implement logic to stop recording here
-      }
-    },
-
         /**
         * Encode recorded audio samples into WAV format.
         * @param {Float32Array} samples - Recorded audio samples.
@@ -456,6 +501,14 @@ export default {
 
 
     async generateSummary() {
+      if (!this.isTranscribing) {
+        return;
+      }
+      console.log("Generating summary")
+
+      this.isGeneratingSummary = true;
+      this.summaryCancelTokenSource = axios.CancelToken.source();
+
       try {
         let payload = {
           transcription: this.transcriptionBuffer.trim(),
@@ -469,11 +522,16 @@ export default {
           payload.previous_report = previousReport;
         }
 
-        const response = await apiClient.post(this.summaryApiEndpoint, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
+        const response = await apiClient.post(
+          this.summaryApiEndpoint,
+          payload,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            cancelToken: this.summaryCancelTokenSource.token,
+          }
+        );
 
 
         if (
@@ -493,24 +551,32 @@ export default {
           ElMessage.warning('Unexpected API response structure.');
         }
       } catch (error) {
-        console.error('Error generating summary:', error);
-        if (error.response) {
-          if (error.response.status === 401) {
-            ElMessage.error('Unauthorized: Please check your API credentials.');
-          } else {
-            ElMessage.error(
-                `Error ${error.response.status}: ${error.response.statusText}`
-            );
-          }
-        } else if (error.request) {
-          ElMessage.error(
-              'No response from the server. Please check your network.'
-          );
+        if (axios.isCancel(error)) {
+          console.log('Summary generation canceled:', error.message);
         } else {
-          ElMessage.error(`Request error: ${error.message}`);
+          console.error('Error generating summary:', error);
+          if (error.response) {
+            if (error.response.status === 401) {
+              ElMessage.error('Unauthorized: Please check your API credentials.');
+            } else {
+              ElMessage.error(
+                `Error ${error.response.status}: ${error.response.statusText}`
+              );
+            }
+          } else if (error.request) {
+            ElMessage.error(
+              'No response from the server. Please check your network.'
+            );
+          } else {
+            ElMessage.error(`Request error: ${error.message}`);
+          }
         }
+      } finally {
+        this.isGeneratingSummary = false;
+        this.summaryCancelTokenSource = null;
       }
     },
+
     extractSummary(apiResponse) {
       try {
         const start = apiResponse.indexOf('```');
@@ -603,6 +669,7 @@ export default {
       return text.charAt(0).toUpperCase() + text.slice(1);
     },
   },
+  
   mounted() {
     this.$watch(
         () => this.summaries,
@@ -750,5 +817,11 @@ export default {
 
 .el-row {
   margin: 0;
+}
+
+/* Disable the upload button when transcribing */
+.el-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 </style>
