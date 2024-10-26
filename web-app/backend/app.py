@@ -233,7 +233,7 @@ def get_summary():
 		# Get the transcription and previous_report from the POST request
 		transcription = request.json.get('transcription')
 		previous_report = request.json.get('previous_report')
-
+		summary_mode = request.json.get('summary_mode')
 		if not transcription:
 			return jsonify({'error': 'Missing transcription in request'}), 400
 
@@ -246,15 +246,26 @@ def get_summary():
 			)
 		else:
 			content = transcription
+		# Construct the file path dynamically based on the variable
+		file_path = f"../ollama_serve/Modelfile_{summary_mode}"
+
+		# Read the contents of the file and assign it to the new variable
+		with open(file_path, 'r') as file:
+			system_prompt = file.read()
 
 		# Define the payload to send to the external API
 		payload = {
 			"model": "atc",
+			"options": {
+				"temperature": 0.1
+			},
 			"messages": [
+				{"role": "system", "content": system_prompt},
 				{"role": "user", "content": content}
 			],
 			"stream": False
 		}
+		print(payload)
 
 		# Make the request to the external chat service
 		response = requests.post(LLM_URI, json=payload)
