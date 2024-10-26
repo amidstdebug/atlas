@@ -44,8 +44,15 @@ apiClient.interceptors.response.use(
   async error => {
     const originalRequest = error.config;
 
+    // Handle 504 Gateway Timeout: retry the same request once
+    if (error.response && error.response.status === 504 && !originalRequest._retry504) {
+      console.log("504 RETRY")
+      originalRequest._retry504 = true; // mark request to avoid infinite loop
+      return apiClient(originalRequest); // retry the request once
+    }
+
     // Handle token expiration
-    if ((error.response.status === 401 || error.response.status === 403) && !originalRequest._retry) {
+    if (error.response && (error.response.status === 401 || error.response.status === 403) && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
