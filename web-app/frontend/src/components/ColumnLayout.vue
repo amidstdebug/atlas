@@ -48,7 +48,7 @@
                 <!-- Carousel Items for each summary -->
                 <template v-else>
                 <el-carousel-item
-                    v-for="(summary, index) in summaries"
+                    v-for="summary in summaries"
                       :key="summary.id"
                     class="summary-item"
                 >
@@ -185,6 +185,14 @@ export default {
     return {
       transcriptionBuffer: '',
       summaries: [],
+      debouncedGenerateSummary: null,
+      transcribeApiEndpoint: '/transcribe',
+      audioContext: null,
+      audioWorkletNode: null,
+      recordedSamples: [],
+      sampleRate: 48000,
+      chunkSize: 1600000, // Approx. 1 second of audio at 16kHz
+      isProcessing: false,
       maxBufferLength: 2000,
       summaryApiEndpoint: '/summary',
       isRecording: false,
@@ -315,38 +323,38 @@ export default {
       }
     },
 
-	/**
-	* Send the audio chunk to the backend for transcription.
-	* @param {Float32Array} chunk - Audio data chunk.
-	*/
-	async sendChunk(chunk) {
-		try {
-		// Encode the chunk into WAV format
-		const wavBlob = this.encodeWAV(chunk, this.sampleRate);
+    /**
+    * Send the audio chunk to the backend for transcription.
+    * @param {Float32Array} chunk - Audio data chunk.
+    */
+    async sendChunk(chunk) {
+        try {
+        // Encode the chunk into WAV format
+        const wavBlob = this.encodeWAV(chunk, this.sampleRate);
 
-		// Create form data for the request
-		const formData = new FormData();
-		formData.append('file', wavBlob, 'audio_chunk.wav');
+        // Create form data for the request
+        const formData = new FormData();
+        formData.append('file', wavBlob, 'audio_chunk.wav');
 
-		// Make the POST request to your backend
-		const response = await apiClient.post(this.transcribeApiEndpoint, formData, {
-			headers: {
-			'Content-Type': 'multipart/form-data', // Ensure multipart form data
-			},
-		});
+        // Make the POST request to your backend
+        const response = await apiClient.post(this.transcribeApiEndpoint, formData, {
+            headers: {
+            'Content-Type': 'multipart/form-data', // Ensure multipart form data
+            },
+        });
 
-		// Handle the backend response
-		if (response.status === 200 && response.data.transcription) {
-			const transcription = response.data.transcription;
-			console.log("reply:", response.data.transcription)
-			this.addTranscription(transcription);
-		} else {
-			console.error('Error in transcription response:', response);
-		}
-		} catch (error) {
-		console.error('Error sending audio chunk:', error);
-		}
-	},
+        // Handle the backend response
+        if (response.status === 200 && response.data.transcription) {
+            const transcription = response.data.transcription;
+            console.log("reply:", response.data.transcription)
+            this.addTranscription(transcription);
+        } else {
+            console.error('Error in transcription response:', response);
+        }
+        } catch (error) {
+        console.error('Error sending audio chunk:', error);
+        }
+    },
 
     addTranscription(newText) {
       this.transcriptionBuffer += newText + '\n';
@@ -394,56 +402,56 @@ export default {
       }
     },
 
-		/**
-		* Encode recorded audio samples into WAV format.
-		* @param {Float32Array} samples - Recorded audio samples.
-		* @param {number} sampleRate - Audio sample rate.
-		* @returns {Blob} - WAV audio blob.
-		*/
-		encodeWAV(samples, sampleRate) {
-			const buffer = new ArrayBuffer(44 + samples.length * 2); // WAV header + samples
-			const view = new DataView(buffer);
+        /**
+        * Encode recorded audio samples into WAV format.
+        * @param {Float32Array} samples - Recorded audio samples.
+        * @param {number} sampleRate - Audio sample rate.
+        * @returns {Blob} - WAV audio blob.
+        */
+        encodeWAV(samples, sampleRate) {
+            const buffer = new ArrayBuffer(44 + samples.length * 2); // WAV header + samples
+            const view = new DataView(buffer);
 
-			// RIFF chunk descriptor
-			this.writeString(view, 0, 'RIFF');
-			view.setUint32(4, 36 + samples.length * 2, true); // File size - 8 bytes
-			this.writeString(view, 8, 'WAVE');
+            // RIFF chunk descriptor
+            this.writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + samples.length * 2, true); // File size - 8 bytes
+            this.writeString(view, 8, 'WAVE');
 
-			// FMT sub-chunk (format of the WAV)
-			this.writeString(view, 12, 'fmt ');
-			view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
-			view.setUint16(20, 1, true); // Audio format (1 = PCM)
-			view.setUint16(22, 1, true); // Number of channels (1 = mono)
-			view.setUint32(24, sampleRate, true); // Sample rate
-			view.setUint32(28, sampleRate * 2, true); // Byte rate (SampleRate * NumChannels * BitsPerSample/8)
-			view.setUint16(32, 2, true); // Block align (NumChannels * BitsPerSample/8)
-			view.setUint16(34, 16, true); // Bits per sample (16 bits for PCM)
+            // FMT sub-chunk (format of the WAV)
+            this.writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
+            view.setUint16(20, 1, true); // Audio format (1 = PCM)
+            view.setUint16(22, 1, true); // Number of channels (1 = mono)
+            view.setUint32(24, sampleRate, true); // Sample rate
+            view.setUint32(28, sampleRate * 2, true); // Byte rate (SampleRate * NumChannels * BitsPerSample/8)
+            view.setUint16(32, 2, true); // Block align (NumChannels * BitsPerSample/8)
+            view.setUint16(34, 16, true); // Bits per sample (16 bits for PCM)
 
-			// Data sub-chunk (actual audio samples)
-			this.writeString(view, 36, 'data');
-			view.setUint32(40, samples.length * 2, true); // NumSamples * NumChannels * BitsPerSample/8
+            // Data sub-chunk (actual audio samples)
+            this.writeString(view, 36, 'data');
+            view.setUint32(40, samples.length * 2, true); // NumSamples * NumChannels * BitsPerSample/8
 
-			// Write the PCM samples
-			let offset = 44;
-			for (let i = 0; i < samples.length; i++, offset += 2) {
-			const s = Math.max(-1, Math.min(1, samples[i])); // Clamp sample values between -1 and 1
-			view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true); // Convert to 16-bit PCM
-			}
+            // Write the PCM samples
+            let offset = 44;
+            for (let i = 0; i < samples.length; i++, offset += 2) {
+            const s = Math.max(-1, Math.min(1, samples[i])); // Clamp sample values between -1 and 1
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true); // Convert to 16-bit PCM
+            }
 
-			return new Blob([view], { type: 'audio/wav' }); // Create the Blob (WAV file)
-		},
+            return new Blob([view], { type: 'audio/wav' }); // Create the Blob (WAV file)
+        },
 
-		/**
-		* Helper to write strings into the DataView for WAV header.
-		* @param {DataView} view
-		* @param {number} offset
-		* @param {string} string
-		*/
-		writeString(view, offset, string) {
-			for (let i = 0; i < string.length; i++) {
-			view.setUint8(offset + i, string.charCodeAt(i));
-			}
-		},
+        /**
+        * Helper to write strings into the DataView for WAV header.
+        * @param {DataView} view
+        * @param {number} offset
+        * @param {string} string
+        */
+        writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        },
 
 
 
@@ -539,7 +547,7 @@ export default {
         rawContent: summaryObj
       });
       console.log(`Summary added. Total summaries: ${this.summaries.length}`);
-      if (this.summaries.length > 10) {
+      if (this.summaries.length > 5) {
         this.summaries.pop();
         console.log(`Summary removed. Total summaries: ${this.summaries.length}`);
       }
