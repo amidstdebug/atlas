@@ -460,6 +460,7 @@ export default {
         let payload = {
           transcription: this.transcriptionBuffer.trim(),
           previous_report: null,
+          summary_mode: this.activeTab,
         };
 
         // Include previous_report if available

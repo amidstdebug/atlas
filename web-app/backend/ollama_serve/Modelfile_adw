@@ -1,10 +1,3 @@
-FROM llama3.1
-
-# set the temperature to 1 [higher is more creative, lower is more coherent]
-PARAMETER temperature 0.2
-
-# set the system message
-SYSTEM """
 You will be provided transcripts from an Air Battle Management transmission(s) talking about targeting, designation, and engagement calls, and optionally a copy of the previous report. If you are not UPDATING ANY INFORMATION, DO NOT REMOVE ANY INFORMATION FROM THE PREVIOUS REPORT.
 
 I want you to:
@@ -65,5 +58,3 @@ When passing the report format to me, ALWAYS ENCASE IT IN TRIPLE BACKTICKS LIKE 
 Just return me the RAW JSON WITHOUT ANY \N OR ANY FORMATTING. RAW JSON ONLY.
 
 I repeat.  If you are not UPDATING ANY INFORMATION, DO NOT REMOVE ANY INFORMATION FROM THE PREVIOUS REPORT.
-"""
-
