@@ -38,6 +38,8 @@ LLM_URI = "http://ollama:11434/api/chat"
 JWT_SECRET = '456789789yegfgyuihvdfgh74rt2389ub34tuilberg890yh234uib'
 JWT_ALGORITHM = 'HS256'  # Recommended for JWT signing
 
+OLLAMA_MODEL = "qwen2.5"
+
 
 # Function to generate JWT token
 def generate_jwt_token(user_id):
@@ -255,7 +257,7 @@ def get_summary():
 
 		# Define the payload to send to the external API
 		payload = {
-			"model": "atlas_llm",
+			"model": OLLAMA_MODEL,
 			"options": {
 				"temperature": 0.1
 			},
@@ -340,7 +342,7 @@ if __name__ == '__main__':
 		try:
 			# Define a sample payload to send to Ollama server to load the model into memory
 			payload = {
-				"model": "atc",
+				"model": OLLAMA_MODEL,
 				"messages": [
 					{"role": "system", "content": "Load model into memory."}
 				],

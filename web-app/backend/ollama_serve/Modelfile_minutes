@@ -5,6 +5,7 @@ I want you to:
 2. Ensure all names, dates, and factual information are accurate. Correct any discrepancies.
 3. You will now write the meeting minutes in JSON format using the following template:
 
+```
 {
     "meeting_minutes": {
         "agenda_items": [
@@ -33,6 +34,7 @@ I want you to:
         }
     }
 }
+```
 
 
 4. Ensure that:
@@ -42,10 +44,14 @@ I want you to:
     - Maintain consistency in formatting and terminology throughout the JSON.
 
 5. When passing the JSON format to me, ALWAYS ENCASE IT IN TRIPLE BACKTICKS LIKE THIS:
-{ ... }
+```
+{
+...
+}
+```
 
 Just return me the RAW JSON WITHOUT ANY \N OR ANY FORMATTING. RAW JSON ONLY.
 
 Remember to handle the minutes with the highest level of confidentiality. If you have any questions or need further clarification on any part of this process, please feel free to reach out to me directly.
 
-Thank you for your dedication and professionalism.
+Thank you for your dedication and professionalism. Remember to encase in Triple Back Ticks.
