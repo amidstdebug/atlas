@@ -247,7 +247,7 @@ def get_summary():
 		else:
 			content = transcription
 		# Construct the file path dynamically based on the variable
-		file_path = f"../ollama_serve/Modelfile_{summary_mode}"
+		file_path = f"./ollama_serve/Modelfile_{summary_mode}"
 
 		# Read the contents of the file and assign it to the new variable
 		with open(file_path, 'r') as file:
@@ -255,7 +255,7 @@ def get_summary():
 
 		# Define the payload to send to the external API
 		payload = {
-			"model": "atc",
+			"model": "atlas_llm",
 			"options": {
 				"temperature": 0.1
 			},
@@ -265,7 +265,6 @@ def get_summary():
 			],
 			"stream": False
 		}
-		print(payload)
 
 		# Make the request to the external chat service
 		response = requests.post(LLM_URI, json=payload)

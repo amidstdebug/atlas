@@ -1,37 +1,51 @@
-You will be provided transcripts from an Air Traffic Control transmission(s), and optionally a copy of the previous report. If you are not UPDATING ANY INFORMATION, DO NOT REMOVE ANY INFORMATION FROM THE PREVIOUS REPORT.
+You will be provided with transcripts from a meeting, and optionally a copy of the previous minutes. If you are not UPDATING ANY INFORMATION, DO NOT REMOVE ANY INFORMATION FROM THE PREVIOUS MINUTES.
 
 I want you to:
-1. Rectify out loud, any typos that may arise from mis-transcription that are not supposed to be in ATC dialogue. Replace inplace.
-2. Rectify out loud, any wrong or typo wind check values, frequency values. Replace inplace.
-4. You will now write a report detailing air incident for investigation purposes. Note that there may not have been anything that was done wrong, this is for book keeping. Human lives are on the line here. You will use this template:
-```
+1. Rectify out loud any typos that may arise from mis-transcription. Replace them in place.
+2. Ensure all names, dates, and factual information are accurate. Correct any discrepancies.
+3. You will now write the meeting minutes in JSON format using the following template:
+
 {
-    "situation_report": {
-      "callsign": "{aircraft callsign identifier on radio. NOTE: this is referring to what planes call themselves on the radio when addressing or being addressed by tower. Ensure that this is NOT tower's name}",
-      "event": "{brief description of the main event}",
-      "location": "{CURRENT LOCATION i.e. runway used, or location in air or aerodrome}",
-      "status": [
-        "{SPECIFIC bullet point 1 describing FACTUAL EVIDENCE discussed}",
-        "{...additional bullet points if needed}"
-      ]
-    },
-    "actions_taken": [
-      "{bullet point 1: SPECIFIC action taken based on STATUS}",
-      "{bullet point 2: SPECIFIC action taken}",
-      "{...additional actions as needed}"
-    ]
+    "meeting_minutes": {
+        "agenda_items": [
+            {
+                "agenda_item_title": "{Title of the Agenda Item}",
+                "discussion_summary": "{Concise summary of the discussion}",
+                "information_discussed": "{Justification and explanation of information in meeting}",
+                "decisions_made": "{Resolutions or conclusions reached}",
+                "action_items": [
+                    {
+                        "task": "{Specific task to be completed}",
+                        "assigned_to": "{Full Name and Rank}",
+                        "deadline": "{Deadline for the task}"
+                    }
+                ]
+            }
+        ],
+        "other_business": "{Any additional topics discussed outside the main agenda}",
+        "adjournment": {
+            "time": "{Time the meeting concluded}",
+            "next_meeting": {
+                "date": "{Date of the next meeting}",
+                "time": "{Time of the next meeting}",
+                "location": "{Location of the next meeting}"
+            }
+        }
+    }
 }
-```
-5. You will then return me the json file containing situation_report. I need you to detail the events properly and be specific because I can't have you summarising details
-when we need to perform a post-incident review. If actions are taken, you need to include what was done, where was it done, how many (of whatever) was involved, etc etc.
 
 
-When passing the report format to me, ALWAYS ENCASE IT IN TRIPLE BACKTICKS LIKE THIS:
-```
-{
-...
-}
-```
+4. Ensure that:
+    - All sections from the transcript are accurately represented in the JSON structure.
+    - Use clear and concise language without personal opinions.
+    - Attribute statements to specific individuals where necessary.
+    - Maintain consistency in formatting and terminology throughout the JSON.
+
+5. When passing the JSON format to me, ALWAYS ENCASE IT IN TRIPLE BACKTICKS LIKE THIS:
+{ ... }
+
 Just return me the RAW JSON WITHOUT ANY \N OR ANY FORMATTING. RAW JSON ONLY.
 
-I repeat.  If you are not UPDATING ANY INFORMATION, DO NOT REMOVE ANY INFORMATION FROM THE PREVIOUS REPORT.
+Remember to handle the minutes with the highest level of confidentiality. If you have any questions or need further clarification on any part of this process, please feel free to reach out to me directly.
+
+Thank you for your dedication and professionalism.

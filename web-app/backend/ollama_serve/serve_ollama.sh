@@ -8,11 +8,11 @@ sleep 10
 
 echo "Pulling model llama3.1..."
 # Pull the 3.1 model
-ollama pull llama3.1
+ollama run qwen2.5:3b-instruct-q2_K
 
 echo "Creating the atc model..."
 # Create the model
-ollama create atc
+ollama create atlas_llm
 
 # Wait for background jobs (i.e., ollama serve) to keep the container alive
 wait

@@ -128,6 +128,7 @@ import apiClient from "@/router/apiClient";
 import {typeWriterMultiple} from '@/methods/utils/typeWriter'; // Ensure this path is correct
 import {tabConfigurations} from '@/config/columnConfig'; // Ensure this path is correct
 import axios from 'axios'; // Import axios for cancel tokens
+import { jsonrepair } from 'jsonrepair'
 
 // Define typingMappings outside the component for reusability
 const typingMappings = [
@@ -512,6 +513,7 @@ export default {
 
     async generateSummary() {
       if (!this.isTranscribing) {
+        // skips if transcription previous transcription still going on
         return;
       }
       console.log("Generating summary")
@@ -607,7 +609,8 @@ export default {
             .replace(/\\\\/g, '\\')
             .replace(/\\"/g, '"');
         console.log(extractedContent);
-        const jsonObj = JSON.parse(extractedContent);
+        let repaired = jsonrepair(extractedContent)
+        let jsonObj = JSON.parse(repaired);
         return jsonObj;
       } catch (error) {
         console.error('Error extracting and parsing summary:', error);
