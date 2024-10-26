@@ -39,30 +39,30 @@
                 <!-- Initial Carousel Item when no summaries are available -->
                 <template v-if="summaries.length === 0">
                   <el-carousel-item>
-                  <div class="initial-text">
-                    <p>{{ rightBoxInitial }}</p>
-                  </div>
-                </el-carousel-item>
+                    <div class="initial-text">
+                      <p>{{ rightBoxInitial }}</p>
+                    </div>
+                  </el-carousel-item>
                 </template>
 
                 <!-- Carousel Items for each summary -->
                 <template v-else>
-                <el-carousel-item
-                    v-for="summary in summaries"
+                  <el-carousel-item
+                      v-for="summary in summaries"
                       :key="summary.id"
-                    class="summary-item"
-                >
+                      class="summary-item"
+                  >
                     <div class="summary-content" ref="summaryContent">
-                    <el-tag type="info" size="small" class="timestamp-tag">
-                      {{ summary.timestamp }}
-                    </el-tag>
-                    <div
-                        v-html="summary.formattedContent"
-                        class="formatted-summary"
+                      <el-tag type="info" size="small" class="timestamp-tag">
+                        {{ summary.timestamp }}
+                      </el-tag>
+                      <div
+                          v-html="summary.formattedContent"
+                          class="formatted-summary"
 
-                    ></div>
-                  </div>
-                </el-carousel-item>
+                      ></div>
+                    </div>
+                  </el-carousel-item>
                 </template>
               </el-carousel>
             </div>
@@ -74,21 +74,21 @@
       <div class="button-group">
         <!-- Upload Recording Button -->
         <el-button
-          :disabled="isTranscribing"
-          :style="{ color: uploadColor }"
-          class="centered-button same-width-button"
-          @click="uploadRecording"
+            :disabled="isTranscribing"
+            :style="{ color: uploadColor }"
+            class="centered-button same-width-button"
+            @click="uploadRecording"
         >
           <el-icon class="icon-group">
-            <UploadIcon />
+            <UploadIcon/>
           </el-icon>
           {{ isTranscribing ? 'Transcribing...' : 'Upload Recording' }}
         </el-button>
 
         <!-- Clear Transcript / Stop Transcribing Button -->
         <el-button
-          class="centered-button same-width-button"
-          @click="clearTranscription"
+            class="centered-button same-width-button"
+            @click="clearTranscription"
         >
           {{ isTranscribing ? 'Stop Transcribing' : 'Clear Transcript' }}
         </el-button>
@@ -96,11 +96,11 @@
 
       <!-- Hidden File Input -->
       <input
-        ref="audioFileInput"
-        type="file"
-        accept="audio/*"
-        style="display: none;"
-        @change="handleFileUpload"
+          ref="audioFileInput"
+          type="file"
+          accept="audio/*"
+          style="display: none;"
+          @change="handleFileUpload"
       />
     </el-main>
   </el-container>
@@ -128,7 +128,7 @@ import apiClient from "@/router/apiClient";
 import {typeWriterMultiple} from '@/methods/utils/typeWriter'; // Ensure this path is correct
 import {tabConfigurations} from '@/config/columnConfig'; // Ensure this path is correct
 import axios from 'axios'; // Import axios for cancel tokens
-import { jsonrepair } from 'jsonrepair'
+import {jsonrepair} from 'jsonrepair'
 
 // Define typingMappings outside the component for reusability
 const typingMappings = [
@@ -339,9 +339,9 @@ export default {
     },
 
     /**
-    * Send the audio chunk to the backend for transcription.
-    * @param {Float32Array} chunk - Audio data chunk.
-    */
+     * Send the audio chunk to the backend for transcription.
+     * @param {Float32Array} chunk - Audio data chunk.
+     */
     async sendChunk(chunk) {
       try {
         // Encode the chunk into WAV format
@@ -353,23 +353,23 @@ export default {
 
         // Make the POST request
         const response = await apiClient.post(
-          this.transcribeApiEndpoint,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-            cancelToken: this.cancelTokenSource.token,
-          }
+            this.transcribeApiEndpoint,
+            formData,
+            {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
+              cancelToken: this.cancelTokenSource.token,
+            }
         );
 
         // Handle the backend response
         if (response.status === 200 && response.data.transcription) {
-            const transcription = response.data.transcription;
-            console.log("reply:", response.data.transcription)
-            this.addTranscription(transcription);
+          const transcription = response.data.transcription;
+          console.log("reply:", response.data.transcription)
+          this.addTranscription(transcription);
         } else {
-            console.error('Error in transcription response:', response);
+          console.error('Error in transcription response:', response);
         }
       } catch (error) {
         if (axios.isCancel(error)) {
@@ -390,15 +390,15 @@ export default {
           .filter((line) => line.trim() !== '').length;
 
       this.transcriptionBuffer = this.transcriptionDisplay.split('\n').filter((word) => word.length != 0).slice(
-        -this.linesForSummary
+          -this.linesForSummary
       ).join('\n');
 
       console.log(this.transcriptionDisplay.split('\n').filter((word) => word.length != 0).slice(-this.linesForSummary))
 
       if (
-        (lineCount >= 3 && this.isTranscribing && lineCount % this.linesForSummary == 0)
+          (lineCount >= 3 && this.isTranscribing && lineCount % this.linesForSummary == 0)
           ||
-        this.lastSent
+          this.lastSent
       ) {
         console.log("FinaL?", this.lastSent)
         this.generateSummary()
@@ -452,57 +452,56 @@ export default {
         }
       });
     },
-        /**
-        * Encode recorded audio samples into WAV format.
-        * @param {Float32Array} samples - Recorded audio samples.
-        * @param {number} sampleRate - Audio sample rate.
-        * @returns {Blob} - WAV audio blob.
-        */
-        encodeWAV(samples, sampleRate) {
-            const buffer = new ArrayBuffer(44 + samples.length * 2); // WAV header + samples
-            const view = new DataView(buffer);
+    /**
+     * Encode recorded audio samples into WAV format.
+     * @param {Float32Array} samples - Recorded audio samples.
+     * @param {number} sampleRate - Audio sample rate.
+     * @returns {Blob} - WAV audio blob.
+     */
+    encodeWAV(samples, sampleRate) {
+      const buffer = new ArrayBuffer(44 + samples.length * 2); // WAV header + samples
+      const view = new DataView(buffer);
 
-            // RIFF chunk descriptor
-            this.writeString(view, 0, 'RIFF');
-            view.setUint32(4, 36 + samples.length * 2, true); // File size - 8 bytes
-            this.writeString(view, 8, 'WAVE');
+      // RIFF chunk descriptor
+      this.writeString(view, 0, 'RIFF');
+      view.setUint32(4, 36 + samples.length * 2, true); // File size - 8 bytes
+      this.writeString(view, 8, 'WAVE');
 
-            // FMT sub-chunk (format of the WAV)
-            this.writeString(view, 12, 'fmt ');
-            view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
-            view.setUint16(20, 1, true); // Audio format (1 = PCM)
-            view.setUint16(22, 1, true); // Number of channels (1 = mono)
-            view.setUint32(24, sampleRate, true); // Sample rate
-            view.setUint32(28, sampleRate * 2, true); // Byte rate (SampleRate * NumChannels * BitsPerSample/8)
-            view.setUint16(32, 2, true); // Block align (NumChannels * BitsPerSample/8)
-            view.setUint16(34, 16, true); // Bits per sample (16 bits for PCM)
+      // FMT sub-chunk (format of the WAV)
+      this.writeString(view, 12, 'fmt ');
+      view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
+      view.setUint16(20, 1, true); // Audio format (1 = PCM)
+      view.setUint16(22, 1, true); // Number of channels (1 = mono)
+      view.setUint32(24, sampleRate, true); // Sample rate
+      view.setUint32(28, sampleRate * 2, true); // Byte rate (SampleRate * NumChannels * BitsPerSample/8)
+      view.setUint16(32, 2, true); // Block align (NumChannels * BitsPerSample/8)
+      view.setUint16(34, 16, true); // Bits per sample (16 bits for PCM)
 
-            // Data sub-chunk (actual audio samples)
-            this.writeString(view, 36, 'data');
-            view.setUint32(40, samples.length * 2, true); // NumSamples * NumChannels * BitsPerSample/8
+      // Data sub-chunk (actual audio samples)
+      this.writeString(view, 36, 'data');
+      view.setUint32(40, samples.length * 2, true); // NumSamples * NumChannels * BitsPerSample/8
 
-            // Write the PCM samples
-            let offset = 44;
-            for (let i = 0; i < samples.length; i++, offset += 2) {
-            const s = Math.max(-1, Math.min(1, samples[i])); // Clamp sample values between -1 and 1
-            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true); // Convert to 16-bit PCM
-            }
+      // Write the PCM samples
+      let offset = 44;
+      for (let i = 0; i < samples.length; i++, offset += 2) {
+        const s = Math.max(-1, Math.min(1, samples[i])); // Clamp sample values between -1 and 1
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true); // Convert to 16-bit PCM
+      }
 
-            return new Blob([view], { type: 'audio/wav' }); // Create the Blob (WAV file)
-        },
+      return new Blob([view], {type: 'audio/wav'}); // Create the Blob (WAV file)
+    },
 
-        /**
-        * Helper to write strings into the DataView for WAV header.
-        * @param {DataView} view
-        * @param {number} offset
-        * @param {string} string
-        */
-        writeString(view, offset, string) {
-            for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-            }
-        },
-
+    /**
+     * Helper to write strings into the DataView for WAV header.
+     * @param {DataView} view
+     * @param {number} offset
+     * @param {string} string
+     */
+    writeString(view, offset, string) {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    },
 
 
     async generateSummary() {
@@ -534,14 +533,14 @@ export default {
         console.log(payload)
 
         const response = await apiClient.post(
-          this.summaryApiEndpoint,
-          payload,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            cancelToken: this.summaryCancelTokenSource.token,
-          }
+            this.summaryApiEndpoint,
+            payload,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              cancelToken: this.summaryCancelTokenSource.token,
+            }
         );
 
         console.log("Receive")
@@ -575,12 +574,12 @@ export default {
               ElMessage.error('Unauthorized: Please check your API credentials.');
             } else {
               ElMessage.error(
-                `Error ${error.response.status}: ${error.response.statusText}`
+                  `Error ${error.response.status}: ${error.response.statusText}`
               );
             }
           } else if (error.request) {
             ElMessage.error(
-              'No response from the server. Please check your network.'
+                'No response from the server. Please check your network.'
             );
           } else {
             ElMessage.error(`Request error: ${error.message}`);
@@ -685,7 +684,7 @@ export default {
       return text.charAt(0).toUpperCase() + text.slice(1);
     },
   },
-  
+
   mounted() {
     this.$watch(
         () => this.summaries,
@@ -739,6 +738,7 @@ export default {
 
 .transcription-content {
   padding: 20px 20px 20px 30px; /* Added left padding */
+  color: #29353c !important;
 }
 
 .initial-text {
@@ -818,6 +818,7 @@ export default {
   width: 100%;
   font-family: 'Arial', sans-serif;
   line-height: 1.6;
+  color: #29353c !important;
 }
 
 /* Styling for nested objects within summaries */
