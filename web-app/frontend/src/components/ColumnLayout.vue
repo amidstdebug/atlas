@@ -191,6 +191,7 @@ export default {
       debouncedGenerateSummary: null,
       transcribeApiEndpoint: '/transcribe',
       audioContext: null,
+      lastSent: false,
       audioWorkletNode: null,
       recordedSamples: [],
       sampleRate: 48000,
@@ -339,6 +340,8 @@ export default {
         await this.sendChunk(chunk);
         offset += this.chunkSize;
       }
+
+      this.lastSent = true;
     },
 
     /**
@@ -398,8 +401,13 @@ export default {
 
       console.log(this.transcriptionDisplay.split('\n').filter((word) => word.length != 0).slice(-this.linesForSummary))
 
-      if (lineCount >= 3 && this.isTranscribing && lineCount % this.linesForSummary == 0) {
+      if (
+        (lineCount >= 3 && this.isTranscribing && lineCount % this.linesForSummary == 0)
+          ||
+        this.lastSent
+      ) {
         this.generateSummary()
+        this.lastSent = false
       }
     },
 
@@ -525,6 +533,9 @@ export default {
           const previousReport = this.summaries[0].rawContent;
           payload.previous_report = previousReport;
         }
+
+        console.log("Sending payload:")
+        console.log(payload)
 
         const response = await apiClient.post(
           this.summaryApiEndpoint,
