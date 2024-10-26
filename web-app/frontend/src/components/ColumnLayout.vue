@@ -328,21 +328,14 @@ export default {
      * Split the audio into chunks and send each chunk to the backend.
      */
     async chunkAndSendAudio() {
-      let offset = 0;
+      for (let offset = 0; offset < this.recordedSamples.length && this.isTranscribing; offset += this.chunkSize) {
+        const chunk = this.recordedSamples.slice(offset, offset + this.chunkSize);
 
-      while (
-        offset < this.recordedSamples.length &&
-        this.isTranscribing
-      ) {
-        const chunk = this.recordedSamples.slice(
-          offset,
-          offset + this.chunkSize
-        );
+        if (offset + this.chunkSize >= this.recordedSamples.length) {
+          this.lastSent = true;
+        }
         await this.sendChunk(chunk);
-        offset += this.chunkSize;
       }
-
-      this.lastSent = true;
     },
 
     /**
@@ -407,6 +400,7 @@ export default {
           ||
         this.lastSent
       ) {
+        console.log("FinaL?", this.lastSent)
         this.generateSummary()
         this.lastSent = false
       }
@@ -550,6 +544,8 @@ export default {
           }
         );
 
+        console.log("Receive")
+        console.log(response.data)
 
         if (
             response.data &&
@@ -558,6 +554,8 @@ export default {
         ) {
           const apiResponse = response.data.message.content;
           const summaryObj = this.extractSummary(apiResponse);
+          console.log("After extract")
+          console.log(summaryObj)
           if (summaryObj) {
             this.addSummary(summaryObj);
             ElMessage.success('Summary generated successfully.');
