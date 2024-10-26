@@ -184,8 +184,10 @@ export default {
   },
   data() {
     return {
-      transcriptionBuffer: '',
+      transcriptionBuffer: '', // Used as a buffer for summary, purpose is to reduce token 
+      transcriptionDisplay: '', // Displayed on HTML
       summaries: [],
+      linesForSummary: 3,
       debouncedGenerateSummary: null,
       transcribeApiEndpoint: '/transcribe',
       audioContext: null,
@@ -194,7 +196,6 @@ export default {
       sampleRate: 48000,
       chunkSize: 1600000, // Approx. 1 second of audio at 16kHz
       isProcessing: false,
-      maxBufferLength: 2000,
       summaryApiEndpoint: '/summary',
       isTranscribing: false,
       isGeneratingSummary: false,
@@ -210,8 +211,8 @@ export default {
   },
   computed: {
     formattedTranscription() {
-      return this.transcriptionBuffer
-          ? DOMPurify.sanitize(this.transcriptionBuffer.replace(/\n/g, '<br>'))
+      return this.transcriptionDisplay
+          ? DOMPurify.sanitize(this.transcriptionDisplay.replace(/\n/g, '<br><br>'))
           : '';
     },
   },
@@ -229,9 +230,8 @@ export default {
           // If newVal is shorter or equal, assume transcription was reset
           newText = newVal;
         }
-        if (newText.trim()) {
-          this.addTranscription(newText);
-        }
+
+        this.addTranscription(newText.trim());
       }
     },
     activeTab(newTab) {
@@ -384,20 +384,21 @@ export default {
     },
 
     addTranscription(newText) {
-      this.transcriptionBuffer += newText + '\n';
-      if (this.transcriptionBuffer.length > this.maxBufferLength) {
-        this.transcriptionBuffer = this.transcriptionBuffer.slice(
-            -this.maxBufferLength
-        );
-      }
+      this.transcriptionDisplay += newText + '\n';
+
       this.scrollToBottom();
 
-      const lineCount = this.transcriptionBuffer
+      const lineCount = this.transcriptionDisplay
           .split('\n')
           .filter((line) => line.trim() !== '').length;
 
-      if (lineCount >= 3 && this.isTranscribing) {
-        console.log("Calling generateSummary")
+      this.transcriptionBuffer = this.transcriptionDisplay.split('\n').filter((word) => word.length != 0).slice(
+        -this.linesForSummary
+      ).join('\n');
+
+      console.log(this.transcriptionDisplay.split('\n').filter((word) => word.length != 0).slice(-this.linesForSummary))
+
+      if (lineCount >= 3 && this.isTranscribing && lineCount % this.linesForSummary == 0) {
         this.generateSummary()
       }
     },
@@ -422,6 +423,7 @@ export default {
         ElMessage.success('Transcription stopped.');
       } else {
         this.transcriptionBuffer = '';
+        this.transcriptionDisplay = '';
         this.summaries = [];
         this.$emit('transcription-cleared');
         ElMessage.success('Transcription and summaries cleared.');
@@ -509,6 +511,7 @@ export default {
       this.isGeneratingSummary = true;
       this.summaryCancelTokenSource = axios.CancelToken.source();
 
+      console.log("Sending:", this.transcriptionBuffer)
       try {
         let payload = {
           transcription: this.transcriptionBuffer.trim(),
@@ -614,7 +617,7 @@ export default {
         rawContent: summaryObj
       });
       console.log(`Summary added. Total summaries: ${this.summaries.length}`);
-      if (this.summaries.length > 5) {
+      if (this.summaries.length > 10) {
         this.summaries.pop();
         console.log(`Summary removed. Total summaries: ${this.summaries.length}`);
       }
