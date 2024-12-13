@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 # Define your sudo password
-SUDO_PASSWORD="apeXvinylbuff325!"
+SUDO_PASSWORD="..."
 
 # Name your tmux session
 SESSION_NAME="auto_transcript_dev"
