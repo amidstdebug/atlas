@@ -35,7 +35,7 @@ LLM_URI = "http://ollama:11434/api/chat"
 
 # TODO : PUT THIS INTO AN ENV FILE
 # Secret key for JWT encoding/decoding
-JWT_SECRET = '456789789yegfgyuihvdfgh74rt2389ub34tuilberg890yh234uib'
+JWT_SECRET = '***'
 JWT_ALGORITHM = 'HS256'  # Recommended for JWT signing
 
 OLLAMA_MODEL = "qwen2.5"
