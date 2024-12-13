@@ -2,6 +2,8 @@
 
 ATLAS is a powerful application designed to transcribe live ATC (Air Traffic Control) communications and provide real-time situational reports (SITREPs). Additionally, it includes a meeting minutes feature that supports live recording and file uploads for detailed, automated transcription. The system leverages cutting-edge AI technologies, a streamlined architecture, and modern containerization for scalability and ease of use.
 
+![](https://github.com/amidstdebug/atlas/blob/main/live.gif)
+
 ---
 
 ## Features
