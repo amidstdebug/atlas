@@ -131,10 +131,11 @@ We welcome contributions to improve ATLAS! To contribute:
 
 ## License
 
-This project is licensed under the CC BY-NC 4.0 License. 
+This project is licensed under the Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) license. 
 
-This means anyone can use, share, and adapt a work as long as they give proper credit to the creator and do not use the material for commercial purposes.
-For more details, see the `LICENSE` file or visit the Creative Commons website.
+This license allows others to share, adapt, and build upon the material as long as they credit the creator and do not use it for commercial purposes.
+
+For detailed terms, please refer to the included `LICENSE` file.
 
 ---
 
