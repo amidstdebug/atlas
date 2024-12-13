@@ -29,7 +29,7 @@ ATLAS is a powerful application designed to transcribe live ATC (Air Traffic Con
 - Developed using **Flask**, providing robust API endpoints and seamless communication with the frontend.
 
 ### 3. **AI Models**
-- **Whisper**: A fine-tuned `jlvdoorn` Whisper model for highly accurate ATC transcription.
+- **Whisper**: A fine-tuned `jlvdoorn` Whisper model for highly accurate ATC transcription, with customizable model sizes.
 - **Llama 3.1**: A powerful language model for contextual understanding and SITREP generation, with customizable model sizes.
 
 ### 4. **Containerization**
