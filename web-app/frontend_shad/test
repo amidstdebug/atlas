@@ -1,0 +1,165 @@
+i want you to recreate this EXACT thing using shadcn vue, and i want you to give me the full code for each of the files that you will be using.
+
+you will breakdown the files you need, their purpose, and then give me the full code.
+
+these files will encompass both the frontend visuals, as well as the logic used to parse the data, and everything else in between.
+
+you will also read the full explanation and create an EXHAUSTIVE checklist, and ensure that by the end of your task, you have addressed all the checklist tasks.
+
+you will use vite and shadcn vue, you will handle logic in a vue-like manner, and you will search online for shadcn-vue components.
+
+you will return me the cli to install all the components and everything you need:
+
+## **1. Overall Page Layout & Color Themes**
+
+1. **Header at the Top**
+   - Spans the entire width of the viewport, approximately 100px in height.
+   - **Dynamic Background Color**: The header transitions its background color whenever the user switches between functional modes (for instance, from an air-incident mode to a meetings mode). This transition is visually smooth, typically over half a second.
+
+     - For example, in an **Air-Incident (ATC) Mode**, the header might use **hex `#44576D`** (dark slate-blue).
+     - For **Meeting Minutes Mode**, it might smoothly fade to **hex `#8BA4B3`** (lighter bluish-gray).
+     - The text in the header (such as the active tab label) contrasts with the header’s background. If the background is dark (`#44576D`), text may be **white (`#FFFFFF`)**; if the background is lighter (`#8BA4B3`), text could remain white or switch to a darker shade like **`#29353C`**.
+
+   - **Logo**: An image aligned to the far left of the header (with spacing, around 40px from the edge), fading or crossfading over one second if the active mode changes. In ATC mode, it might display a lighter variant, whereas in Meeting Minutes mode, a darker version is used.
+   - **Centered Tabs**: Each tab label becomes highlighted (for example, in white with an underline) when active. The emphasis includes a subtle size increase (around 20px) for the active tab.
+
+2. **Two-Box Main Content**
+   - Immediately below the header, the screen is divided into two horizontally adjacent boxes.
+   - **Left Box (35% width)**: Displays incoming transcription lines, each featuring a timestamp and speaker label.
+   - **Right Box (65% width)**: Contains an editable summary or meeting minutes, plus any controls related to that summary.
+
+---
+
+## **2. Dynamic Color Switching and Animated Glow**
+
+1. **Header Color Changes**
+   - When modes switch (e.g., from “Automated Air Incident Investigation” to “Automated Meeting Minutes”), the header **fades** from one color to another over ~0.5s. For instance, it might go from **hex `#44576D`** (dark) to **hex `#8BA4B3`** (lighter).
+   - **Text Contrast**: The labels in the header (like tab labels) automatically shift to a contrasting color (often **white** with hex `#FFFFFF`) to remain visible against darker backgrounds. Where the background is lighter, the text could become a dark gray or stay white if still readable.
+
+2. **Left Box: Constant Sine-Wave Glow**
+IF the microphone is activated and the user is doing a live recording,
+   - Around the outer edges of the left transcription box, there is a **continuous red-hued glow** that gently ripples or pulses in intensity. This glow could shift between lighter reds (like **`#f88078`**) and deeper reds (like **`#e34660`**) in a slow cycle.
+   - The glow animation does not respond to sound; it is purely aesthetic, showing a steady wave-like variation.
+   - The box interior can remain a neutral color (like **white** `#FFFFFF` or **light gray** `#f9f9f9`) so that text remains easily readable.
+
+3. **Speaker Label Colors**
+   - Each speaker is automatically assigned a **distinct color** for their label. Examples might include a bright green (**`#1CDC9A`**) for Speaker A, a light blue (**`#3B82F6`**) for Speaker B, a soft orange (**`#FBBF24`**) for Speaker C, etc.
+   - These colors help users quickly recognize who is speaking. If a new speaker joins, the interface picks an additional color from the palette. If a speaker leaves, the interface may quietly remove them from any legend or highlight.
+
+---
+
+## **3. Left Box (Transcription Area) Interactions**
+
+1. **Incoming Transcriptions**
+   - If the user is **recording** from the microphone, the system captures audio in **chunks**. When each chunk is processed by the transcription service, the recognized text appears here in near-real-time.
+   - This chunk-based approach continues until recording is stopped or until the file ends (if an uploaded file is used).
+   - As the system receives transcripts in real time, it will receive the timestamp of the start and end of the speech, the speaker label, and the transcription text. Each new line appears at the bottom (or in chronological order) of the left box.
+   - The frontend displays the transcriptions, coloring the speaker label using the palette mentioned (for example, **`#1CDC9A`** for one speaker).
+   - A **speaker legend** can fade in or update, showing the same color code next to each speaker name so users can rename speakers or see who is active.
+
+2. **Scrolling**
+   - If enough lines accumulate, the box becomes scrollable. It can automatically scroll to the newest line so the user always sees the latest transcript. Alternatively, the user can manually scroll back to review earlier statements.
+
+3. **Adaptive Speaker Legend**
+   - The interface may show a color key or small list of active participants. If a new speaker label appears, the legend dynamically includes them with their assigned color. If that speaker stops appearing for a while, the legend eventually removes them or dims their entry.
+
+---
+
+## **4. Right Box (Summary/Minutes) Interactions**
+Summary generation will trigger after **3 transcript lines** are accumulated. If that threshold is reached while the user is editing, the system waits. Once the user finishes, it sends all the new lines to refresh or refine the summary.
+
+When sending content for summary generation, the system will send the last 3 accumulated lines, as well as the last summary stored in the system (if applicable).
+
+If the system is about to send a summary, but the user is still editing, then the system will hold a buffer to accumulate the 3 + (whatever incoming lines the system has received while the user was typing),
+and once the user has finished updating the summary (the system will register this through a button click to confirm summary editing has finished), the system will then send everything in that buffer + the latest summary it has.
+
+1. **Editable Summary Section**
+   - The right box displays a summary or minutes of the conversation. This area is **directly editable** by the user. For example, it might contain a rich-text field or a plain multiline box.
+   - The user can highlight, delete, or rearrange text as needed, just like editing a normal document.
+
+2. **Indicator for Summary Updates**
+   - Whenever the system is preparing or sending an updated summary request to the server (for instance, to create or refine the meeting minutes), a **visual indicator** becomes visible. This might be a text label saying “Waiting for summary update…” or a small loading icon near the top of the box.
+   - If the user starts editing during this waiting period, the interface automatically **cancels or pauses** that request to avoid overwriting user changes. The indicator might change to reflect that an update is on hold.
+
+3. **User Finishing Edits**
+   - Once the user completes their changes (e.g., clicking an “Apply Changes” button or moving focus away from the text area), the system checks if any new transcripts arrived in the meantime.
+   - The interface then **packages** all of these transcripts together with the user’s updated text and sends a **new** summary request. The indicator reappears to show that an updated summary is in progress.
+   - When the server response arrives, the edited summary can either remain as-is (if the user’s changes override any automated suggestions) or incorporate additional summarization details. The indicator disappears once it’s done.
+
+4. **Scrolling**
+   - If the summary is lengthy, the right box scrolls vertically. The user can easily navigate through multiple paragraphs or bullet points of meeting minutes.
+
+
+---
+
+## **5. Header Tabs and Color Coordination**
+
+1. **Tab Switching**
+   - The user can switch between functional tabs, each associated with its own color set or theme. For instance, the background might become a medium grayish-blue in one mode and shift to a lighter bluish tint in another. Specifically, it could fade from **`#44576D`** to **`#8BA4B3`** over half a second.
+   - The logo might also shift from a light version to a dark version, fading over roughly one second.
+   - The entire header smoothly transitions to the new color, ensuring a cohesive look across the page.
+   - The tab label that is active is displayed more prominently, in a larger size or with a different color (often **white**, `#FFFFFF`), emphasizing its selected status.
+
+2. **Primary and Secondary Colors**
+   - The text in the header, including the active tab, typically appears in a contrasting color to the header’s background. If the background is dark (`#44576D`), the text is white (`#FFFFFF`); if it’s light (`#8BA4B3`), the text might shift to a dark gray (`#29353C`) or remain white if still readable.
+   - Certain accent elements (like small icons or borders around the header tabs) might also adjust colors to maintain clear contrast.
+
+---
+
+## **6. Additional Interactive Elements: Buttons & File Uploads**
+
+1. **Upload Recording**
+   - There may be a button, often placed below the header or within the right box, labeled something like “Upload Recording.” The button color can be **`#5773D9`** (a strong medium-blue).
+   - When pressed, a **file selection dialog** opens so the user can choose an audio file (e.g., MP3, WAV, or another audio format).
+   - As soon as the user selects the file, the interface starts processing it. This typically involves **splitting the audio into smaller parts (chunks)** and sending them to a server for real-time or near-real-time transcription.
+   - While the system is uploading and processing, the button might become **temporarily disabled** or change its label (e.g., to “Uploading…” or “Transcribing…”).
+
+2. **Recording / Live Capture**
+   - In some configurations, there could be a “Start Recording” button (commonly styled in **`#e34660`**, a vibrant pinkish-red) for capturing audio from the microphone. Clicking it begins live transcription, which is also chunked.
+   - A “Stop Recording” button might appear once capturing starts, stopping the flow of audio to the server. When the user stops, the final chunk is sent.
+
+   **(Additional Logic on Recording Start/Stop & Chunk Sending)**
+   - **Starting**: Once the user clicks “Start Recording,” the site begins streaming audio in small segments. Each segment (or chunk) is uploaded automatically.
+   - **Chunk-by-Chunk Transcription**: As the server finishes processing each chunk, it returns recognized text, which appears in the Left Box.
+   - **Stopping**: Clicking “Stop Recording” ends the capture; any remaining chunk is finalized and sent. No further transcript lines appear unless the user restarts or uploads another file.
+
+3. **Clearing / Stopping Transcripts**
+   - Another button might be available to **clear** all transcribed text and any associated summaries. This could be labeled “Clear Transcript” or “Reset.”
+   - If the system is actively recording, that same button might say “Stop Recording” to halt real-time capture.
+
+4. **Summary Editing Buttons**
+   - The summary/minutes box might include a distinct “Apply Changes” or “Save Edits” button, letting the user finalize any manual changes.
+   - Upon clicking this, the interface updates the summary logic accordingly and sends a new request if needed.
+
+5. **Visual Feedback on Button States**
+   - Whenever a button is in a “busy” or “disabled” state (for instance, during file upload or summary generation), it might gray out, reduce its opacity, or show a spinner.
+   - Upon completion or cancellation, the button returns to its normal style.
+
+---
+
+## **7. Putting It All Together**
+
+When someone arrives at the site:
+
+1. **Header**
+   - Sees a prominent rectangular area with a background color tied to the current functional mode. In “ATC” mode, it may be **`#44576D`**; in “Minutes” mode, **`#8BA4B3`**.
+   - The logo on the left might switch from a dark to a light variant (or vice versa), fading over ~1s. Tabs in the center indicate the current function, with the active one highlighted in white or a contrasting shade.
+
+2. **Left Box (35%)**
+   - Surrounded by a gently moving red glow that never changes in response to speech; it’s purely aesthetic (shifting between something like **`#f88078`** and **`#e34660`**).
+   - Incoming transcripts show up line by line, each labeled with a timestamp and a color-coded speaker name (e.g., **`#1CDC9A`**). The user sees the conversation built out in real time. A speaker legend might dynamically update with these colors.
+
+3. **Right Box (65%)**
+   - Contains an editable summary or meeting minutes area. The user can type, edit, or reorder text.
+   - If an update to the summary is in progress, a visual indicator appears; if the user chooses to edit while that is happening, the request is put on hold.
+   - Once the user finishes editing, any backlog of transcripts is combined, and a new request is sent to refresh or refine the summary. The indicator disappears when complete.
+
+4. **Buttons**
+   - “Upload Recording” (colored **`#5773D9`**) triggers a file input, letting the user pick an audio file for transcription. A progress indicator or changed button label shows it is busy or “Transcribing…”.
+   - A “Clear Transcript” or “Stop Recording” button can clear all text or halt ongoing capture.
+
+**Integrated Recording and Summaries**
+- As the user **records** or **uploads** audio, the system sends it in chunks to a transcription service, populating the Left Box with recognized text. If enough lines accumulate, the Right Box’s summary logic can request an updated summary.
+- When the user **stops recording**, any final chunk is processed. The summary is refreshed one last time, unless the user manually clears everything.
+
+Through these specific descriptions—covering **exact hex color codes**, dynamic color themes, chunk-based recording logic, speaker labeling, file uploads, summary editing, and interactive button states—someone can build an interface matching the intended vision in both **look and functionality** without seeing any underlying code.
