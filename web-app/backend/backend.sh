@@ -1,39 +1,19 @@
 #!/bin/bash
-#
-## Set image and container names
-#IMAGE_NAME="transcriber-api"
-#CONTAINER_NAME="transcriber-api-container"
-#
-# Find and kill any process using port 5000 using ss
-sudo fuser -k 5000/tcp
-sudo fuser -k 5000/tcp
-#
-sudo fuser -k 11434/tcp
-sudo fuser -k 11434/tcp
-#
-sudo systemctl stop ollama.service
-#
-if [ -n "$PIDS" ]; then
-    echo "Killing processes on port 5000: $PIDS"
-    echo $PIDS | xargs sudo kill -9 5000
+
+# Kill processes on ports 5000 and 11434, ignoring errors if none are found
+sudo fuser -k 5000/tcp || true
+sudo fuser -k 11434/tcp || true
+
+# Attempt to stop ollama.service only if systemd is actually supported
+if command -v systemctl &> /dev/null
+then
+    echo "Stopping ollama.service using systemctl..."
+    sudo systemctl stop ollama.service
 else
-    echo "No processes found on port 5000."
+    echo "systemctl not found or not supported in WSL. Skipping stopping ollama.service..."
 fi
-#
-if [ -n "$PIDS" ]; then
-    echo "Killing processes on port 11434: $PIDS"
-    echo $PIDS | xargs sudo kill -9 11434
-else
-    echo "No processes found on port 11434."
-fi
-#
-## Check if the container is already running and remove it if necessary
-#if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
-#    echo "Stopping and removing the existing container..."
-#    docker stop $CONTAINER_NAME
-#    docker rm $CONTAINER_NAME
-#fi
-#
-# Build the Docker image
-echo "Running backend server."
+
+echo "Running backend server..."
+
+# Build and run with Docker Compose
 docker compose up --build --remove-orphans

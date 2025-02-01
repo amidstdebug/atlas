@@ -38,7 +38,7 @@ LLM_URI = "http://ollama:11434/api/chat"
 JWT_SECRET = '***'
 JWT_ALGORITHM = 'HS256'  # Recommended for JWT signing
 
-OLLAMA_MODEL = "qwen2.5"
+OLLAMA_MODEL = "llama3.2"
 
 
 # Function to generate JWT token
