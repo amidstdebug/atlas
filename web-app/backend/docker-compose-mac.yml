@@ -1,5 +1,6 @@
 services:
   backend:
+    platform: linux/amd64   # if needed for platform emulation
     build: .
     volumes:
       - .:/usr/src/app  # mount codebase for hot reload
