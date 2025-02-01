@@ -77,18 +77,43 @@ ATLAS is a powerful application designed to transcribe live ATC (Air Traffic Con
 - **Docker** and **Docker Compose** installed on your system.
 
 ### Steps
-1. Clone the repository:
+Clone the repository:
    ```bash
    git clone https://github.com/amidstdebug/ATLAS.git
-   cd ATLAS
+   cd atlas
    ```
+Setup Python Environment
+```bash
+conda create -n atlas python
+pip install librosa numpy soundfile torch transformers
+conda activate atlas
+python ./web-app/backend/misc/download_model.py
+```
+Install necessary applications:
+```bash
+   sudo apt update
+   sudo apt install tmux docker ollama
+```
+or if you're using Mac:
+```bash
+   brew update && brew upgrade
+   brew install tmux docker ollama
+```
+Mac users will also have to install the Docker for Mac application at:
+1. [Apple Silicon](https://desktop.docker.com/mac/main/arm64/Docker.dmg?utm_source=docker&utm_medium=webreferral&utm_campaign=docs-driven-download-mac-arm64)
+2. [Apple Intel](https://desktop.docker.com/mac/main/amd64/Docker.dmg?utm_source=docker&utm_medium=webreferral&utm_campaign=docs-driven-download-mac-amd64)
 
-2. Build and start the application:
-   ```bash
-   ./run_server.sh
-   ```
+Setup Ollama environment and generation of API key:
+```bash
+bash ./web-app/backend/ollama_serve/serve_ollama.sh
+```
 
-3. Access the application:
+Build and start the application:
+```bash
+./run_server_tmux.sh
+```
+
+Access the application:
    - Navigate to `http://localhost:7860` in your browser.
 
 ---
@@ -153,4 +178,3 @@ For detailed terms, please refer to the included `LICENSE` file.
 For questions or feedback, please open an issue or contact the maintainer at `work@jwong.dev`.
 
 ---
-

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Kill processes on ports 5000 and 11434, ignoring errors if none are found
-sudo fuser -k 5000/tcp || true
+# Kill processes on ports 5001 and 11434, ignoring errors if none are found
+sudo fuser -k 5001/tcp || true
 sudo fuser -k 11434/tcp || true
 
 # Attempt to stop ollama.service only if systemd is actually supported

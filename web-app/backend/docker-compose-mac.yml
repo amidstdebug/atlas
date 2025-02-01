@@ -1,0 +1,32 @@
+services:
+  backend:
+    build: .
+    volumes:
+      - .:/usr/src/app  # mount codebase for hot reload
+    ports:
+      - "5001:5001"
+    environment:
+      FLASK_APP: app.py
+      FLASK_ENV: development
+      PYTHONUNBUFFERED: 1
+    command: python app.py
+    depends_on:
+      - ollama  # Ensure that 'backend' waits for 'ollama' to be ready
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ollama:/root/.ollama
+      - ./ollama_serve:/root/ollama_serve
+      - ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro  # Mount a specific SSH key file
+    ports:
+      - "11434:11434"
+    restart: "no"
+    entrypoint: [ "bash", "/root/ollama_serve/serve_ollama.sh" ]
+
+volumes:
+  ollama:
+    driver: local  # Persistent volume for Ollama

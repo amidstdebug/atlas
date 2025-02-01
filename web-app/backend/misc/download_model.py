@@ -9,7 +9,7 @@ from collections import defaultdict
 
 
 # Initialize CUDA (optional)
-torch.cuda.init()
+# torch.cuda.init()
 
 # Define the model path or Hugging Face model ID
 # model_name_or_path = "jlvdoorn/whisper-small-atco2-asr"

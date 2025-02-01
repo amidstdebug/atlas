@@ -26,6 +26,7 @@ CORS(app)
 
 # Load model and processor
 model_name_or_path = './models/atco2_medium'
+# model_name_or_path = ''
 processor, model, device = load_model(model_name_or_path)
 transcription_history = defaultdict(int)
 pattern_history = defaultdict(lambda: {'count': 0, 'correct_format': ''})
@@ -381,4 +382,4 @@ if __name__ == '__main__':
 		print("Failed to load all models. Please check errors above.")
 
 	# Step 4: Start the Flask application
-	app.run(host='0.0.0.0', port=5000, debug=True)
+	app.run(host='0.0.0.0', port=5001, debug=True)
