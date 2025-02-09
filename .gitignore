@@ -12,6 +12,8 @@ distil_large_justin
 distil_large_justin_retrained
 final_model
 web-app/backend/whisper/final_model
+web-app/backend/audio_server/models/*
+web-app/backend/audio_server/data/*
 final_model_2
 local_model
 train

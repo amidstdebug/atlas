@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-multipart
+omegaconf
+wget
+librosa
+matplotlib
+# torchaudio
+# transformers==4.40.0
+# # tokenizers>=0.21
+# datasets==2.19.0
+# huggingface_hub==0.21.3

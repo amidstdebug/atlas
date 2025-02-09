@@ -1,9 +1,8 @@
 services:
   backend:
-    platform: linux/amd64   # if needed for platform emulation
-    build: .
+    build: ./server
     volumes:
-      - .:/usr/src/app # mount codebase for hot reload
+      - ./server:/usr/src/app # mount codebase for hot reload
     ports:
       - "5001:5001"
     environment:
@@ -20,6 +19,7 @@ services:
     command: python app.py
     depends_on:
       - ollama  # Ensure that 'app' waits for 'ollama' to be ready
+      - audio
 
   ollama:
     image: ollama/ollama
@@ -42,6 +42,24 @@ services:
     restart: "no"
     entrypoint: ["bash", "/root/ollama_serve/serve_ollama.sh"]  # Run the custom script to create and serve the model
 
+  audio:
+    build: ./audio_server
+    volumes:
+      - ./audio_server:/usr/src/app # mount codebase for hot reload
+    ports:
+      - "5002:5002"
+    environment:
+      FLASK_APP: app.py
+      FLASK_ENV: development
+      PYTHONUNBUFFERED: 1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    command: python app.py
 
 volumes:
   ollama:
