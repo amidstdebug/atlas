@@ -95,8 +95,8 @@ class Audio:
 
         # Hold a certain number of segments in buffer before starting to cluster to prevent inaccurate issues
         if not self._clustering_start:
-            self._unclustered_segments_buffer.extend(segments_to_cluster)
-            if len(self._unclustered_segments_buffer) > min_segments_for_clustering:
+            self._unclustered_segments_buffer.extend(segments_to_update)
+            if len(self._unclustered_segments_buffer) > self.min_segments_for_clustering:
                 self._clustering_start = True
                 self.clear_merged_segments()
                 segments_to_update = self._unclustered_segments_buffer
@@ -182,7 +182,7 @@ class Audio:
         self._merged_segments_idx = 0
         
     def get_merged_speaker_segments(self) -> List[SpeakerSegment]:        
-        for curr_merged_idx, segment in enumerate(self.base_scale_segments[self._merged_segments_idx]):
+        for curr_merged_idx, segment in enumerate(self.base_scale_segments[self._merged_segments_idx:]):
             curr_active_speakers = list(self._active_speakers.items())
             
             for speaker, active_segments in curr_active_speakers:
@@ -192,7 +192,7 @@ class Audio:
                     self._active_speakers[speaker].append(segment)
                 else:
                     # merge and end speakers
-                    speaker_segment = self.merge_segments(
+                    speaker_segment = merge_segments(
                         active_segments, 
                         speaker, 
                         sampling_rate=self.sampling_rate
