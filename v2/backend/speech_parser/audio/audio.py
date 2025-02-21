@@ -187,7 +187,9 @@ class Audio:
         self.merged_segments = []
         self._merged_segments_idx = 0
         
-    def get_merged_speaker_segments(self) -> List[SpeakerSegment]:        
+    def get_merged_speaker_segments(self, use_cache: bool = False) -> List[SpeakerSegment]:  
+        if not use_cache:
+            self.clear_merged_segments()
         for curr_merged_idx, segment in enumerate(self.base_scale_segments[self._merged_segments_idx:]):
             curr_active_speakers = list(self._active_speakers.items())
             

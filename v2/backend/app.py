@@ -60,9 +60,17 @@ class SpeechManager:
             
             # Get timeline from base scale segments
             if self.audio_processor.base_scale_segments is not None:
-                merged_segments = a.get_merged_speaker_segments()
+                merged_segments = self.audio_processor.get_merged_speaker_segments(use_cache=False)
 
-                output_segments = [{'speaker': segment.speaker, 'start': segment.start, 'end': segment.end, 'duration': segment.duration} for segment in merged]
+                output_segments = [
+                    {
+                        'speaker': segment.speaker, 
+                        'start': segment.start, 
+                        'end': segment.end, 
+                        'duration': segment.duration
+                    } 
+                    for segment in merged_segments
+                ]
                 
                 return {
                     "segments": output_segments
