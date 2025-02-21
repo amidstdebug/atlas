@@ -15,7 +15,7 @@ class OnlineSpeakerClustering:
     def __init__(
         self,
         hist_buffer_size_per_spk: int = 400,
-        max_buffer_size: int = 2500,
+        max_buffer_size: int = 1500,
         device: str = 'cpu'
     ):
         """
@@ -28,7 +28,7 @@ class OnlineSpeakerClustering:
                            exceeding 2900~ will possibly result in errors with Torch (related to Intel MKL)
             device: computation device ('cuda' or 'cpu')
         """
-        MAX_EMBEDDINGS = 2850
+        MAX_EMBEDDINGS = 2800
         self.device = device
         
         self.max_embs_clustered = MAX_EMBEDDINGS
@@ -55,7 +55,7 @@ class OnlineSpeakerClustering:
         self.oracle_num_speakers = -1  # Set to -1 for automatic speaker count detection
         self.max_num_speakers = 8  # Maximum number of speakers to detect
         self.max_rp_threshold = 0.3  # Maximum threshold for spectral clustering # was 0.15
-        self.sparse_search_volume = 30  # Number of threshold values to search
+        self.sparse_search_volume = 50  # Number of threshold values to search
         self.fixed_thres = -1.0  # Fixed threshold for clustering (-1.0 means adaptive)
         self.kmeans_random_trials = 3  # Number of k-means clustering attempts
         self.sim_threshold = 0.5  # Similarity threshold for speaker matching
@@ -224,6 +224,13 @@ class OnlineSpeakerClustering:
         Returns:
             Tensor [n] containing cluster assignments for each time step
         """
+        
+        if ms_emb_t.shape[0] > self.max_embs_clustered:
+            raise ValueError(
+                f"{ms_emb_t} exceeds maximum allowed size of {self.max_embs_clustered}. "
+                "This may cause errors with Torch's Intel MKL implementation."
+            )
+            
         affinity_matrix = self.get_affinity_matrix(ms_emb_t)
         affinity_matrix = affinity_matrix.to(device=self.device)
         
