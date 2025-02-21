@@ -4,7 +4,7 @@ from typing import List, Tuple, Dict, Optional, Iterator
 import torch
 from nemo.collections.asr.models.label_models import EncDecSpeakerLabelModel
 
-from .segment import Segment, BaseScaleSegment, ScaleSegment, SegmentBatch, get_segments, get_segment_batches
+from .segment import Segment, BaseScaleSegment, ScaleSegment, SegmentBatch, SpeakerSegment, get_segments, get_segment_batches
 from ..clustering.online_clustering import OnlineSpeakerClustering
 from ..msdd import MSDD
 from ..vad import SileroVAD
@@ -148,6 +148,9 @@ class Audio:
                         
                     segment.other_scale_segments[scale] = self.segment_scales[scale][next_other_segment_idx]
                     self.other_scale_segment_idx[scale] = next_other_segment_idx
+
+    def get_merged_speaker_segments(self) -> List[SpeakerSegment]:
+        pass
 
     def get_all_embeds(self) -> torch.Tensor:
         # Collect all speaker embeddings from base scale segments

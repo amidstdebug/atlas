@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Tuple, Dict, Optional, Iterator
+from typing import List, Tuple, Dict, Optional, Iterator, Any
 
 import torch
 
@@ -203,3 +203,43 @@ def get_segment_batches(segment_scale: ScaleSegment, batch_size: int) -> Iterato
     # Only yield the final batch if it's not empty
     if current_batch:
         yield SegmentBatch(current_batch)
+
+@dataclass
+class SpeakerSegment:
+    """Represents a continuous segment of speech for a single speaker"""
+    start: float  # Start time in seconds
+    end: float    # End time in seconds
+    data: torch.Tensor # waveform data
+    speaker: Any
+    transcription: str = None
+
+    def __init__(
+        self,
+        start: float,
+        end: float,
+        data: torch.Tensor,
+        speaker: int
+    ): 
+        self.start = start
+        self.end = end
+        self.data = data
+        self.speaker = speaker
+
+    @property
+    def duration(self) -> float:
+        return self.end-self.start
+
+    @property
+    def center(self) -> float:
+        """Get center point of segment in seconds"""
+        return (self.start + self.end) / 2
+        
+    def __hash__(self):
+        return hash(f'{self.start}-{self.end}, {self.speaker}')
+    
+    def __eq__(self, other):
+        # Two items are equal if they have the same id
+        if not isinstance(other, Segment):
+            return False
+        return hash(self) == hash(other)
+    

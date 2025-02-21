@@ -12,7 +12,7 @@ import numpy as np
 import torch
 import torchaudio
 
-from diarizer import Audio, SileroVAD, OnlineSpeakerClustering, MSDD
+from speech_parser import Audio, SileroVAD, OnlineSpeakerClustering, MSDD
 from utils import load_audio
 
 app = FastAPI()
