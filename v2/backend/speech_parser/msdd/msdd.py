@@ -35,7 +35,6 @@ def get_speaker_predictions(
         
     device = ms_emb_seq.device
     num_speakers = ms_avg_embs.shape[-1]
-    print(ms_avg_embs.shape)
     speaker_indices = list(range(num_speakers))
     sequence_length = ms_emb_seq.shape[1]
     if batch_size == -1:
@@ -43,7 +42,7 @@ def get_speaker_predictions(
     
     if len(speaker_indices) == 1:
         all_probs = torch.ones((1, sequence_length), device=device)
-        labels = torch.zeros((1, sequence_length), device=device)
+        labels = torch.ones((1, sequence_length), device=device)
         return all_probs, labels
     else:
         # Initialize output tensors for full sequence

@@ -4,7 +4,7 @@ from typing import List, Tuple, Dict, Optional, Iterator
 import torch
 from nemo.collections.asr.models.label_models import EncDecSpeakerLabelModel
 
-from .segment import Segment, BaseScaleSegment, ScaleSegment, SegmentBatch, SpeakerSegment, get_segments, get_segment_batches
+from .segment import Segment, BaseScaleSegment, ScaleSegment, SegmentBatch, SpeakerSegment, get_segments, get_segment_batches, merge_segments
 from ..clustering.online_clustering import OnlineSpeakerClustering
 from ..msdd import MSDD
 from ..vad import SileroVAD
@@ -14,7 +14,7 @@ class Audio:
     base_scale: float
     scales: List[float]
     hops: List[float]
-    sr: int = 16_000
+    sampling_rate: int = 16_000
     device: str = 'cuda'
     waveform: Optional[torch.Tensor] = None
     voice_activity_mask: Optional[torch.Tensor] = None # 1 for speech, 0 for non-speech
@@ -25,7 +25,7 @@ class Audio:
         scales: List[float], 
         hops: List[float], 
         base_scale: float=0.5, 
-        sr: int=16_000,
+        sampling_rate: int=16_000,
         batch_size: int=128,
         speech_embedding_model: EncDecSpeakerLabelModel=None,
         voice_activity_detection_model: SileroVAD=None,
@@ -36,12 +36,16 @@ class Audio:
         # Initialize models and parameters for multi-scale diarization
         self.scales = scales
         self.hops = hops
-        self.sr = sr
-        self.batch_size = batch_size
+        self.scale_hops = {scale: hop for scale, hop in zip(scales, hops)}
         self.base_scale = base_scale
         self.segment_scales = {}
+        
+        self.sampling_rate = sampling_rate
+        self.batch_size = batch_size
 
         self.min_samples = 40_000
+        self.min_speaker_segment_duration = 1.0
+        self.max_silence_per_segment_pct = 0.25
 
         self.speech_embedding_model = speech_embedding_model
         self.speech_embedding_model.freeze() # Freeze model weights for inference
@@ -80,6 +84,7 @@ class Audio:
                 segments_to_update.append(segment)
         if len(segments_to_update) == 0:
             return empty_returns
+            
         new_ms_emb_seq = torch.stack([segment.tensor for segment in segments_to_update])
         
         # Perform speaker clustering and get updated centroids
@@ -101,7 +106,7 @@ class Audio:
 
         for spk_idx in range(labels.shape[0]):
             for i, segment in enumerate(segments_to_update):
-                if labels[spk_idx, i] == 1:                
+                if labels[spk_idx, i] == 1:         
                     segment.add_speaker(spk_idx)
 
         return proba, labels
@@ -135,13 +140,14 @@ class Audio:
                     break
 
                 other_scale_segment = other_scale[other_segment_idx]
-                if segment.center < other_scale_segment.end:
+                boundary_to_next = other_scale_segment.center + (self.scale_hops[scale] / 2)
+                
+                if segment.center < boundary_to_next:
                     # Current segment falls within the other scale segment
                     segment.other_scale_segments[scale] = other_scale_segment
                 else:
                     # Move to next segment at other scale
                     next_other_segment_idx = other_segment_idx + 1
-
                     if next_other_segment_idx == len(other_scale):
                         segment.other_scale_segments = None
                         break
@@ -150,7 +156,45 @@ class Audio:
                     self.other_scale_segment_idx[scale] = next_other_segment_idx
 
     def get_merged_speaker_segments(self) -> List[SpeakerSegment]:
-        pass
+        active_speakers  = {}
+        
+        merged_segments = []
+        
+        for segment in self.base_scale_segments:
+            curr_active_speakers = list(active_speakers.items())
+            for speaker, active_segments in curr_active_speakers:
+                # end the speaker segment if the start of the new segment is past the end of the old
+                if (speaker in segment.speakers) and (segment.start <= active_segments[-1].end):
+                    active_speakers[speaker].append(segment)
+                else:
+                    # merge and end speakers
+                    speaker_segment = merge_segments(
+                        active_segments, 
+                        speaker, 
+                        sampling_rate=self.sampling_rate
+                    )
+                    merged_segments.append(speaker_segment)
+                    active_speakers.pop(speaker)
+                
+            for speaker in segment.speakers:
+                if speaker not in active_speakers:
+                    # start speaker
+                    active_speakers[speaker] = [segment]
+
+        # merged_segments = [segment in merged_segments if seg]
+        filtered_segments = []
+        for segment in merged_segments:
+            print('new seg')
+            print(segment.mask.sum()/segment.mask.shape[0])
+            print(segment.duration)
+            
+            if (segment.mask.sum()/segment.mask.shape[0]) < self.max_silence_per_segment_pct:
+                continue
+            if segment.duration < self.min_speaker_segment_duration:
+                continue
+            filtered_segments.append(segment)
+
+        return filtered_segments
 
     def get_all_embeds(self) -> torch.Tensor:
         # Collect all speaker embeddings from base scale segments
@@ -185,7 +229,7 @@ class Audio:
             segments = get_segments(
                 self.waveform,
                 self.voice_activity_mask,
-                self.sr, 
+                self.sampling_rate, 
                 scale, 
                 hop, 
                 segment_class=segment_class, 

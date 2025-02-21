@@ -12,7 +12,6 @@ class Segment:
     mask: torch.Tensor # VAD mask
     scale: int
     embed: Optional[torch.Tensor] = None
-    speakers: Optional[List[int]] = None
     is_base_scale: bool = False
 
     def __init__(
@@ -30,6 +29,8 @@ class Segment:
         self.mask = mask
         self.scale = scale
         self.embed = embed
+        
+        self.speakers: List[Any] = []
     
     @property
     def center(self) -> float:
@@ -62,6 +63,24 @@ class Segment:
 class BaseScaleSegment(Segment):
     is_base_scale: bool = True
     other_scale_segments: Optional[Dict[float, Segment]] = None # Only used in base scale
+
+    def __init__(
+        self,
+        start: float,
+        end: float,
+        data: torch.Tensor,
+        mask: torch.Tensor,
+        scale: int,
+        embed: Optional[torch.Tensor] = None
+    ):
+        super().__init__(
+            start=start,
+            end=end,
+            data=data,
+            mask=mask,
+            scale=scale,
+            embed=embed,
+        )
 
     @property
     def tensor(self) -> torch.Tensor:
@@ -210,6 +229,7 @@ class SpeakerSegment:
     start: float  # Start time in seconds
     end: float    # End time in seconds
     data: torch.Tensor # waveform data
+    mask: torch.Tensor # VAD mask
     speaker: Any
     transcription: str = None
 
@@ -218,11 +238,13 @@ class SpeakerSegment:
         start: float,
         end: float,
         data: torch.Tensor,
+        mask: torch.Tensor,
         speaker: int
     ): 
         self.start = start
         self.end = end
         self.data = data
+        self.mask = mask
         self.speaker = speaker
 
     @property
@@ -243,3 +265,26 @@ class SpeakerSegment:
             return False
         return hash(self) == hash(other)
     
+def merge_segments(segments, speaker, sampling_rate=16000):
+    
+    first_segment = segments[0]
+    start = first_segment.start
+    end = first_segment.start
+    normal_segment_duration = first_segment.end - first_segment.start
+    waveforms = []
+    vad_masks = []
+    
+    for segment in segments:
+        increment = segment.end - end
+        assert increment <= normal_segment_duration, f"Issue in the matching section of get_merged_speaker_segments(), {increment} > {normal_segment_duration}"
+
+        concat_length = int(increment*sampling_rate)
+        waveforms.append(segment.data[-concat_length:])
+        vad_masks.append(segment.mask[-concat_length:])
+        
+        end = segment.end
+        
+    waveform = torch.cat(waveforms)
+    vad_mask = torch.cat(vad_masks)
+
+    return SpeakerSegment(start, end, waveform, vad_mask, speaker)
