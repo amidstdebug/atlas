@@ -218,7 +218,7 @@ class Audio:
         for segment in self.merged_segments:
             if (segment.mask.sum()/segment.mask.shape[0]) < self.max_silence_per_segment_pct:
                 continue
-            if segment.duration < self.min_speaker_segment_duration:
+            if segment.duration <= self.min_speaker_segment_duration:
                 continue
             filtered_segments.append(segment)
 
