@@ -33,6 +33,8 @@ class Audio:
         speaker_clustering=None,
         waveform=None
     ):
+        self.idle_device = 'cpu'
+        
         # Initialize models and parameters for multi-scale diarization
         self.scales = scales
         self.hops = hops
@@ -55,7 +57,9 @@ class Audio:
 
         # Clustering state
         self._clustering_start = False
-        self._unclustered_segments_buffer: List[Segments] = []
+
+        # VAD state
+        self._unprocessed_chunk: Optional[torch.Tensor] = None
 
         # Models
         self.speech_embedding_model = speech_embedding_model
@@ -71,19 +75,19 @@ class Audio:
         
         # Initialize waveform and process if provided
         self.waveform = torch.tensor([]) if waveform is None else waveform
-        self.waveform = self.waveform.to(device=self.device, dtype=torch.float32)
+        self.waveform = self.waveform.to(device=self.idle_device, dtype=torch.float32)
         if waveform is not None:
             self.voice_activity_mask = self.voice_activity_detection_model(self.waveform)
             self.populate_segment_scales()
             self.assign_segments()
         else:
-            self.voice_activity_mask = torch.tensor([], device=self.device, dtype=torch.float32)
+            self.voice_activity_mask = torch.tensor([], device=self.idle_device, dtype=torch.float32)
 
     def __call__(self, waveform: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # Process new audio input and perform diarization
         new_segments = self.append_waveform(waveform)
 
-        empty_returns = torch.tensor([], device=self.device), torch.tensor([], device=self.device)
+        empty_returns = torch.tensor([], device=self.idle_device), torch.tensor([], device=self.idle_device)
 
         # Collect embeddings from new segments
         segments_to_update = []
@@ -95,11 +99,10 @@ class Audio:
 
         # Hold a certain number of segments in buffer before starting to cluster to prevent inaccurate issues
         if not self._clustering_start:
-            self._unclustered_segments_buffer.extend(segments_to_update)
-            if len(self._unclustered_segments_buffer) > self.min_segments_for_clustering:
+            if len(self.base_scale_segments) > self.min_segments_for_clustering:
                 self._clustering_start = True
                 self.clear_merged_segments()
-                segments_to_update = self._unclustered_segments_buffer
+                segments_to_update = self.base_scale_segments.segments_with_tensors
                 
         if self._clustering_start:
             new_ms_emb_seq = torch.stack([segment.tensor for segment in segments_to_update])
@@ -120,6 +123,8 @@ class Audio:
             
             # Get diarization probabilities and logits
             proba, labels = self.multi_scale_diarization_model(new_ms_emb_seq, new_label_seq, ms_avg_embs)
+            proba = proba.to(self.idle_device)
+            labels = labels.to(self.idle_device)
     
             for spk_idx in range(labels.shape[0]):
                 for i, segment in enumerate(segments_to_update):
@@ -145,6 +150,7 @@ class Audio:
                     audio_signal = batch.tensor.to(device=self.device, dtype=torch.float32)
                     audio_signal_lens = torch.tensor([audio_signal.shape[-1]] * audio_signal.shape[0], device=self.device)
                     _, embeds = self.speech_embedding_model.forward(input_signal=audio_signal, input_signal_length=audio_signal_lens)
+                embeds = embeds.to(self.idle_device)
                 batch.update_embeds(embeds)
 
     def assign_segments(self) -> None:
@@ -190,7 +196,7 @@ class Audio:
                 # end the speaker segment if the start of the new segment is past the end of the old
                 if (speaker in segment.speakers) and (segment.start <= active_segments[-1].end):
                     self._active_speakers[speaker].append(segment)
-                else:
+                elif segment.start > active_segments[-1].end:
                     # merge and end speakers
                     speaker_segment = merge_segments(
                         active_segments, 
@@ -228,9 +234,17 @@ class Audio:
 
     def append_waveform(self, waveform) -> List[Segment]:
         # Add new audio data and update voice activity detection mask
-        waveform = waveform.to(device=self.device, dtype=torch.float32)
-        self.waveform = torch.cat([self.waveform, waveform])
-        self.voice_activity_mask = torch.cat([self.voice_activity_mask, self.voice_activity_detection_model(waveform)])
+        waveform = waveform.to(device=self.idle_device, dtype=torch.float32)
+        if self._unprocessed_chunk is not None:
+            waveform = torch.cat([self._unprocessed_chunk, waveform])
+        vad_mask, self._unprocessed_chunk = self.voice_activity_detection_model(waveform)
+
+        if self._unprocessed_chunk is not None:
+            unprocessed_length = self._unprocessed_chunk.shape[0]
+        else:
+            unprocessed_length = 1
+        self.waveform = torch.cat([self.waveform, waveform[:-unprocessed_length]])
+        self.voice_activity_mask = torch.cat([self.voice_activity_mask, vad_mask])
 
         return self.populate_segment_scales()
 
@@ -239,7 +253,7 @@ class Audio:
         orig_num_base_segments = len(self.segment_scales.get(self.base_scale, []))
         for scale, hop in zip(self.scales, self.hops):
             if self.segment_scales.get(scale) is None:
-                self.segment_scales[scale] = ScaleSegment(scale, [], self.device)
+                self.segment_scales[scale] = ScaleSegment(scale, [])
                 
             last_segment_time = self.segment_scales[scale].last_segment_time
             # Use different segment class for base scale vs other scales

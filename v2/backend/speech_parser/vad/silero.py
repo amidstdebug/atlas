@@ -17,20 +17,21 @@ class SileroVAD:
         orig_device = waveform.device
         waveform = waveform.to(self.device)
         
-        mask = get_speech_mask(
+        mask, chunk = get_speech_mask(
             waveform,
             self.model,
             threshold=self.threshold
         )
         
         mask = mask.to(orig_device)
-        return mask
+        return mask, chunk
 
 @torch.no_grad()
 def get_speech_mask(
     audio: torch.Tensor,
     model,
-    threshold: float = 0.5
+    threshold: float = 0.5,
+    pad: bool = False
 ) -> torch.Tensor:
     """
     Generate a binary mask indicating speech segments in audio using silero VAD
@@ -48,6 +49,8 @@ def get_speech_mask(
     -------
     mask: torch.Tensor
         Binary mask of same shape as input where 1 indicates speech, 0 indicates silence
+    chunk: torch.Tensor
+        Last chunk
     """
     
     if not torch.is_tensor(audio):
@@ -71,10 +74,13 @@ def get_speech_mask(
     for i in range(0, len(audio), window_size_samples):
         chunk = audio[i:i + window_size_samples]
         if len(chunk) < window_size_samples:
-            chunk = torch.nn.functional.pad(chunk, (0, window_size_samples - len(chunk)))
+            if pad:
+                chunk = torch.nn.functional.pad(chunk, (0, window_size_samples - len(chunk)))
+            else:
+                break
         speech_prob = model(chunk, sampling_rate).item()
         
         if speech_prob >= threshold:
             mask[i:i + window_size_samples] = 1
     
-    return mask
+    return mask, chunk

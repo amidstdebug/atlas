@@ -110,7 +110,6 @@ class BaseScaleSegment(Segment):
 class ScaleSegment:
     scale: float
     segments: List[Segment]
-    device: str
 
     @property
     def last_segment_time(self) -> float:
@@ -132,6 +131,10 @@ class ScaleSegment:
     @property
     def unassigned_segments(self):
         return [segment for segment in self.segments if segment.other_scale_segments is None]
+
+    @property
+    def segments_with_tensors(self):
+        return [segment for segment in self.segments if segment.has_tensor]
         
     def __getitem__(self, idx: int) -> torch.Tensor:
         return self.segments[idx]
@@ -181,7 +184,7 @@ def get_segments(
         segment_data = waveform[start_idx:end_idx]
         segment_vad_data = voice_activity_mask[start_idx:end_idx]
         
-        segment = segment_class(start_time, end_time, segment_data, segment_vad_data, scale)
+        segment = segment_class(start_time, end_time, segment_data, segment_vad_data.to('cpu'), scale)
         segments.append(segment)
         
         current_time += hop_length
@@ -198,8 +201,7 @@ class SegmentBatch:
 
     def update_embeds(self, embeds: torch.Tensor):
         for i, s in enumerate(self.segments):
-            # store on cpu
-            s.embed = embeds[i].to('cpu')
+            s.embed = embeds[i]
 
 def get_segment_batches(segment_scale: ScaleSegment, batch_size: int) -> Iterator[List[Segment]]:
     """
@@ -220,7 +222,6 @@ def get_segment_batches(segment_scale: ScaleSegment, batch_size: int) -> Iterato
             continue
             
         if segment.embed is None:
-            segment.data = segment.data.to(segment_scale.device)
             current_batch.append(segment)
             
             if len(current_batch) >= batch_size:
