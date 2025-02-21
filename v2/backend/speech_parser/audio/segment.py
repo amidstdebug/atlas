@@ -29,6 +29,8 @@ class Segment:
         self.mask = mask
         self.scale = scale
         self.embed = embed
+
+        self.unk_speaker = True
         
         self.speakers: List[Any] = []
     
@@ -45,10 +47,15 @@ class Segment:
     def has_embed(self) -> bool:
         return self.embed is not None
 
-    def add_speaker(self, spk_idx):
-        if self.speakers is None:
+    def add_speaker(self, speaker: Any) -> None:
+        if self.speakers is None or self.unk_speaker:
+            self.unk_speaker = False
             self.speakers = []
-        self.speakers.append(spk_idx)
+        self.speakers.append(speaker)
+
+    def set_unk_speaker(self) -> None:
+        self.unk_speaker = True
+        self.speakers = ['?']
         
     def __hash__(self):
         return hash(f'{self.start}-{self.end}')
@@ -191,7 +198,8 @@ class SegmentBatch:
 
     def update_embeds(self, embeds: torch.Tensor):
         for i, s in enumerate(self.segments):
-            s.embed = embeds[i]
+            # store on cpu
+            s.embed = embeds[i].to('cpu')
 
 def get_segment_batches(segment_scale: ScaleSegment, batch_size: int) -> Iterator[List[Segment]]:
     """

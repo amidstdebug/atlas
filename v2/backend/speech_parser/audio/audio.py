@@ -43,10 +43,21 @@ class Audio:
         self.sampling_rate = sampling_rate
         self.batch_size = batch_size
 
-        self.min_samples = 40_000
-        self.min_speaker_segment_duration = 1.0
-        self.max_silence_per_segment_pct = 0.25
+        # Tunables
+        self.min_segments_for_clustering: int = 100
+        self.min_speaker_segment_duration: float = 1.0
+        self.max_silence_per_segment_pct: float = 0.5
 
+        # Merging segments
+        self._active_speakers: Dict[Any, List[Segment]] = {}
+        self.merged_segments: List[SpeakerSegment] = []
+        self._merged_segments_idx: int = 0
+
+        # Clustering state
+        self._clustering_start = False
+        self._unclustered_segments_buffer: List[Segments] = []
+
+        # Models
         self.speech_embedding_model = speech_embedding_model
         self.speech_embedding_model.freeze() # Freeze model weights for inference
         self.voice_activity_detection_model = voice_activity_detection_model
@@ -74,9 +85,6 @@ class Audio:
 
         empty_returns = torch.tensor([], device=self.device), torch.tensor([], device=self.device)
 
-        if len(new_segments) == 0:
-            return empty_returns
-
         # Collect embeddings from new segments
         segments_to_update = []
         for segment in new_segments:
@@ -84,33 +92,46 @@ class Audio:
                 segments_to_update.append(segment)
         if len(segments_to_update) == 0:
             return empty_returns
+
+        # Hold a certain number of segments in buffer before starting to cluster to prevent inaccurate issues
+        if not self._clustering_start:
+            self._unclustered_segments_buffer.extend(segments_to_cluster)
+            if len(self._unclustered_segments_buffer) > min_segments_for_clustering:
+                self._clustering_start = True
+                self.clear_merged_segments()
+                segments_to_update = self._unclustered_segments_buffer
+                
+        if self._clustering_start:
+            new_ms_emb_seq = torch.stack([segment.tensor for segment in segments_to_update])
             
-        new_ms_emb_seq = torch.stack([segment.tensor for segment in segments_to_update])
-        
-        # Perform speaker clustering and get updated centroids
-        new_label_seq = self.speaker_clustering(new_ms_emb_seq)
-        centroids = self.speaker_clustering.get_centroids()
-
-        # Prepare inputs for multi-scale diarization model
-        new_ms_emb_seq = new_ms_emb_seq.unsqueeze(0)
-        new_label_seq = new_label_seq.unsqueeze(0)
-        ms_avg_embs = torch.stack([centroids[spk_idx] for spk_idx in sorted(list(centroids.keys()))]).permute(1, 2, 0).unsqueeze(0)
-        
-        # Move tensors to appropriate device
-        new_ms_emb_seq = new_ms_emb_seq.to(self.device)
-        new_label_seq = new_label_seq.to(self.device)
-        ms_avg_embs = ms_avg_embs.to(self.device)
-        
-        # Get diarization probabilities and logits
-        proba, labels = self.multi_scale_diarization_model(new_ms_emb_seq, new_label_seq, ms_avg_embs)
-
-        for spk_idx in range(labels.shape[0]):
-            for i, segment in enumerate(segments_to_update):
-                if labels[spk_idx, i] == 1:         
-                    segment.add_speaker(spk_idx)
-
-        return proba, labels
+            # Perform speaker clustering and get updated centroids
+            new_label_seq = self.speaker_clustering(new_ms_emb_seq)
+            centroids = self.speaker_clustering.get_centroids()
     
+            # Prepare inputs for multi-scale diarization model
+            new_ms_emb_seq = new_ms_emb_seq.unsqueeze(0)
+            new_label_seq = new_label_seq.unsqueeze(0)
+            ms_avg_embs = torch.stack([centroids[spk_idx] for spk_idx in sorted(list(centroids.keys()))]).permute(1, 2, 0).unsqueeze(0)
+            
+            # Move tensors to appropriate device
+            new_ms_emb_seq = new_ms_emb_seq.to(self.device)
+            new_label_seq = new_label_seq.to(self.device)
+            ms_avg_embs = ms_avg_embs.to(self.device)
+            
+            # Get diarization probabilities and logits
+            proba, labels = self.multi_scale_diarization_model(new_ms_emb_seq, new_label_seq, ms_avg_embs)
+    
+            for spk_idx in range(labels.shape[0]):
+                for i, segment in enumerate(segments_to_update):
+                    if labels[spk_idx, i] == 1:
+                        segment.add_speaker(spk_idx)
+                        
+            return proba, labels
+        else:
+            for segment in segments_to_update:
+                segment.set_unk_speaker()
+            return empty_returns
+
     @property
     def base_scale_segments(self) -> Optional[ScaleSegment]:
         return self.segment_scales.get(self.base_scale)
@@ -155,39 +176,40 @@ class Audio:
                     segment.other_scale_segments[scale] = self.segment_scales[scale][next_other_segment_idx]
                     self.other_scale_segment_idx[scale] = next_other_segment_idx
 
-    def get_merged_speaker_segments(self) -> List[SpeakerSegment]:
-        active_speakers  = {}
+    def clear_merged_segments(self) -> None:
+        self._active_speakers = {}
+        self.merged_segments = []
+        self._merged_segments_idx = 0
         
-        merged_segments = []
-        
-        for segment in self.base_scale_segments:
-            curr_active_speakers = list(active_speakers.items())
+    def get_merged_speaker_segments(self) -> List[SpeakerSegment]:        
+        for curr_merged_idx, segment in enumerate(self.base_scale_segments[self._merged_segments_idx]):
+            curr_active_speakers = list(self._active_speakers.items())
+            
             for speaker, active_segments in curr_active_speakers:
+                
                 # end the speaker segment if the start of the new segment is past the end of the old
                 if (speaker in segment.speakers) and (segment.start <= active_segments[-1].end):
-                    active_speakers[speaker].append(segment)
+                    self._active_speakers[speaker].append(segment)
                 else:
                     # merge and end speakers
-                    speaker_segment = merge_segments(
+                    speaker_segment = self.merge_segments(
                         active_segments, 
                         speaker, 
                         sampling_rate=self.sampling_rate
                     )
-                    merged_segments.append(speaker_segment)
-                    active_speakers.pop(speaker)
+                    self.merged_segments.append(speaker_segment)
+                    self._active_speakers.pop(speaker)
                 
             for speaker in segment.speakers:
-                if speaker not in active_speakers:
+                if speaker not in self._active_speakers:
                     # start speaker
-                    active_speakers[speaker] = [segment]
+                    self._active_speakers[speaker] = [segment]
+                    
+        self._merged_segments_idx += curr_merged_idx
 
-        # merged_segments = [segment in merged_segments if seg]
+        # filters
         filtered_segments = []
-        for segment in merged_segments:
-            print('new seg')
-            print(segment.mask.sum()/segment.mask.shape[0])
-            print(segment.duration)
-            
+        for segment in self.merged_segments:
             if (segment.mask.sum()/segment.mask.shape[0]) < self.max_silence_per_segment_pct:
                 continue
             if segment.duration < self.min_speaker_segment_duration:
@@ -209,9 +231,6 @@ class Audio:
         waveform = waveform.to(device=self.device, dtype=torch.float32)
         self.waveform = torch.cat([self.waveform, waveform])
         self.voice_activity_mask = torch.cat([self.voice_activity_mask, self.voice_activity_detection_model(waveform)])
-
-        if self.waveform.shape[0] < self.min_samples:
-            return []
 
         return self.populate_segment_scales()
 
