@@ -8,7 +8,7 @@ const routes = [
     path: '/',
     name: 'Home',
     component: MainApp,
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: false },
   },
   {
     path: '/login',
