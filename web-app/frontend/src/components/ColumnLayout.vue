@@ -152,8 +152,7 @@ import Prism from 'prismjs';
 import 'prismjs/themes/prism.css';
 import { typeWriterMultiple } from '@/methods/utils/typeWriter';
 import { tabConfigurations } from '@/config/columnConfig';
-import { jsonrepair } from 'jsonrepair';
-import axios from 'axios';
+// Removed axios import since HTTP sending is no longer used.
 import { AudioRecorderService } from '@/services/audioRecorderService';
 
 const typingMappings = [
@@ -212,7 +211,7 @@ export default {
       typingSpeed: 11,
       cancelTypingFunctions: [],
       isTranscribing: false,
-      cancelTokenSource: null,
+      // Removed cancelTokenSource and file upload related properties.
       recordedSamples: [],
       sampleRate: 48000,
       chunkSize: 1600000,
@@ -270,63 +269,27 @@ export default {
         console.warn(`No configuration found for activeTab: ${newTab}`);
       }
     },
-    // File upload methods:
+    // File upload methods updated to use the AudioRecorderService function.
     uploadRecording() {
       this.$refs.audioFileInput.click();
     },
     async handleFileUpload(event) {
       const file = event.target.files[0];
       if (file) {
-        this.isTranscribing = true;
-        this.cancelTokenSource = axios.CancelToken.source();
-        await this.processAudioFile(file);
-      }
-    },
-    async processAudioFile(file) {
-      const arrayBuffer = await file.arrayBuffer();
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      this.sampleRate = audioBuffer.sampleRate;
-      this.recordedSamples = Array.from(audioBuffer.getChannelData(0));
-      await this.chunkAndSendAudio();
-      this.isTranscribing = false;
-      this.cancelTokenSource = null;
-    },
-    async chunkAndSendAudio() {
-      for (let offset = 0; offset < this.recordedSamples.length && this.isTranscribing; offset += this.chunkSize) {
-        const chunk = this.recordedSamples.slice(offset, offset + this.chunkSize);
-        if (offset + this.chunkSize >= this.recordedSamples.length) {
-          this.lastSent = true;
+        if (!this.audioRecorder) {
+          this.audioRecorder = new AudioRecorderService({ preBufferDuration: 0.4 });
+          // Update the URL accordingly.
+          this.audioRecorder.connectWebSocket('ws://your-websocket-server-url');
         }
-        await this.sendChunk(chunk);
-      }
-    },
-    async sendChunk(chunk) {
-      try {
-        const wavBlob = this.encodeWAV(chunk, this.sampleRate);
-        const formData = new FormData();
-        formData.append('file', wavBlob, 'audio_chunk.wav');
-        const response = await axios.post(
-          '/transcribe',
-          formData,
-          {
-            headers: { 'Content-Type': 'multipart/form-data' },
-            cancelToken: this.cancelTokenSource.token,
-          }
-        );
-        if (response.status === 200 && response.data.transcription) {
-          const transcription = response.data.transcription;
-          console.log("Transcription reply:", transcription);
-          this.addTranscription(transcription);
-        } else {
-          console.error('Error in transcription response:', response);
-        }
-      } catch (error) {
-        if (axios.isCancel(error)) {
-          console.log('Transcription request canceled:', error.message);
-        } else {
-          console.error('Error sending audio chunk:', error);
-        }
+        const arrayBuffer = await file.arrayBuffer();
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        // Use the first channel's float32 samples.
+        const float32Array = audioBuffer.getChannelData(0);
+        // Set the recordedSamples property so that sendRecordedAudio() will send this data.
+        this.audioRecorder.recordedSamples = Array.from(float32Array);
+        await this.audioRecorder.sendRecordedAudio();
+        console.log('File upload payload sent via WebSocket.');
       }
     },
     clearTranscription() {
@@ -339,7 +302,7 @@ export default {
     async startMicRecording() {
       if (!this.audioRecorder) {
         this.audioRecorder = new AudioRecorderService({ preBufferDuration: 0.4 });
-        // Connect to your WebSocket server – update the URL accordingly.
+        // Update the URL accordingly.
         this.audioRecorder.connectWebSocket('ws://your-websocket-server-url');
       }
       await this.audioRecorder.startRecording();
@@ -347,7 +310,6 @@ export default {
     },
     async stopMicRecording() {
       await this.audioRecorder.stopRecording();
-      // Use audioStream instead of mediaStream to properly stop the microphone on macOS.
       if (this.audioRecorder.audioStream) {
         this.audioRecorder.audioStream.getTracks().forEach(track => track.stop());
       }
@@ -448,8 +410,8 @@ export default {
     },
   },
   watch: {
-    transcription(newVal, oldVal) {
-      // Additional logic for transcription updates can go here.
+    transcription(newVal) {
+      // Additional logic for transcription updates.
     },
     activeTab(newTab) {
       this.handleActiveTabChange(newTab);
@@ -472,6 +434,20 @@ export default {
     this.cancelTypingFunctions.forEach((cancelFn) => cancelFn());
   },
 };
+
+/*
+Helper function to convert an ArrayBuffer to a base64 string.
+This helper could also be imported from a shared utilities file.
+*/
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
 </script>
 
 <style scoped>
@@ -496,7 +472,6 @@ export default {
   padding: 0;
 }
 
-/* Base styling for content boxes */
 .transcription-box,
 .content-box {
   position: relative;
@@ -509,8 +484,6 @@ export default {
   transition: border 0.3s ease-in-out;
 }
 
-/* Recording glow effect using box-shadow on the card.
-   The box-shadow will fade in/out with a transition and pulse faster when active. */
 .recording-glow {
   transition: box-shadow 0.3s ease;
 }

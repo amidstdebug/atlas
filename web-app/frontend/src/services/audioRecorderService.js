@@ -1,7 +1,5 @@
 // src/services/audioRecorderService.js
 
-import { encodeWAV } from '@/methods/utils/audioUtils';
-
 export class AudioRecorderService {
   constructor(options = {}) {
     // Recording settings
@@ -16,7 +14,10 @@ export class AudioRecorderService {
     this.chunkNumber = 1;
     this.ws = null; // WebSocket connection
 
-    // Reactivation/chunk–sending settings
+    // For tracking pending chunks
+    this.pendingChunks = new Set(); // holds chunk ids for which we have not received a response
+
+    // Recording/reactivation settings (unchanged)
     this.thresholdPercentage = 0.1;
     this.sensitivity = { activity: 0.5, reduced: 0.5 };
     this.delayDuration = 250; // ms
@@ -26,7 +27,6 @@ export class AudioRecorderService {
     this.delayTimer = null;
     this.forceSendTimer = null;
     this.reactivationCount = 0;
-    this.maxReactivations = 1;
     this.chunkBeepDuration = 250; // ms
     this.conditionCounter = 0;
     this.isActive = false;
@@ -43,7 +43,6 @@ export class AudioRecorderService {
     this.audioWorkletNode = null;
   }
 
-  // Sets up the audio input and analysis (no canvas drawing)
   async setupAudio() {
     try {
       // Request microphone access
@@ -55,7 +54,7 @@ export class AudioRecorderService {
       this.sampleRate = this.audioContext.sampleRate;
       const source = this.audioContext.createMediaStreamSource(this.audioStream);
 
-      // Create an analyser node (to measure audio levels for reactivation)
+      // Create an analyser node for reactivation
       this.analyser = this.audioContext.createAnalyser();
       source.connect(this.analyser);
       this.bufferLength = this.analyser.frequencyBinCount;
@@ -69,12 +68,12 @@ export class AudioRecorderService {
       this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
       source.connect(this.audioWorkletNode);
 
-      // Initialize pre–buffer (to keep a short period of audio before recording)
+      // Initialize pre–buffer
       this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
       this.preBuffer = new Float32Array(this.preBufferSize);
       this.preBufferIndex = 0;
 
-      // When audio worklet sends data, save it in the pre–buffer and (if recording) into recordedSamples
+      // Save incoming audio data to the pre–buffer and (if recording) recordedSamples
       this.audioWorkletNode.port.onmessage = (event) => {
         const audioData = event.data;
         if (audioData.length > 0) {
@@ -89,7 +88,6 @@ export class AudioRecorderService {
     }
   }
 
-  // Append new samples into the pre–buffer (shifting if needed)
   storeInPreBuffer(audioData) {
     const dataLength = audioData.length;
     if (dataLength + this.preBufferIndex > this.preBufferSize) {
@@ -101,8 +99,6 @@ export class AudioRecorderService {
     this.preBufferIndex += dataLength;
   }
 
-  // Start recording: set up audio if needed, mark recording active,
-  // append pre–buffer to recordedSamples, and start reactivation loop.
   async startRecording() {
     if (!this.audioContext) {
       await this.setupAudio();
@@ -120,22 +116,19 @@ export class AudioRecorderService {
     this.startReactivationLoop();
   }
 
-  // Stop recording manually: stop reactivation loop, send any pending chunk,
-  // close microphone, and reset state.
   async stopRecording() {
     this.isRecording = false;
-    // Clear any pending timers in the reactivation logic
+    // Clear pending timers
     if (this.inactiveTimer) { clearTimeout(this.inactiveTimer); this.inactiveTimer = null; }
     if (this.delayTimer) { clearTimeout(this.delayTimer); this.delayTimer = null; }
     if (this.forceSendTimer) { clearTimeout(this.forceSendTimer); this.forceSendTimer = null; }
     // Send any remaining audio chunk
     await this.sendRecordedAudio();
-    // Close microphone and audio context so the mic is no longer in use
+    // Close microphone and audio context
     this.closeAudio();
     this.resetState();
   }
 
-  // Closes the audio stream and AudioContext
   closeAudio() {
     if (this.audioStream) {
       this.audioStream.getTracks().forEach(track => track.stop());
@@ -159,21 +152,38 @@ export class AudioRecorderService {
     this.isActive = false;
     this.chunkSent = false;
     this.reactivationCount = 0;
+    this.pendingChunks.clear();
   }
 
-  // Connect to a WebSocket server for sending chunks
   connectWebSocket(url) {
     this.ws = new WebSocket(url);
     this.ws.onopen = () => { console.log('WebSocket connection established.'); };
+
+    // Listen for responses from the backend
+    this.ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.chunk_id) {
+          console.log('Received response for chunk_id', data.chunk_id);
+          // Remove the pending chunk since we got the response.
+          this.pendingChunks.delete(data.chunk_id);
+          // Flush any queued chunks stored in cookies if there are none pending now.
+          if (this.pendingChunks.size === 0) {
+            this.flushCookieQueue();
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing WebSocket message:', e);
+      }
+    };
+
     this.ws.onerror = (error) => { console.error('WebSocket error:', error); };
     this.ws.onclose = () => { console.log('WebSocket connection closed.'); };
   }
 
-  // Reactivation loop: repeatedly get analyser data and check if audio level is low.
   startReactivationLoop() {
     const loop = () => {
       if (this.isRecording) {
-        // Get time–domain data from the analyser
         this.analyser.getByteTimeDomainData(this.dataArray);
         this.checkThresholdCondition();
         requestAnimationFrame(loop);
@@ -182,8 +192,6 @@ export class AudioRecorderService {
     loop();
   }
 
-  // Check if the audio level is below threshold.
-  // Here we assume the neutral value is 128 (for an 8–bit time domain array).
   checkThresholdCondition() {
     const center = 128;
     const centerThreshold = center * this.thresholdPercentage;
@@ -214,24 +222,19 @@ export class AudioRecorderService {
     }
   }
 
-  // Called when a loud signal is detected, marking the chunk as active.
   activateRecording() {
     console.log('Activating recording (chunk start)');
     this.isActive = true;
-    // Record the start time if needed
     this.recordingStartTime = Date.now();
     if (this.delayTimer) { clearTimeout(this.delayTimer); this.delayTimer = null; }
-    // Append any remaining pre–buffer data
     const preBufferData = this.preBuffer.slice(0, this.preBufferIndex);
     this.recordedSamples.push(...preBufferData);
     this.preBufferIndex = this.preBufferSize;
-    // Set a timer to force–send a chunk if recording goes too long
     this.forceSendTimer = setTimeout(() => { this.forceSendChunk('time'); }, this.forceSendDuration);
     this.conditionCounter = 0;
     this.chunkSent = false;
   }
 
-  // Called when a silent period is detected.
   deactivateRecording() {
     console.log('Deactivating recording (chunk end)');
     this.isActive = false;
@@ -240,7 +243,6 @@ export class AudioRecorderService {
     this.chunkSent = false;
   }
 
-  // When silence persists, force–send the current chunk.
   forceSendChunk(reason) {
     console.log(`Force–sending chunk due to ${reason}`);
     this.sendRecordedAudio();
@@ -250,7 +252,6 @@ export class AudioRecorderService {
     this.isActive = false;
   }
 
-  // If silence continues, start an inactive timer that sends the chunk.
   startInactiveTimer() {
     if (this.inactiveTimer) return;
     this.inactiveTimer = setTimeout(() => {
@@ -262,21 +263,38 @@ export class AudioRecorderService {
     }, this.delayDuration);
   }
 
-  // Encode recordedSamples as a WAV Blob and send it over the WebSocket.
+  // Updated sendRecordedAudio() now adds a chunk_id and checks for pending responses.
   async sendRecordedAudio() {
     if (this.isSending) {
       console.log('Already sending audio, skipping.');
       return;
     }
+    // If there are pending chunk responses, queue this chunk in the cookie
+    if (this.pendingChunks.size > 0) {
+      console.log('Previous chunk(s) still pending; queuing new chunk in cookie.');
+      if (this.recordedSamples.length) {
+        const float32Array = new Float32Array(this.recordedSamples);
+        const base64Audio = arrayBufferToBase64(float32Array.buffer);
+        const payload = { chunk_id: this.chunkNumber, audio: base64Audio };
+        this.addChunkToCookieQueue(payload);
+        this.chunkNumber++;
+        this.recordedSamples = [];
+      }
+      return;
+    }
+
     if (this.recordedSamples.length) {
       this.isSending = true;
       try {
-        const wavBlob = encodeWAV(this.recordedSamples, this.sampleRate);
-        console.log('Sending chunk', this.chunkNumber, wavBlob);
+        const float32Array = new Float32Array(this.recordedSamples);
+        const base64Audio = arrayBufferToBase64(float32Array.buffer);
+        const payload = { chunk_id: this.chunkNumber, audio: base64Audio };
+        console.log('Sending chunk', this.chunkNumber, payload);
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          const arrayBuffer = await wavBlob.arrayBuffer();
-          this.ws.send(arrayBuffer);
+          this.ws.send(JSON.stringify(payload));
           console.log('Chunk sent over WebSocket.');
+          // Mark this chunk as pending a response.
+          this.pendingChunks.add(this.chunkNumber);
         } else {
           console.error('WebSocket is not connected.');
         }
@@ -289,4 +307,79 @@ export class AudioRecorderService {
       }
     }
   }
+
+  // --- Cookie-based Queue Helpers ---
+  addChunkToCookieQueue(payload) {
+    const cookieName = 'chunkQueue';
+    const existing = this.getCookie(cookieName);
+    let queue = [];
+    if (existing) {
+      try {
+        queue = JSON.parse(existing);
+      } catch (e) {
+        queue = [];
+      }
+    }
+    queue.push(payload);
+    this.setCookie(cookieName, JSON.stringify(queue), 1);
+  }
+
+  flushCookieQueue() {
+    const cookieName = 'chunkQueue';
+    const existing = this.getCookie(cookieName);
+    if (existing) {
+      try {
+        const queue = JSON.parse(existing);
+        if (queue.length > 0) {
+          for (let payload of queue) {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+              this.ws.send(JSON.stringify(payload));
+              console.log('Flushed queued chunk: chunk_id', payload.chunk_id);
+              // Mark the flushed chunk as pending.
+              this.pendingChunks.add(payload.chunk_id);
+            } else {
+              console.error('WebSocket is not connected. Cannot flush cookie queue.');
+              break;
+            }
+          }
+          // Once flushed, clear the cookie.
+          this.deleteCookie(cookieName);
+        }
+      } catch (e) {
+        console.error('Error parsing chunk queue cookie:', e);
+      }
+    }
+  }
+
+  getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+  }
+
+  setCookie(name, value, days) {
+    let expires = "";
+    if (days) {
+      const date = new Date();
+      date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+      expires = "; expires=" + date.toUTCString();
+    }
+    document.cookie = name + "=" + (value || "") + expires + "; path=/";
+  }
+
+  deleteCookie(name) {
+    this.setCookie(name, "", -1);
+  }
+}
+
+// Helper: converts an ArrayBuffer to a base64 string.
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
 }
