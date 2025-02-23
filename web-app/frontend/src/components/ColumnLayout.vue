@@ -154,6 +154,7 @@ import { typeWriterMultiple } from '@/methods/utils/typeWriter';
 import { tabConfigurations } from '@/config/columnConfig';
 // Removed axios import since HTTP sending is no longer used.
 import { AudioRecorderService } from '@/services/audioRecorderService';
+import {jsonrepair} from "jsonrepair";
 
 const typingMappings = [
   { configPath: ['headers', 'leftBoxHeader'], dataKey: 'leftBoxHeader' },
