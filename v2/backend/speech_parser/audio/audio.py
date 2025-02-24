@@ -46,7 +46,7 @@ class Audio:
         self.batch_size = batch_size
 
         # Tunables
-        self.min_segments_for_clustering: int = 150
+        self.min_segments_for_clustering: int = 80
         self.min_speaker_segment_duration: float = 1.0
         self.max_silence_per_segment_pct: float = 0.5
 
