@@ -46,7 +46,7 @@ class Audio:
         self.batch_size = batch_size
 
         # Tunables
-        self.min_segments_for_clustering: int = 80
+        self.min_segments_for_clustering: int = 150
         self.min_speaker_segment_duration: float = 1.0
         self.max_silence_per_segment_pct: float = 0.5
 
@@ -277,3 +277,51 @@ class Audio:
         self.assign_segments()
         self.embed()
         return self.base_scale_segments[orig_num_base_segments:]
+
+    def rediarize(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Recluster segments and reassign speakers based on new clustering.
+        
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: (probabilities, labels) for speaker assignments
+        """
+        if not self._clustering_start:
+            return torch.tensor([], device=self.idle_device), torch.tensor([], device=self.idle_device)
+            
+        # Get all segments with embeddings
+        segments_to_update = self.base_scale_segments.segments_with_tensors
+        if len(segments_to_update) == 0:
+            return torch.tensor([], device=self.idle_device), torch.tensor([], device=self.idle_device)
+            
+        # Stack embeddings and recluster
+        new_ms_emb_seq = torch.stack([segment.tensor for segment in segments_to_update])
+        self.speaker_clustering.recluster()
+        new_label_seq = self.speaker_clustering(new_ms_emb_seq)
+        
+        # Get updated centroids
+        centroids = self.speaker_clustering.get_centroids()
+        
+        # Clear existing speaker assignments
+        for segment in segments_to_update:
+            segment.speakers.clear()
+        
+        # Prepare inputs for multi-scale diarization model
+        new_ms_emb_seq = new_ms_emb_seq.unsqueeze(0)
+        ms_avg_embs = torch.stack([centroids[spk_idx] for spk_idx in sorted(list(centroids.keys()))]).permute(1, 2, 0).unsqueeze(0)
+        
+        # Move tensors to appropriate device
+        new_ms_emb_seq = new_ms_emb_seq.to(self.device)
+        ms_avg_embs = ms_avg_embs.to(self.device)
+        
+        # Get diarization probabilities and logits with no initial labels
+        proba, labels = self.multi_scale_diarization_model(new_ms_emb_seq, None, ms_avg_embs)
+        proba = proba.to(self.idle_device)
+        labels = labels.to(self.idle_device)
+    
+        # Assign new speaker labels
+        for spk_idx in range(labels.shape[0]):
+            for i, segment in enumerate(segments_to_update):
+                if labels[spk_idx, i] == 1:
+                    segment.add_speaker(spk_idx)
+                    
+        return proba, labels

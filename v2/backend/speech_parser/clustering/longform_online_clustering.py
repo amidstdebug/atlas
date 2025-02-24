@@ -173,7 +173,7 @@ class LongformOnlineClustering:
             raise ValueError(
                 f"Buffer size {max_buffer_size} exceeds maximum allowed size of {MAX_EMBEDDINGS}. "
                 "This may cause errors with Torch's Intel MKL implementation."
-            )t
+            )
         
         self.max_buffer_size = max_buffer_size
 

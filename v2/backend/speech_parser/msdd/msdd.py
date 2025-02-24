@@ -1,3 +1,4 @@
+from typing import Optional
 from itertools import combinations
 
 import torch
@@ -7,7 +8,7 @@ from nemo.collections.asr.models.msdd_models import EncDecDiarLabelModel
 @torch.no_grad()
 def get_speaker_predictions(
     ms_emb_seq: torch.Tensor, 
-    ms_emb_seq_labels: torch.Tensor, 
+    ms_emb_seq_labels: Optional[torch.Tensor], 
     ms_avg_embs: torch.Tensor, 
     msdd_model: EncDecDiarLabelModel, 
     threshold=0.7, 
@@ -19,7 +20,7 @@ def get_speaker_predictions(
     
     Args:
         ms_emb_seq: Embedding sequence tensor [batch_size, length, scale_n, emb_dim]
-        ms_emb_seq_labels: Initial clustering labels [batch_size, sequence_length]
+        ms_emb_seq_labels: Initial clustering labels [batch_size, sequence_length], can be None
         ms_avg_embs: Average embeddings tensor [batch_size, scale_n, emb_dim, num_speakers] (centroids)
         msdd_model: MSDD model instance
         threshold: Threshold value for final speaker label output (default: 0.7)
@@ -30,8 +31,9 @@ def get_speaker_predictions(
             - probabilities: tensor of shape [num_speakers, sequence_length]
             - labels: binary tensor of shape [num_speakers, sequence_length]
     """
-    if ms_emb_seq.shape[1] != ms_emb_seq_labels.shape[1]:
-        raise ValueError(f"ms_emb_seq sequence length {ms_emb_seq.shape[1]} does not match ms_emb_seq_labels sequence length {ms_emb_seq_labels.shape[1]}")
+    if ms_emb_seq_labels is not None:
+        if ms_emb_seq.shape[1] != ms_emb_seq_labels.shape[1]:
+            raise ValueError(f"ms_emb_seq sequence length {ms_emb_seq.shape[1]} does not match ms_emb_seq_labels sequence length {ms_emb_seq_labels.shape[1]}")
         
     device = ms_emb_seq.device
     num_speakers = ms_avg_embs.shape[-1]
@@ -105,11 +107,18 @@ def get_speaker_predictions(
         
         # For each time step in the batch
         for i in range(end_idx - start_idx):
+            # Get max probability and corresponding speaker index
+            max_prob, max_speaker = torch.max(batch_probs[:, i], dim=0)
+            
             # If max probability at this time step is below threshold
-            if torch.max(batch_probs[:, i]) < threshold:
-                # Use the initial clustering label
-                initial_label = ms_emb_seq_labels[0, start_idx + i]
-                labels[initial_label, start_idx + i] = 1
+            if max_prob < threshold:
+                if ms_emb_seq_labels is not None:
+                    # Use the initial clustering label if available
+                    initial_label = ms_emb_seq_labels[0, start_idx + i]
+                    labels[initial_label, start_idx + i] = 1
+                else:
+                    # Use the speaker with highest probability
+                    labels[max_speaker, start_idx + i] = 1
             else:
                 # Use the model predictions
                 labels[:, start_idx + i] = (batch_probs[:, i] > threshold).float()
@@ -136,7 +145,7 @@ class MSDD:
     def __call__(
         self,
         ms_emb_seq: torch.Tensor, 
-        ms_emb_seq_labels: torch.Tensor, 
+        ms_emb_seq_labels: Optional[torch.Tensor], 
         ms_avg_embs: torch.Tensor
     ):
         return get_speaker_predictions(

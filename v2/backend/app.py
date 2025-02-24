@@ -3,15 +3,12 @@ import json
 import asyncio
 from typing import List, Dict
 import base64
-
 from fastapi import FastAPI, WebSocket, UploadFile, File
 from fastapi.responses import JSONResponse
 import uvicorn
-
 import numpy as np
 import torch
 import torchaudio
-
 from speech_parser import Audio, SileroVAD, OnlineSpeakerClustering, MSDD
 from utils import load_audio
 
@@ -50,7 +47,6 @@ class SpeechManager:
             
             print('waveform loading ok')
             print(waveform_torch.shape)
-
             torchaudio.save('test.wav', self.audio_processor.waveform.unsqueeze(0).cpu(), 16_000)
             
             proba, labels = self.audio_processor(waveform_torch)
@@ -61,7 +57,6 @@ class SpeechManager:
             # Get timeline from base scale segments
             if self.audio_processor.base_scale_segments is not None:
                 merged_segments = self.audio_processor.get_merged_speaker_segments(use_cache=False)
-
                 output_segments = [
                     {
                         'speaker': segment.speaker, 
@@ -109,6 +104,21 @@ async def websocket_endpoint(websocket: WebSocket):
             
     except Exception as e:
         await websocket.close(code=1001, reason=str(e))
+
+@app.put("/redo")
+async def redo_diarization():
+    """
+    Endpoint to trigger rediarization of existing audio segments.
+    Returns 200 on success, 500 on error.
+    """
+    try:
+        speech_parser.audio_processor.rediarize()
+        return JSONResponse(status_code=200, content={"message": "Rediarization completed"})
+    except Exception as e:
+        return JSONResponse(
+            status_code=500, 
+            content={"error": f"Failed to perform rediarization: {str(e)}"}
+        )
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
