@@ -1,7 +1,7 @@
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.bufferSize = 40000; // Set to minimum necessary size
+    this.bufferSize = 80000; 
     this.buffer = new Float32Array(this.bufferSize);
     this.bufferIndex = 0;
   }
@@ -15,10 +15,13 @@ class AudioProcessor extends AudioWorkletProcessor {
     // Add data to buffer
     for (let i = 0; i < channelData.length; i++) {
       if (this.bufferIndex >= this.bufferSize) {
-        // Buffer is full, send it
+        // Buffer is full, send it using transferable objects
         this.port.postMessage({
-          audioData: Array.from(this.buffer), // Convert to regular array for transfer
-        });
+          audioData: this.buffer.buffer
+        }, [this.buffer.buffer]);
+        
+        // Create a new buffer after the transfer
+        this.buffer = new Float32Array(this.bufferSize);
         this.bufferIndex = 0;
       }
       this.buffer[this.bufferIndex++] = channelData[i];
