@@ -26,7 +26,7 @@ class SpeechManager:
         
         # Configure audio processing parameters
         self.scales = [1.5, 1.25, 1.0, 0.75, 0.5]
-        self.hops = [0.75, 0.625, 0.5, 0.375, 0.25]
+        self.hops = [scale / 4 for scale in self.scales]
         
         # Initialize audio processor
         self.audio_processor = Audio(
