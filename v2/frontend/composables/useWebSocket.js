@@ -6,6 +6,7 @@ export const useWebSocket = () => {
   const segments = ref([]);
   const error = ref(null);
   let reconnectTimeout = null;
+  let sampleRate = 44100;
 
   const connect = () => {
     if (ws.value?.readyState === WebSocket.OPEN) {
@@ -15,11 +16,22 @@ export const useWebSocket = () => {
 
     console.log("Attempting WebSocket connection...");
     ws.value = new WebSocket("ws://localhost:8000/ws/diarize");
+    
+    // Essential for efficient binary data
+    ws.value.binaryType = "arraybuffer";
 
     ws.value.onopen = () => {
       console.log("WebSocket connected successfully");
       isConnected.value = true;
       error.value = null;
+      
+      // Send initial configuration once
+      ws.value.send(JSON.stringify({
+        type: "config",
+        sampleRate: sampleRate,
+        channels: 1,
+        format: "float32"
+      }));
     };
 
     ws.value.onclose = (event) => {
@@ -34,29 +46,46 @@ export const useWebSocket = () => {
     };
 
     ws.value.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      segments.value = data.segments.map((segment) => ({
-        ...segment,
-        speaker: `${segment.speaker}`,
-        startFormatted: formatTime(segment.start),
-        endFormatted: formatTime(segment.end),
-        text: `[Speaker ${segment.speaker} audio]`,
-      }));
-      console.log(segments.value);
+      // Handle text data (JSON responses)
+      if (typeof event.data === "string") {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.segments) {
+            segments.value = data.segments.map((segment) => ({
+              ...segment,
+              speaker: `${segment.speaker}`,
+              startFormatted: formatTime(segment.start),
+              endFormatted: formatTime(segment.end),
+              text: `[Speaker ${segment.speaker} audio]`,
+            }));
+            console.log(segments.value);
+          }
+        } catch (e) {
+          console.error("Error parsing WebSocket message:", e);
+        }
+      }
     };
   };
 
-  const sendAudioChunk = (chunk) => {
+  const sendAudioChunk = (chunk, rate = 44100) => {
     if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
       console.log("Cannot send: WebSocket not open");
       return;
     }
 
-    ws.value.send(
-      JSON.stringify({
-        audio: chunk,
-      }),
-    );
+    // Update sample rate if it changed
+    if (rate !== sampleRate) {
+      sampleRate = rate;
+      ws.value.send(JSON.stringify({
+        type: "config",
+        sampleRate: sampleRate,
+        channels: 1,
+        format: "float32"
+      }));
+    }
+
+    // Send raw binary data directly
+    ws.value.send(chunk);
   };
 
   const disconnect = () => {

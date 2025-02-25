@@ -9,63 +9,45 @@ export const useAudioProcessor = (onAudioChunk) => {
   const waveformBars = ref(Array(40).fill(10));
   let animationFrameId = null;
 
-  const float32ToBase64 = (float32Array) => {
-    // Create a buffer to store the data
-    const buffer = new ArrayBuffer(float32Array.length * 4);
-    // Create a view on the buffer
-    const view = new DataView(buffer);
-    
-    // Copy the Float32Array values into the buffer
-    for (let i = 0; i < float32Array.length; i++) {
-      view.setFloat32(i * 4, float32Array[i], true); // true for little-endian
-    }
-    
-    // Convert to Uint8Array for base64 encoding
-    const uint8Array = new Uint8Array(buffer);
-    
-    // Process in chunks for large arrays
-    const chunkSize = 1024;
-    let binary = "";
-    
-    for (let i = 0; i < uint8Array.length; i += chunkSize) {
-      const chunk = uint8Array.slice(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, chunk);
-    }
-    
-    return btoa(binary);
-  };
-
   const initAudio = async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("Media devices API not supported");
       }
 
+      // Request high quality audio
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: 16000,
+          sampleRate: 44100,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
         },
       });
 
-      // Initialize audio context
+      // Create audio context at high quality
       audioContext.value = new (window.AudioContext ||
         window.webkitAudioContext)({
-        sampleRate: 16000,
+        sampleRate: 44100,
+        latencyHint: 'interactive'
       });
+
+      console.log(`Actual sample rate: ${audioContext.value.sampleRate}`);
 
       // Load audio worklet
       await audioContext.value.audioWorklet.addModule(
         "/audioWorkletProcessor.js",
       );
 
-      // Create audio worklet node
+      // Create audio worklet node with appropriate buffer size
       workletNode.value = new AudioWorkletNode(
         audioContext.value,
         "audio-processor",
         {
+          outputChannelCount: [1],
           processorOptions: {
-            sampleRate: 16000,
+            sampleRate: audioContext.value.sampleRate,
           },
         },
       );
@@ -73,9 +55,8 @@ export const useAudioProcessor = (onAudioChunk) => {
       // Handle audio data from worklet
       workletNode.value.port.onmessage = (event) => {
         if (event.data.audioData) {
-          const audioData = new Float32Array(event.data.audioData);
-          const base64Data = float32ToBase64(audioData);
-          onAudioChunk(base64Data);
+          // Send the raw audio data and its sample rate
+          onAudioChunk(event.data.audioData, event.data.sampleRate);
         }
       };
 
