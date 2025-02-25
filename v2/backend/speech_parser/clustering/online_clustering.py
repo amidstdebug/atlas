@@ -54,10 +54,10 @@ class OnlineSpeakerClustering:
         self.multiscale_weights = torch.tensor([1, 1, 1, 1, 1], dtype=torch.float32)  # Weights for different temporal scales
         self.oracle_num_speakers = -1  # Set to -1 for automatic speaker count detection
         self.max_num_speakers = 8  # Maximum number of speakers to detect
-        self.max_rp_threshold = 0.3  # Maximum threshold for spectral clustering # was 0.15
+        self.max_rp_threshold = 0.15 # Maximum threshold for spectral clustering
         self.sparse_search_volume = 50  # Number of threshold values to search
         self.fixed_thres = -1.0  # Fixed threshold for clustering (-1.0 means adaptive)
-        self.kmeans_random_trials = 3  # Number of k-means clustering attempts
+        self.kmeans_random_trials = 1  # Number of k-means clustering attempts
         self.sim_threshold = 0.5  # Similarity threshold for speaker matching
         
         # Speaker tracking state
@@ -102,8 +102,8 @@ class OnlineSpeakerClustering:
         spk_ms_emb = self._group_speaker_embeddings(cluster_input_embs, cluster_emb_labels_remap)
         self.update_buffer(spk_ms_emb)
 
-        self.embs = torch.cat([self.embs, ms_emb_t])
-        self.emb_labels = torch.cat([self.emb_labels, cluster_emb_labels_remap[num_existing:]])
+        # self.embs = torch.cat([self.embs, ms_emb_t])
+        # self.emb_labels = torch.cat([self.emb_labels, cluster_emb_labels_remap[num_existing:]])
         
         return cluster_emb_labels[num_existing:]
 
@@ -185,6 +185,50 @@ class OnlineSpeakerClustering:
             int(spk_idx): embeddings[torch.where(cluster_labels == spk_idx)[0]]
             for spk_idx in spk_indices
         }
+        
+    def recluster(self):
+        """
+        Recluster all embeddings in the historical buffer and overwrite past history.
+        Handles resampling to maximum allowed embeddings if necessary.
+        
+        This method:
+        1. Combines all embeddings from the historical buffer
+        2. Resamples if total embeddings exceed maximum limit
+        3. Performs fresh clustering on all embeddings
+        4. Updates the historical buffer with new cluster assignments
+        """
+        # If buffer is empty, nothing to do
+        if not self.hist_spk_buffer:
+            return
+            
+        # Combine all embeddings from historical buffer
+        all_embeddings = torch.cat(list(self.hist_spk_buffer.values()))
+        total_samples = all_embeddings.shape[0]
+        
+        # Resample if exceeding maximum limit
+        if total_samples > self.max_embs_clustered:
+            all_embeddings = self.random_resample(all_embeddings, self.max_embs_clustered)
+        
+        # Perform fresh clustering
+        cluster_labels = self.get_clusters(all_embeddings)
+        
+        # Create new speaker mappings starting from 0
+        unique_clusters = cluster_labels.unique().tolist()
+        new_speaker_mapping = {k: i for i, k in enumerate(unique_clusters)}
+        remapped_labels = torch.tensor([new_speaker_mapping[int(label)] for label in cluster_labels], 
+                                     device=self.device, 
+                                     dtype=torch.int)
+        
+        # Group embeddings by new cluster assignments
+        new_speaker_embeddings = self._group_speaker_embeddings(all_embeddings, remapped_labels)
+        
+        # Clear existing buffer and update with new clusters
+        self.hist_spk_buffer.clear()
+        self.update_buffer(new_speaker_embeddings)
+        
+        # Reset speaker tracking state
+        self.next_speaker_id = len(unique_clusters)
+        self.num_speakers = len(unique_clusters)
         
     def get_centroids(self):
         return {spk_idx: spk_embs.mean(0) for spk_idx, spk_embs in self.hist_spk_buffer.items()}
