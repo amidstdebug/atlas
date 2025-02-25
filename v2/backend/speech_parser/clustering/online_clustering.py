@@ -55,9 +55,9 @@ class OnlineSpeakerClustering:
         self.oracle_num_speakers = -1  # Set to -1 for automatic speaker count detection
         self.max_num_speakers = 8  # Maximum number of speakers to detect
         self.max_rp_threshold = 0.15 # Maximum threshold for spectral clustering
-        self.sparse_search_volume = 50  # Number of threshold values to search
+        self.sparse_search_volume = 20  # Number of threshold values to search
         self.fixed_thres = -1.0  # Fixed threshold for clustering (-1.0 means adaptive)
-        self.kmeans_random_trials = 1  # Number of k-means clustering attempts
+        self.kmeans_random_trials = 5  # Number of k-means clustering attempts
         self.sim_threshold = 0.5  # Similarity threshold for speaker matching
         
         # Speaker tracking state
