@@ -10,18 +10,28 @@ export const useAudioProcessor = (onAudioChunk) => {
   let animationFrameId = null;
 
   const float32ToBase64 = (float32Array) => {
-    // Convert Float32Array to Uint8Array
-    const uint8Array = new Uint8Array(float32Array.buffer);
-
-    // Process in chunks of 1024 bytes
+    // Create a buffer to store the data
+    const buffer = new ArrayBuffer(float32Array.length * 4);
+    // Create a view on the buffer
+    const view = new DataView(buffer);
+    
+    // Copy the Float32Array values into the buffer
+    for (let i = 0; i < float32Array.length; i++) {
+      view.setFloat32(i * 4, float32Array[i], true); // true for little-endian
+    }
+    
+    // Convert to Uint8Array for base64 encoding
+    const uint8Array = new Uint8Array(buffer);
+    
+    // Process in chunks for large arrays
     const chunkSize = 1024;
     let binary = "";
-
+    
     for (let i = 0; i < uint8Array.length; i += chunkSize) {
       const chunk = uint8Array.slice(i, i + chunkSize);
       binary += String.fromCharCode.apply(null, chunk);
     }
-
+    
     return btoa(binary);
   };
 
