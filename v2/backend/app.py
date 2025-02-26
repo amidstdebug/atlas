@@ -101,8 +101,12 @@ class SpeechManager:
             #     self.save_current_audio("before_processing")
             
             # Run diarization
-            proba, labels = self.audio_processor(waveform_torch)
-            
+            try:
+                proba, labels = self.audio_processor(waveform_torch)
+            except Exception as e:
+                print(e)
+                raise e
+                
             # Save the post-processing audio
             if self.save_audio and hasattr(self.audio_processor, 'waveform') and self.audio_processor.waveform is not None:
                 self.save_current_audio("after_processing")

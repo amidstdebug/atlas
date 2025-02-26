@@ -46,7 +46,6 @@ class Audio:
         self.batch_size = batch_size
 
         # Tunables
-        self.min_segments_for_clustering: int = 250
         self.min_speaker_segment_duration: float = 1.0
         self.max_silence_per_segment_pct: float = 0.5
 
@@ -83,7 +82,7 @@ class Audio:
         else:
             self.voice_activity_mask = torch.tensor([], device=self.idle_device, dtype=torch.float32)
 
-    def rerun_msdd(self, segments_to_update: List[Segment]) -> Tuple[torch.Tensor, torch.Tensor]:
+    def run_msdd(self, segments_to_update: List[Segment]) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Run the multi-scale diarization model on provided segments.
         
@@ -98,11 +97,9 @@ class Audio:
         if not self._clustering_start or len(segments_to_update) == 0:
             return empty_returns
             
-        # Stack embeddings for processing
         new_ms_emb_seq = torch.stack([segment.tensor for segment in segments_to_update])
         
-        # Perform speaker clustering and get updated centroids
-        new_label_seq = self.speaker_clustering(new_ms_emb_seq)
+        # Get updated centroids
         centroids = self.speaker_clustering.get_centroids()
 
         # Prepare inputs for multi-scale diarization model
@@ -135,16 +132,18 @@ class Audio:
                 segments_to_update.append(segment)
         if len(segments_to_update) == 0:
             return empty_returns
-
-        # Hold a certain number of segments in buffer before starting to cluster to prevent inaccurate issues
-        if not self._clustering_start:
-            if len(self.base_scale_segments) > self.min_segments_for_clustering:
-                self._clustering_start = True
+                
+        # Stack embeddings for processing
+        new_ms_emb_seq = torch.stack([segment.tensor for segment in segments_to_update])
+        new_label_seq = self.speaker_clustering(new_ms_emb_seq)
+        
+        if len(self.speaker_clustering.get_centroids()) > 0:
+            if not self._clustering_start:
                 self.clear_merged_segments()
                 segments_to_update = self.base_scale_segments.segments_with_tensors
+                self._clustering_start = True
                 
-        if self._clustering_start:
-            return self.rerun_msdd(segments_to_update)
+            return self.run_msdd(segments_to_update)
         else:
             for segment in segments_to_update:
                 segment.set_unk_speaker()
@@ -312,4 +311,4 @@ class Audio:
             segment.speakers.clear()
         
         # Run MSDD on the segments with reclustered data
-        return self.rerun_msdd(segments_to_update)
+        return self.run_msdd(segments_to_update)
