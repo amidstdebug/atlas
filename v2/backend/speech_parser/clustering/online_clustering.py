@@ -1,4 +1,4 @@
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 
 import torch
 from scipy.optimize import linear_sum_assignment
@@ -71,7 +71,7 @@ class OnlineSpeakerClustering:
     def __call__(
         self, 
         ms_emb_t: torch.Tensor = None
-    ) -> torch.Tensor:
+    ) -> Optional[torch.Tensor]:
         self.buffer.append(ms_emb_t)
         
         curr_buffer_len = sum([embs.shape[0] for embs in self.buffer])
@@ -124,7 +124,7 @@ class OnlineSpeakerClustering:
         # self.embs = torch.cat([self.embs, ms_emb_t])
         # self.emb_labels = torch.cat([self.emb_labels, cluster_emb_labels_remap[num_existing:]])
         
-        return ms_emb_t, cluster_emb_labels[num_existing:]
+        return cluster_emb_labels[num_existing:]
 
     def _prepare_clustering_data(
         self,

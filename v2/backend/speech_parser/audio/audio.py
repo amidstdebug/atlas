@@ -109,23 +109,23 @@ class Audio:
             
             # Perform speaker clustering and get updated centroids
             new_label_seq = self.speaker_clustering(new_ms_emb_seq)
-            if new_label_seq is None:
-                return empty_returns
                 
             centroids = self.speaker_clustering.get_centroids()
     
             # Prepare inputs for multi-scale diarization model
             new_ms_emb_seq = new_ms_emb_seq.unsqueeze(0)
-            new_label_seq = new_label_seq.unsqueeze(0)
-            ms_avg_embs = torch.stack([centroids[spk_idx] for spk_idx in sorted(list(centroids.keys()))]).permute(1, 2, 0).unsqueeze(0)
-            
-            # Move tensors to appropriate device
             new_ms_emb_seq = new_ms_emb_seq.to(self.device)
-            new_label_seq = new_label_seq.to(self.device)
+            
+            # if new_label_seq is not None:
+            #     new_label_seq = new_label_seq.unsqueeze(0)
+            #     new_label_seq = new_label_seq.to(self.device)
+                
+            ms_avg_embs = torch.stack([centroids[spk_idx] for spk_idx in sorted(list(centroids.keys()))]).permute(1, 2, 0).unsqueeze(0)
             ms_avg_embs = ms_avg_embs.to(self.device)
             
+            
             # Get diarization probabilities and logits
-            proba, labels = self.multi_scale_diarization_model(new_ms_emb_seq, new_label_seq, ms_avg_embs)
+            proba, labels = self.multi_scale_diarization_model(new_ms_emb_seq, None, ms_avg_embs)
             proba = proba.to(self.idle_device)
             labels = labels.to(self.idle_device)
     
