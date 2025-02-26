@@ -109,6 +109,9 @@ class Audio:
             
             # Perform speaker clustering and get updated centroids
             new_label_seq = self.speaker_clustering(new_ms_emb_seq)
+            if new_label_seq is None:
+                return empty_returns
+                
             centroids = self.speaker_clustering.get_centroids()
     
             # Prepare inputs for multi-scale diarization model

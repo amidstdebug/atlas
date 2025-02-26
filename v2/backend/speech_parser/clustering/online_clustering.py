@@ -40,6 +40,7 @@ class OnlineSpeakerClustering:
         
         self.max_buffer_size = max_buffer_size
         self.hist_buffer_size_per_spk = hist_buffer_size_per_spk
+        self.buffer: List[torch.Tensor] = []
         self.hist_spk_buffer = {}  # Buffer storing historical embeddings for each speaker
         self.spk_avg_ms_emb_dict = {}  # Dictionary storing average embeddings for each speaker
         self.embs: torch.Tensor = torch.tensor([], device=self.device, dtype=torch.float32)
@@ -59,6 +60,8 @@ class OnlineSpeakerClustering:
         self.fixed_thres = -1.0  # Fixed threshold for clustering (-1.0 means adaptive)
         self.kmeans_random_trials = 5  # Number of k-means clustering attempts
         self.sim_threshold = 0.5  # Similarity threshold for speaker matching
+
+        self.min_new_samples = 250
         
         # Speaker tracking state
         self.next_speaker_id = 0  # Next available unique speaker ID
@@ -68,7 +71,23 @@ class OnlineSpeakerClustering:
     def __call__(
         self, 
         ms_emb_t: torch.Tensor = None
-    ) -> Dict[int, torch.Tensor]:
+    ) -> torch.Tensor:
+        self.buffer.append(ms_emb_t)
+        
+        curr_buffer_len = sum([embs.shape[0] for embs in self.buffer])
+
+        if curr_buffer_len > self.min_new_samples:
+            buffer_tensor = torch.concat(self.buffer)
+            self.buffer.clear()
+            
+            return self._forward(buffer_tensor)
+        else:
+            return None
+
+    def _forward(
+        self, 
+        ms_emb_t: torch.Tensor = None
+    ) -> torch.Tensor:
         """
         Process new embeddings and return speaker mappings.
         Main entry point for clustering new audio segments.
@@ -105,7 +124,7 @@ class OnlineSpeakerClustering:
         # self.embs = torch.cat([self.embs, ms_emb_t])
         # self.emb_labels = torch.cat([self.emb_labels, cluster_emb_labels_remap[num_existing:]])
         
-        return cluster_emb_labels[num_existing:]
+        return ms_emb_t, cluster_emb_labels[num_existing:]
 
     def _prepare_clustering_data(
         self,
