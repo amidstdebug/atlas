@@ -1,4 +1,6 @@
 import torch
+import torchaudio
+
 from utils import load_audio
 from nemo.collections.asr.models.label_models import EncDecSpeakerLabelModel
 
@@ -44,7 +46,7 @@ def simple_diarization_example():
     
     # 6. Print the results
     for i, segment in enumerate(speaker_segments):
-        torchaudio.save(f"test_output/segment_{i+1}_{segment.speaker}_{segment.start}", segment.data.unsqueeze(0).cpu(), 16_000)
+        torchaudio.save(f"test_output/segment_{i+1}_{segment.speaker}_{segment.start}.wav", segment.data.unsqueeze(0).cpu(), 16_000)
         print(f"Segment {i+1}: Speaker {segment.speaker}, "
               f"Time: {segment.start:.2f}s - {segment.start + segment.duration:.2f}s")
     
@@ -54,7 +56,7 @@ def simple_diarization_example():
     updated_segments = diarizer.get_merged_speaker_segments()
     
     for i, segment in enumerate(updated_segments):
-        torchaudio.save(f"test_output/updated_segment_{i+1}_{segment.speaker}_{segment.start}", segment.data.unsqueeze(0).cpu(), 16_000)
+        torchaudio.save(f"test_output/updated_segment_{i+1}_{segment.speaker}_{segment.start}.wav", segment.data.unsqueeze(0).cpu(), 16_000)
         print(f"Updated Segment {i+1}: Speaker {segment.speaker}, "
               f"Time: {segment.start:.2f}s - {segment.start + segment.duration:.2f}s")
     
