@@ -65,9 +65,11 @@ export const useAudioProcessor = (onAudioChunk) => {
       analyser.value = audioContext.value.createAnalyser();
       analyser.value.fftSize = 128;
 
-      // Connect the nodes
+      // Connect the nodes in series instead of parallel
+      // microphone → analyser → workletNode
       microphone.value.connect(analyser.value);
-      microphone.value.connect(workletNode.value);
+      analyser.value.connect(workletNode.value);
+      // Removed the direct connection from microphone to workletNode
 
       // Start updating waveform
       updateWaveform();
