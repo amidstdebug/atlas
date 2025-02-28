@@ -11,7 +11,7 @@ import uvicorn
 import numpy as np
 import torch
 import torchaudio
-from speech_parser import Audio, SileroVAD, OnlineSpeakerClustering, MSDD
+from speech_parser import OnlineDiarizationPipeline, Audio, SileroVAD, OnlineSpeakerClustering, MSDD
 from utils import load_audio
 
 app = FastAPI()
@@ -20,22 +20,22 @@ class SpeechManager:
     def __init__(self):
         # Initialize models
         self.msdd = MSDD(threshold=0.8)
-        self.titanet_l = self.msdd.speech_embedding_model
+        self.speech_model = self.msdd.speech_embedding_model
         self.vad = SileroVAD(threshold=0.7)
-        self.osc = OnlineSpeakerClustering()
+        self.clustering = OnlineSpeakerClustering()
         
         # Configure audio processing parameters
         self.scales = [1.5, 1.25, 1.0, 0.75, 0.5]
         self.hops = [scale / 4 for scale in self.scales]
         
-        # Initialize audio processor
-        self.audio_processor = Audio(
-            self.scales,
-            self.hops,
-            speech_embedding_model=self.titanet_l,
+        # Initialize diarization pipeline instead of Audio directly
+        self.audio_pipeline = OnlineDiarizationPipeline(
+            speech_embedding_model=self.speech_model,
             voice_activity_detection_model=self.vad,
             multi_scale_diarization_model=self.msdd,
-            speaker_clustering=self.osc
+            speaker_clustering=self.clustering,
+            scales=self.scales,
+            hops=self.hops
         )
         
         # Audio storage settings
@@ -43,6 +43,10 @@ class SpeechManager:
         self.audio_buffer = np.array([], dtype=np.float32)
         self.output_dir = Path("recorded_audio")
         self.output_dir.mkdir(exist_ok=True)
+        
+        # Create test_output directory for segment saving
+        self.segments_dir = Path("test_output")
+        self.segments_dir.mkdir(exist_ok=True)
         
         # Counters for unique filenames
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -76,7 +80,7 @@ class SpeechManager:
             self.audio_buffer = np.array([], dtype=np.float32)
             
             # Resample to 16kHz if needed (for model compatibility)
-            if self.sample_rate != 16000:
+            if self.sample_rate != self.audio_pipeline.sample_rate:
                 # Convert to torch tensor
                 tensor_data = torch.from_numpy(process_data)
                 tensor_data = tensor_data.view(1, -1)  # [1, length]
@@ -85,7 +89,7 @@ class SpeechManager:
                 resampled_tensor = torchaudio.functional.resample(
                     tensor_data,
                     orig_freq=self.sample_rate, 
-                    new_freq=16000
+                    new_freq=self.audio_pipeline.sample_rate
                 )
                 process_data = resampled_tensor.squeeze().numpy()
                 
@@ -97,35 +101,42 @@ class SpeechManager:
             waveform_torch = torch.from_numpy(process_data)
 
             try:
-                proba, labels = self.audio_processor(waveform_torch)
+                # Process using the diarization pipeline
+                proba, labels = self.audio_pipeline(waveform_torch)
             except Exception as e:
                 print(e)
                 raise e
                 
             # Save the post-processing audio
-            if self.save_audio and hasattr(self.audio_processor, 'waveform') and self.audio_processor.waveform is not None:
+            if self.save_audio and hasattr(self.audio_pipeline.audio, 'waveform') and self.audio_pipeline.audio.waveform is not None:
                 self.save_current_audio("after_processing")
             
-            # Get timeline from base scale segments
-            if self.audio_processor.base_scale_segments is not None:
-                merged_segments = self.audio_processor.get_merged_speaker_segments(use_cache=False)
-                output_segments = [
-                    {
-                        'speaker': segment.speaker, 
-                        'start': segment.start, 
-                        'end': segment.end, 
-                        'duration': segment.duration
-                    } 
-                    for segment in merged_segments
-                ]
-                
-                return {
-                    "segments": output_segments
-                }
-            else:
-                return {
-                    "segments": []
-                }
+            # Get merged speaker segments from the audio_pipeline
+            merged_segments = self.audio_pipeline.get_merged_speaker_segments(use_cache=False)
+            
+            # Save individual segments to the test_output directory
+            if self.save_audio:
+                for i, segment in enumerate(merged_segments):
+                    try:
+                        segment_filename = self.segments_dir / f"segment_{self.session_id}_{i+1}_{segment.speaker}_{segment.start:.2f}.wav"
+                        torchaudio.save(str(segment_filename), segment.data.unsqueeze(0).cpu(), self.audio_pipeline.sample_rate)
+                    except Exception as e:
+                        print(f"Error saving segment {i}: {e}")
+            
+            # Format segments for JSON response
+            output_segments = [
+                {
+                    'speaker': segment.speaker, 
+                    'start': segment.start, 
+                    'end': segment.start + segment.duration, 
+                    'duration': segment.duration
+                } 
+                for segment in merged_segments
+            ]
+            
+            return {
+                "segments": output_segments
+            }
         except Exception as e:
             print(f"Error processing audio: {e}")
             return {
@@ -150,13 +161,13 @@ class SpeechManager:
         print(f"Saved audio chunk to {filename}")
         
     def save_current_audio(self, prefix):
-        """Save the current audio from audio_processor"""
+        """Save the current audio from audio_pipeline"""
         try:
             self.chunk_counter += 1
             filename = self.output_dir / f"{prefix}_{self.session_id}_{self.chunk_counter:04d}.wav"
             
-            # Get the current waveform from audio_processor
-            waveform = self.audio_processor.waveform
+            # Get the current waveform from audio_pipeline's audio object
+            waveform = self.audio_pipeline.audio.waveform
             
             # Save the audio
             torchaudio.save(str(filename), waveform.unsqueeze(0).cpu(), 16000)
@@ -228,8 +239,24 @@ async def redo_diarization():
     Returns 200 on success, 500 on error.
     """
     try:
-        speech_parser.audio_processor.rediarize()
-        return JSONResponse(status_code=200, content={"message": "Rediarization completed"})
+        # Use the pipeline's rediarize method
+        proba, labels = speech_parser.audio_pipeline.rediarize()
+        
+        # Get the updated segments
+        updated_segments = speech_parser.audio_pipeline.get_merged_speaker_segments()
+        
+        # Save rediarized segments
+        for i, segment in enumerate(updated_segments):
+            segment_filename = speech_parser.segments_dir / f"rediarized_{speech_parser.session_id}_{i+1}_{segment.speaker}_{segment.start:.2f}.wav"
+            torchaudio.save(str(segment_filename), segment.data.unsqueeze(0).cpu(), 16000)
+        
+        return JSONResponse(
+            status_code=200, 
+            content={
+                "message": "Rediarization completed", 
+                "segments_count": len(updated_segments)
+            }
+        )
     except Exception as e:
         return JSONResponse(
             status_code=500, 
