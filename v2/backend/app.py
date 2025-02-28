@@ -95,12 +95,7 @@ class SpeechManager:
             
             # Convert to torch tensor for processing
             waveform_torch = torch.from_numpy(process_data)
-            
-            # Save the pre-processing audio
-            # if self.save_audio and hasattr(self.audio_processor, 'waveform') and self.audio_processor.waveform is not None:
-            #     self.save_current_audio("before_processing")
-            
-            # Run diarization
+
             try:
                 proba, labels = self.audio_processor(waveform_torch)
             except Exception as e:
