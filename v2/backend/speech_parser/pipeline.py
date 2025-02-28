@@ -43,6 +43,7 @@ class OnlineDiarizationPipeline:
             sampling_rate=sampling_rate,
             batch_size=batch_size
         )
+        self.sampling_rate = sampling_rate
         
         # Tunables for filtering speaker segments
         self.min_speaker_segment_duration = 1.0
