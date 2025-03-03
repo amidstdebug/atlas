@@ -1,32 +1,38 @@
 <template>
-    <div class="font-[Inter] text-white bg-stone-950 h-screen w-screen flex flex-col items-center justify-center gap-8">
-        <!-- Connection status -->
-        <div v-if="error" class="text-red-500">{{ error }}</div>
-
-        <!-- Debug status -->
-        <div class="text-xs text-gray-400">WebSocket: {{ isConnected ? "Connected" : "Disconnected" }}</div>
-
-        <!-- Waveform container -->
-        <div class="h-24 flex items-center justify-center gap-1">
-            <div
-                v-for="(bar, index) in waveformBars"
-                :key="index"
-                class="w-1 bg-white rounded-full transition-all duration-150"
-                :style="{ height: `${bar}px` }"
-            ></div>
+    <div class="font-[Inter] text-white bg-stone-950 h-screen w-screen flex flex-row items-center justify-center gap-4">
+        <div class="flex flex-row gap-4 relative">
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-col items-center justify-center border-2 border-stone-800 bg-black p-6 rounded-2xl">
+                    <!-- Connection status -->
+                    <div v-if="error" class="text-red-500">{{ error }}</div>
+                    <!-- Debug status -->
+                    <div class="text-xs text-gray-400">WebSocket: {{ isConnected ? "Connected" : "Disconnected" }}</div>
+                    <!-- Waveform container -->
+                    <div class="h-24 flex items-center justify-center gap-1">
+                        <div
+                            v-for="(bar, index) in waveformBars"
+                            :key="index"
+                            class="w-1 bg-white rounded-full transition-all duration-150"
+                            :style="{ height: `${bar}px` }"
+                        ></div>
+                    </div>
+                    <!-- Microphone button -->
+                    <button
+                        @click="toggleRecording"
+                        class="p-4 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
+                        :class="isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/20'"
+                    >
+                        <Icon name="tabler:microphone-filled" class="h-6 w-6" />
+                    </button>
+                </div>
+                <!-- Transcription/Diarization Area -->
+                <div class="border-2 border-stone-800 bg-black p-6 rounded-2xl" v-if="segments.length > 0">
+                    <TranscriptBox :segments="segments" class="max-h-60 min-w-64 max-w-2xl pe-4" />
+                </div>
+            </div>
+            <!-- Summarize Area -->
+            <!-- <div class="border-2 border-stone-800 bg-black p-6 rounded-2xl"></div> -->
         </div>
-
-        <!-- Microphone button -->
-        <button
-            @click="toggleRecording"
-            class="p-4 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
-            :class="isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/20'"
-        >
-            <Icon name="tabler:microphone-filled" class="h-6 w-6" />
-        </button>
-
-        <!-- Transcription/Diarization Area -->
-        <TranscriptBox :segments="segments" class="max-h-60 min-w-64 max-w-2xl px-4" />
     </div>
 </template>
 
