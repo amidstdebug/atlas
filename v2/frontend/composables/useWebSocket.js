@@ -69,8 +69,7 @@ export const useWebSocket = () => {
                             ...segment,
                             speaker: `${segment.speaker}`,
                             startFormatted: formatTime(segment.start),
-                            endFormatted: formatTime(segment.end),
-                            text: `[Speaker ${segment.speaker} audio]`,
+                            endFormatted: formatTime(segment.end)
                         }));
                     }
 
