@@ -153,7 +153,7 @@ class SpeechManager:
 logger.info("Starting speech diarization server")
 speech_parser = SpeechManager()
 
-@app.websocket("/ws/diarize")
+@app.websocket("/ws/call")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     client_id = id(websocket)
@@ -226,72 +226,6 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebSocket error: {e}", exc_info=True)
         await websocket.close(code=1001, reason=str(e))
-
-@app.put("/redo")
-async def redo_diarization():
-    """
-    Endpoint to trigger rediarization of existing audio segments.
-    Returns 200 on success, 500 on error.
-    """
-    logger.info("Rediarization requested")
-    try:
-        start_time = time.time()
-        
-        # Use the pipeline's rediarize method
-        proba, labels = speech_parser.audio_pipeline.rediarize()
-        
-        # Get the updated segments
-        updated_segments = speech_parser.audio_pipeline.get_merged_speaker_segments()
-        
-        # Save rediarized segments
-        if updated_segments:
-            logger.info(f"Saving {len(updated_segments)} rediarized segments")
-            for i, segment in enumerate(updated_segments):
-                segment_filename = speech_parser.segments_dir / f"rediarized_{speech_parser.session_id}_{i+1}_{segment.speaker}_{segment.start:.2f}.wav"
-                torchaudio.save(str(segment_filename), segment.data.unsqueeze(0).cpu(), speech_parser.audio_pipeline.audio.sample_rate)
-        
-        total_time = time.time() - start_time
-        logger.info(f"Rediarization complete: {len(updated_segments)} segments in {total_time:.2f}s")
-        
-        return JSONResponse(
-            status_code=200, 
-            content={
-                "message": "Rediarization completed", 
-                "segments_count": len(updated_segments),
-                "processing_time": total_time
-            }
-        )
-    except Exception as e:
-        logger.error(f"Rediarization failed: {e}", exc_info=True)
-        return JSONResponse(
-            status_code=500, 
-            content={"error": f"Failed to perform rediarization: {str(e)}"}
-        )
-
-@app.put("/toggle-save-audio")
-async def toggle_save_audio():
-    """
-    Endpoint to toggle audio saving.
-    """
-    speech_parser.save_audio = not speech_parser.save_audio
-    logger.info(f"Audio saving: {speech_parser.save_audio}")
-    return JSONResponse(
-        status_code=200, 
-        content={"save_audio": speech_parser.save_audio}
-    )
-
-@app.get("/health")
-async def health_check():
-    """
-    Simple health check endpoint.
-    """
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "ok", 
-            "timestamp": datetime.now().isoformat()
-        }
-    )
 
 if __name__ == "__main__":
     logger.info("Server starting on 0.0.0.0:8000")

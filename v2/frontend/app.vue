@@ -22,7 +22,7 @@
                         class="p-4 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
                         :class="isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/20'"
                     >
-                        <Icon name="tabler:microphone-filled" class="h-6 w-6" />
+                        <Icon name="tabler:microphone-filled" class="h-5 w-5" />
                     </button>
                 </div>
                 <!-- Transcription/Diarization Area -->
