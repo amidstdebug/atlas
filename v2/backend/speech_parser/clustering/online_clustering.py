@@ -3,7 +3,7 @@ from typing import Tuple, Dict, Optional
 import torch
 from scipy.optimize import linear_sum_assignment
 
-from nemo.collections.asr.parts.utils.offline_clustering import SpeakerClustering, getCosAffinityMatrix
+from .utils import NMESCConfig, MAX_SPECTRAL_CLUSTERING_SAMPLES, get_clusters, random_resample, window_overcluster_resample
 
 class OnlineSpeakerClustering:
     """
@@ -28,38 +28,36 @@ class OnlineSpeakerClustering:
                            exceeding 2900~ will possibly result in errors with Torch (related to Intel MKL)
             device: computation device ('cuda' or 'cpu')
         """
-        MAX_EMBEDDINGS = 2800
+        MAX_SPECTRAL_CLUSTERING_SAMPLES = 2800
         self.device = device
         
-        self.max_embs_clustered = MAX_EMBEDDINGS
-        if max_buffer_size >= MAX_EMBEDDINGS:
+        self.max_embs_clustered = MAX_SPECTRAL_CLUSTERING_SAMPLES
+        if max_buffer_size >= MAX_SPECTRAL_CLUSTERING_SAMPLES:
             raise ValueError(
-                f"Buffer size {max_buffer_size} exceeds maximum allowed size of {MAX_EMBEDDINGS}. "
+                f"Buffer size {max_buffer_size} exceeds maximum allowed size of {MAX_SPECTRAL_CLUSTERING_SAMPLES}. "
                 "This may cause errors with Torch's Intel MKL implementation."
             )
         
         self.max_buffer_size = max_buffer_size
         self.hist_buffer_size_per_spk = hist_buffer_size_per_spk
+        self.all_embs: List[torch.Tensor] = []
         self.buffer: List[torch.Tensor] = []
         self.hist_spk_buffer = {}  # Buffer storing historical embeddings for each speaker
         self.spk_avg_ms_emb_dict = {}  # Dictionary storing average embeddings for each speaker
         self.embs: torch.Tensor = torch.tensor([], device=self.device, dtype=torch.float32)
         self.emb_labels: torch.Tensor = torch.tensor([], device=self.device, dtype=int)
         
-        # Initialize NME-SC clustering algorithm
-        self.clustering = SpeakerClustering()
-        self.clustering.device = device
-        self.clustering.cuda = "cuda" in device
-        
         # Initialize clustering parameters
-        self.multiscale_weights = torch.tensor([1, 1, 1, 1, 1], dtype=torch.float32)  # Weights for different temporal scales
-        self.oracle_num_speakers = -1  # Set to -1 for automatic speaker count detection
-        self.max_num_speakers = 8  # Maximum number of speakers to detect
-        self.max_rp_threshold = 0.15 # Maximum threshold for spectral clustering
-        self.sparse_search_volume = 20  # Number of threshold values to search
-        self.fixed_thres = -1.0  # Fixed threshold for clustering (-1.0 means adaptive)
-        self.kmeans_random_trials = 5  # Number of k-means clustering attempts
-        self.sim_threshold = 0.5  # Similarity threshold for speaker matching
+        self.cluster_config = NMESCConfig(
+            multiscale_weights = torch.tensor([1, 1, 1, 1, 1], dtype=torch.float32),
+            oracle_num_speakers = -1,
+            max_num_speakers = 8,
+            max_rp_threshold = 0.15,
+            sparse_search_volume = 20,
+            fixed_thres = -1.0,
+            kmeans_random_trials = 5,
+            device = self.device
+        )
 
         self.min_new_samples = 250
         
@@ -73,6 +71,7 @@ class OnlineSpeakerClustering:
         ms_emb_t: torch.Tensor = None
     ) -> Optional[torch.Tensor]:
         self.buffer.append(ms_emb_t)
+        self.all_embs.append(ms_emb_t)
         
         curr_buffer_len = sum([embs.shape[0] for embs in self.buffer])
 
@@ -107,7 +106,7 @@ class OnlineSpeakerClustering:
         cluster_input_embs, existing_embs, existing_emb_labels, num_existing = self._prepare_clustering_data(ms_emb_t)
         
         # Perform clustering and group speaker embeddings
-        cluster_emb_labels = self.get_clusters(cluster_input_embs)
+        cluster_emb_labels = get_clusters(cluster_input_embs, self.cluster_config)
         
         # Update speaker identities and historical buffer
         speaker_remaps = self.get_speaker_label_remaps(
@@ -167,7 +166,7 @@ class OnlineSpeakerClustering:
                 temp_hist_spk_buffer = self.hist_spk_buffer.copy()
                 for spk_idx, spk_embs in self.hist_spk_buffer.items():
                     if spk_embs.shape[0] > ref_hist_buffer_size:
-                        temp_hist_spk_buffer[spk_idx] = self.random_resample(spk_embs, ref_hist_buffer_size)
+                        temp_hist_spk_buffer[spk_idx] = random_resample(spk_embs, ref_hist_buffer_size)
                     else:
                         temp_hist_spk_buffer[spk_idx] = spk_embs
                         
@@ -201,11 +200,11 @@ class OnlineSpeakerClustering:
         """
         spk_indices = cluster_labels.unique()
         return {
-            int(spk_idx): embeddings[torch.where(cluster_labels == spk_idx)[0]]
+            int(spk_idx): embeddings[cluster_labels == spk_idx]
             for spk_idx in spk_indices
         }
         
-    def recluster(self):
+    def recluster(self, downsample_method: str = "window_overcluster"):
         """
         Recluster all embeddings in the historical buffer and overwrite past history.
         Handles resampling to maximum allowed embeddings if necessary.
@@ -216,6 +215,11 @@ class OnlineSpeakerClustering:
         3. Performs fresh clustering on all embeddings
         4. Updates the historical buffer with new cluster assignments
         """
+
+        ALLOWED_DOWNSAMPLE_METHODS = ["random", "window_overcluster"] # incl later window_random?
+        if downsample_method not in ALLOWED_DOWNSAMPLE_METHODS:
+            raise ValueError(f"downsample_method must be one of {','.join(ALLOWED_DOWNSAMPLE_METHODS)} instead of {downsample_method}")
+            
         # If buffer is empty, nothing to do
         if not self.hist_spk_buffer:
             return
@@ -226,10 +230,16 @@ class OnlineSpeakerClustering:
         
         # Resample if exceeding maximum limit
         if total_samples > self.max_embs_clustered:
-            all_embeddings = self.random_resample(all_embeddings, self.max_embs_clustered)
+            if downsample_method == "random":
+                all_embeddings = random_resample(all_embeddings, self.max_embs_clustered)
+            elif downsample_method == "window_overcluster":
+                all_embeddings = window_overcluster_resample(
+                    input_tensor=all_embeddings, 
+                    target_count=self.max_embs_clustered
+                )
         
         # Perform fresh clustering
-        cluster_labels = self.get_clusters(all_embeddings)
+        cluster_labels = get_clusters(all_embeddings, self.cluster_config)
         
         # Create new speaker mappings starting from 0
         unique_clusters = cluster_labels.unique().tolist()
@@ -251,61 +261,6 @@ class OnlineSpeakerClustering:
         
     def get_centroids(self):
         return {spk_idx: spk_embs.mean(0) for spk_idx, spk_embs in self.hist_spk_buffer.items()}
-    
-    def get_affinity_matrix(self, ms_emb_t):
-        """
-        Compute weighted multi-scale affinity matrix from embeddings.
-        
-        Args:
-            ms_emb_t: Multi-scale embedding tensor [n, s, e]
-                n: number of time steps
-                s: number of scales
-                e: embedding dimension
-                
-        Returns:
-            Square cosine similarity matrix [n, n]
-        """
-        # Compute affinity matrix for each temporal scale
-        affinity_matrices = torch.stack([getCosAffinityMatrix(ms_emb_t[:, scale_idx]) for scale_idx in range(ms_emb_t.shape[1])])
-
-        # Compute weighted sum across all scales
-        weighted_affinity_matrices = affinity_matrices.permute(1, 2, 0) * self.multiscale_weights.to(device=affinity_matrices.device)
-        affinity_matrix = weighted_affinity_matrices.sum(2)
-        
-        return affinity_matrix
-    
-    def get_clusters(self, ms_emb_t):
-        """
-        Perform speaker clustering on multi-scale embeddings.
-        
-        Args:
-            ms_emb_t: Multi-scale embedding tensor [n, s, e]
-                n: number of time steps
-                s: number of scales
-                e: embedding dimension
-                
-        Returns:
-            Tensor [n] containing cluster assignments for each time step
-        """
-        
-        if ms_emb_t.shape[0] > self.max_embs_clustered:
-            raise ValueError(
-                f"{ms_emb_t} exceeds maximum allowed size of {self.max_embs_clustered}. "
-                "This may cause errors with Torch's Intel MKL implementation."
-            )
-            
-        affinity_matrix = self.get_affinity_matrix(ms_emb_t)
-        affinity_matrix = affinity_matrix.to(device=self.device)
-        
-        return self.clustering.forward_unit_infer(
-            mat=affinity_matrix,
-            oracle_num_speakers=self.oracle_num_speakers,
-            max_num_speakers=self.max_num_speakers,
-            max_rp_threshold=self.max_rp_threshold,
-            sparse_search_volume=self.sparse_search_volume,
-            fixed_thres=self.fixed_thres,
-            kmeans_random_trials=self.kmeans_random_trials,
-        )
 
     def get_speaker_label_remaps(
         self, 
@@ -380,23 +335,6 @@ class OnlineSpeakerClustering:
                     remapping[new_idx] = new_speaker_id
         
         return remapping
-    
-    def compute_similarity(self, emb1: torch.Tensor, emb2: torch.Tensor) -> torch.Tensor:
-        """
-        Compute weighted cosine similarity between multi-scale speaker embeddings.
-        
-        Args:
-            emb1, emb2: Multi-scale embedding tensors to compare
-            
-        Returns:
-            Weighted similarity score
-        """
-        similarities = torch.tensor([
-            torch.nn.functional.cosine_similarity(
-                emb1[scale], emb2[scale], dim=0
-            ) for scale in range(5)
-        ])
-        return (similarities * self.multiscale_weights).sum()
         
     def update_buffer(self, spk_ms_emb: Dict[int, torch.Tensor]):
         """
@@ -407,18 +345,3 @@ class OnlineSpeakerClustering:
         """
         for spk_idx, spk_embs in spk_ms_emb.items():
             self.hist_spk_buffer[spk_idx] = torch.cat([self.hist_spk_buffer.get(spk_idx, torch.tensor([], device=self.device)), spk_embs])
-                
-    def random_resample(self, input_tensor: torch.Tensor, target_count: int) -> torch.Tensor:
-        """
-        Randomly resample a tensor to reduce its size while maintaining distribution.
-        
-        Args:
-            input_tensor: Tensor to resample
-            target_count: Desired number of samples
-            
-        Returns:
-            Randomly resampled tensor with target_count samples
-        """
-        num_samples = input_tensor.shape[0]
-        sampled_indices = torch.randperm(num_samples)[:target_count]
-        return input_tensor[sampled_indices]
