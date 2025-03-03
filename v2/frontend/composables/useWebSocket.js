@@ -19,7 +19,7 @@ export const useWebSocket = () => {
         }
 
         console.log("Attempting WebSocket connection...");
-        ws.value = new WebSocket("ws://localhost:8000/ws/diarize");
+        ws.value = new WebSocket("ws://localhost:8000/ws/call");
 
         // Essential for efficient binary data
         ws.value.binaryType = "arraybuffer";
@@ -69,7 +69,7 @@ export const useWebSocket = () => {
                             ...segment,
                             speaker: `${segment.speaker}`,
                             startFormatted: formatTime(segment.start),
-                            endFormatted: formatTime(segment.end)
+                            endFormatted: formatTime(segment.end),
                         }));
                     }
 
