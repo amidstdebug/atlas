@@ -79,12 +79,14 @@ class TranscribedSegment:
 @dataclass
 class OnlinePipelineConfig:
     segmentation_model_name: str = "pyannote/segmentation-3.0"
-    embedding_model_name: str = "nvidia/speakerverification_en_titanet_large"
+    embedding_model_name: str = "speechbrain/spkrec-ecapa-voxceleb" # "hbredin/wespeaker-voxceleb-resnet34-LM" # "nvidia/speakerverification_en_titanet_large"
     whisper_type: str = "faster-whisper"  # one of ['whisper', 'faster-whisper']
-    whisper_model: str = "small"  # Model size (tiny, base, small, medium, large)
-    collar: float = 0.25
+    whisper_model: str = "distil-large-v3"  # Model size (tiny, base, small, medium, large)
     hf_token: Optional[str] = None
-
+    
+    collar: float = 0.5
+    min_transcription_duration: float = 0.5
+    pre_detection_duration: float = 0.1
 
 class OnlinePipeline:
     def __init__(self, config: OnlinePipelineConfig):
@@ -159,31 +161,41 @@ class OnlinePipeline:
     def transcribe(self):
         anno = self.get_annotation()
         for t_segment in self._transcriptions:
-            if not anno.has_track(t_segment.segment, t_segment.track):
-                t_segment.deprecated = True
+            t_segment.deprecated = True
+            for segment, track, label in anno.itertracks(yield_label=True):
+                if (t_segment.segment.start == segment.start and 
+                    t_segment.segment.end == segment.end and 
+                    t_segment.label == label):
+                    t_segment.deprecated = False
+                    break
+                
         self._transcriptions = list(filter(lambda x: not x.deprecated, self._transcriptions))
         self._transcriptions.sort(key=lambda x: x.segment.start)
         
         for segment, track, label in anno.itertracks(yield_label=True):
-            print(segment, track, label)
-            
+            if (segment.end - segment.start) <= self.config.min_transcription_duration:
+                continue
+                
             track_exists = False
             for t_segment in self._transcriptions:
-                if t_segment.segment == segment and t_segment.label == label:
+                if (t_segment.segment.start == segment.start and 
+                    t_segment.segment.end == segment.end and 
+                    t_segment.label == label):
                     track_exists = True
                     break
             
             if not track_exists:
+                print('Transcribing:', segment, track, label)
+                
                 # Extract audio for this segment
-                start_sample = int(segment.start * self.pipeline.config.sample_rate)
-                end_sample = int(segment.end * self.pipeline.config.sample_rate)
+                start_idx = int((segment.start - self.config.pre_detection_duration) * self.pipeline.config.sample_rate)
+                end_idx = int(segment.end * self.pipeline.config.sample_rate)
                 
                 transcription = ""
-                if end_sample <= self.waveform.shape[0] and (end_sample - start_sample) > 0:
+                if end_idx <= self.waveform.shape[0] and (end_idx - start_idx) > 0:
                     # Extract audio segment
-                    audio_segment = self.waveform[start_sample:end_sample]
+                    audio_segment = self.waveform[start_idx:end_idx]
                     
-                    # Transcribe using the external function
                     transcription = transcribe_audio_segment(
                         self.whisper,
                         audio_segment
