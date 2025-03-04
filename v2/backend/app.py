@@ -203,6 +203,31 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"WebSocket error: {e}", exc_info=True)
         await websocket.close(code=1001, reason=str(e))
 
+@app.post("/reset")
+async def reset_pipeline():
+    """Reset the diarization pipeline to its initial state."""
+    try:
+        # Reset the pipeline
+        speech_parser.pipeline.reset()
+        
+        # Also reset session-specific information
+        speech_parser.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        speech_parser.chunk_counter = 0
+        speech_parser.time_since_transcribe = 0
+        
+        logger.info(f"Pipeline reset. New session: {speech_parser.session_id}")
+        
+        return JSONResponse(
+            status_code=200,
+            content={"status": "success", "message": "Pipeline reset successfully", "new_session_id": speech_parser.session_id}
+        )
+    except Exception as e:
+        logger.error(f"Error resetting pipeline: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to reset pipeline: {str(e)}"}
+        )
+
 if __name__ == "__main__":
     logger.info("Server starting on 0.0.0.0:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
