@@ -1,12 +1,23 @@
 import os
 from dotenv import load_dotenv
+
+import nvidia.cublas.lib
+import nvidia.cudnn.lib
+
+os.environ["LD_LIBRARY_PATH"] = f'{os.path.dirname(nvidia.cublas.lib.__file__)}:{os.path.dirname(nvidia.cudnn.lib.__file__)}'
+
 from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple, List
+from typing import Optional, Sequence, Tuple, List, Union
+import warnings
+
 import torch
 import numpy as np
+import torchaudio.functional as F  # Added for resampling
+
 from pyannote.core import SlidingWindow, SlidingWindowFeature, Annotation, Timeline, Segment
 from diart.models import EmbeddingModel, SegmentationModel
 from diart import SpeakerDiarization, SpeakerDiarizationConfig
+
 from faster_whisper import WhisperModel
 
 
@@ -51,7 +62,7 @@ def transcribe_audio_segment(
         # Transcribe using faster-whisper
         segments, _ = whisper_model.transcribe(
             audio,
-            beam_size=5,
+            beam_size=3,
             language="en"
         )
         
@@ -79,14 +90,22 @@ class TranscribedSegment:
 @dataclass
 class OnlinePipelineConfig:
     segmentation_model_name: str = "pyannote/segmentation-3.0"
-    embedding_model_name: str = "speechbrain/spkrec-ecapa-voxceleb" # "hbredin/wespeaker-voxceleb-resnet34-LM" # "nvidia/speakerverification_en_titanet_large"
+    embedding_model_name: str = "speechbrain/spkrec-ecapa-voxceleb" # "pyannote/embedding" "hbredin/wespeaker-voxceleb-resnet34-LM" "nvidia/speakerverification_en_titanet_large"
     whisper_type: str = "faster-whisper"  # one of ['whisper', 'faster-whisper']
-    whisper_model: str = "distil-large-v3"  # Model size (tiny, base, small, medium, large)
+    whisper_model: str = "large-v3"  # Model size (tiny, base, small, medium, large)
     hf_token: Optional[str] = None
     
+    # Audio preprocessing settings
+    audio_gain: float = 10.0
+    audio_gain_mode: str = "db" # one of ["amplitude", "db"]
+    normalize_audio: bool = False  # Whether to normalize audio (center and scale)
+    high_pass_filter: bool = True  # Whether to apply high-pass filter to remove low-frequency noise
+    high_pass_cutoff: float = 80.0  # Cutoff frequency for high-pass filter in Hz
+    
     collar: float = 0.5
-    min_transcription_duration: float = 0.5
+    min_transcription_duration: float = 1.0
     pre_detection_duration: float = 0.1
+
 
 class OnlinePipeline:
     def __init__(self, config: OnlinePipelineConfig):
@@ -103,7 +122,10 @@ class OnlinePipeline:
         
         speaker_diarization_config = SpeakerDiarizationConfig(
             segmentation=segmentation,
-            embedding=embedding
+            embedding=embedding,
+            # tau_active=0.555,
+            # rho_update=0.422,
+            # delta_new=1.517
         )
         
         self.pipeline = SpeakerDiarization(speaker_diarization_config)
@@ -123,40 +145,101 @@ class OnlinePipeline:
     
     def get_annotation(self):
         return self._annotation.support(self.config.collar)
-        
-    def __call__(self, waveform, sample_rate: int = 16_000):
-        """
-        Inputs:
-            waveform: numpy array of shape (length, channel)
-        """
+
+    def preprocess(self, waveform: Union[torch.Tensor, np.ndarray], sample_rate: int) -> np.ndarray:
+        if isinstance(waveform, np.ndarray):
+            waveform = torch.from_numpy(waveform)
+            waveform = waveform.permute(1, 0) # assume np arr format is (length, channel)
+
+        # Apply resampling if needed
         if sample_rate != self.pipeline.config.sample_rate:
-            # write resampling logic
-            pass
-        if isinstance(waveform, torch.Tensor):
-            # if 'cuda' in waveform.device:
-            waveform = waveform.detach().cpu()            
-            waveform = waveform.numpy()
+            # Apply resampling
+            waveform = F.resample(
+                waveform, 
+                orig_freq=sample_rate, 
+                new_freq=self.pipeline.config.sample_rate
+            )
+            
+        # Apply high-pass filter if enabled
+        if self.config.high_pass_filter:
+            nyquist = self.pipeline.config.sample_rate / 2
+            normalized_cutoff = self.config.high_pass_cutoff / nyquist
+            
+            # Apply high-pass filter using torchaudio
+            # This is a simple first-order filter, can be replaced with more sophisticated ones if needed
+            waveform = F.highpass_biquad(
+                waveform,
+                self.pipeline.config.sample_rate,
+                self.config.high_pass_cutoff
+            )
+            
+        # Apply gain adjustment
+        if self.config.audio_gain_mode == "amplitude":
+            if self.config.audio_gain != 1.0:
+                waveform = waveform * self.config.audio_gain
+        elif self.config.audio_gain_mode == "db":
+            waveform = F.gain(waveform, self.config.audio_gain)
+        else:
+            warnings.warn(f"config.audio_gain_mode '{self.config.audio_gain_mode}' should instead be one of ['amplitude', 'db']")
+            
+        waveform = waveform.permute(1, 0) # channel, length -> length, channel
+        waveform = waveform.numpy()
+
+        return waveform
+
+    def online_annotate(self, waveform: np.ndarray, audio_start_time: float):
+        sliding_window = SlidingWindow(
+            start=audio_start_time,
+            duration=1.0 / self.pipeline.config.sample_rate,
+            step=1.0 / self.pipeline.config.sample_rate,
+        )
+        
+        waveform = SlidingWindowFeature(waveform, sliding_window)
+        annotation, _ = self.pipeline([waveform])[0]
+        self._annotation.update(annotation)
+        
+    def __call__(self, waveform: Union[torch.Tensor, np.ndarray], sample_rate: int = 16_000):
+        """
+        Process an audio waveform for speaker diarization.
+        
+        Args:
+            waveform: tensor of shape (channel, length) or np array of shape (length, channel)
+            sample_rate: the sample rate of the input waveform
+        
+        Returns:
+            Updated speaker annotation
+        """
+        # if isinstance(waveform, torch.Tensor):
+        #     # if 'cuda' in waveform.device:
+        #     waveform = waveform.detach().cpu()            
+        #     waveform = waveform.numpy()
+            
         if len(waveform.shape) != 2:
-            raise ValueError(f'input waveform of shape {waveform.shape} should be of shape (length, channel)')
+            raise ValueError(f'input waveform of shape {waveform.shape} should be of shape (channel, length)')
+
+        waveform = self.preprocess(waveform, sample_rate)
+        
+        # Continue with existing logic for processing
         if self.waveform is not None:
             self.waveform = np.concatenate((self.waveform, waveform))
         else:
             self.waveform = waveform
+            
         while self.waveform.shape[0] > (self.last_processed_start_time + self.duration):
             audio = self.waveform[self.last_processed_start_time:self.last_processed_start_time+self.duration]
+            audio_start_time = self.last_processed_start_time / self.pipeline.config.sample_rate
             
-            sliding_window = SlidingWindow(
-                start=self.last_processed_start_time/self.pipeline.config.sample_rate,
-                duration=1.0 / self.pipeline.config.sample_rate,
-                step=1.0 / self.pipeline.config.sample_rate,
-            )
-            
-            audio = SlidingWindowFeature(audio, sliding_window)
-            annotation, _ = self.pipeline([audio])[0]
-            self._annotation.update(annotation)
+            self.online_annotate(audio, audio_start_time)
             
             self.last_processed_start_time += self.step
         return self.get_annotation()
+    
+    def reset(self):
+        """Reset the pipeline state to its initial condition."""
+        self.waveform = None
+        self.last_processed_start_time = 0
+        self._annotation = Annotation()
+        self._transcriptions = []
         
     def transcribe(self):
         anno = self.get_annotation()

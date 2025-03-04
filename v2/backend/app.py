@@ -1,8 +1,9 @@
+import os
+
 from pathlib import Path
 import json
 import asyncio
 import time
-import os
 import logging
 from datetime import datetime
 from typing import List, Dict, Optional
@@ -69,18 +70,23 @@ class SpeechManager:
         logger.info(f"Processing chunk: {len(waveform)} samples")
         
         try:
-            waveform_torch = torch.from_numpy(waveform)
-            increment_duration = waveform_torch.shape[0]
+            # waveform_torch = torch.from_numpy(waveform)
+            increment_duration = waveform.shape[0]
             self.time_since_transcribe += increment_duration
-            waveform_torch = waveform_torch.unsqueeze(0)
+            # waveform_torch = waveform_torch.unsqueeze(0)
             
-            if self.sample_rate != self.pipeline.pipeline.config.sample_rate:
-                waveform_torch = self.transform(waveform_torch)
-            waveform_torch = waveform_torch.permute(1, 0)
-            anno = self.pipeline(waveform_torch)
+            # if self.sample_rate != self.pipeline.pipeline.config.sample_rate:
+            #     waveform_torch = self.transform(waveform_torch)
+            # waveform_torch = torchaudio.functional.gain(waveform_torch, 10)
+            
+            # waveform_torch = waveform_torch.permute(1, 0)
+            waveform = np.expand_dims(waveform, 1)
+            anno = self.pipeline(waveform, self.sample_rate)
             
             if self.time_since_transcribe > self.transcribe_duration * self.sample_rate:
                 self.pipeline.transcribe()
+                self.time_since_transcribe = 0
+                torchaudio.save(f"recorded_audio/save_{time.time()}.wav", torch.from_numpy(self.pipeline.waveform).permute(1, 0), self.pipeline.pipeline.config.sample_rate)
 
             transcripts = self.pipeline.get_transcription()
             if len(transcripts) > 0:
@@ -118,36 +124,6 @@ class SpeechManager:
             return {
                 "segments": []
             }
-    
-    def save_audio_chunk(self, data, prefix, sample_rate=None):
-        """Save an audio chunk to disk"""
-        if sample_rate is None:
-            sample_rate = self.sample_rate
-            
-        self.chunk_counter += 1
-        filename = self.output_dir / f"{prefix}_{self.session_id}_{self.chunk_counter:04d}.wav"
-        
-        # Convert to torch tensor for saving
-        tensor_data = torch.from_numpy(data).float()
-        if tensor_data.ndim == 1:
-            tensor_data = tensor_data.unsqueeze(0)  # Add channel dimension
-            
-        # Save the audio
-        torchaudio.save(str(filename), tensor_data, sample_rate)
-        
-    def save_current_audio(self, prefix):
-        """Save the current audio from audio_pipeline"""
-        try:
-            self.chunk_counter += 1
-            filename = self.output_dir / f"{prefix}_{self.session_id}_{self.chunk_counter:04d}.wav"
-            
-            # Get the current waveform from audio_pipeline's audio object
-            waveform = self.audio_pipeline.audio.waveform
-            
-            # Save the audio
-            torchaudio.save(str(filename), waveform.unsqueeze(0).cpu(), self.audio_pipeline.audio.sample_rate)
-        except Exception as e:
-            logger.error(f"Error saving current audio: {e}")
 
 # Create a single instance of the speech manager
 logger.info("Starting speech diarization server")
@@ -186,10 +162,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         client_config = data
                         # Update sample rate from client config
                         speech_parser.sample_rate = data.get("sampleRate", 44100)
-                        speech_parser.transform = torchaudio.transforms.Resample(
-                            orig_freq = speech_parser.sample_rate,
-                            new_freq = speech_parser.pipeline.pipeline.config.sample_rate
-                        )
+                        # speech_parser.transform = torchaudio.transforms.Resample(
+                        #     orig_freq = speech_parser.sample_rate,
+                        #     new_freq = speech_parser.pipeline.pipeline.config.sample_rate
+                        # )
                         logger.info(f"Config received: sample rate={speech_parser.sample_rate}Hz")
                         await websocket.send_json({"status": "config_received"})
                         continue
