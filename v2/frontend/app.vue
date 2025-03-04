@@ -19,6 +19,7 @@
                     <div class="flex flex-row justify-center items-center gap-2">
                         <!-- Reset button -->
                         <button
+                            @click="resetRecording"
                             class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center bg-white/10 hover:bg-white/20"
                         >
                             <Icon name="tabler:trash-x-filled" class="h-4 w-4" />
@@ -52,10 +53,12 @@
 
 <script setup>
 import { onMounted, onUnmounted } from "vue";
-import { useWebSocket } from "~/composables/useWebSocket";
+import { useAudioStream } from "~/composables/useAudioStream";
 import { useAudioProcessor } from "~/composables/useAudioProcessor";
+import { useRecording } from "~/composables/useRecording";
 
-const { isConnected, segments, error, connect, sendAudioChunk, disconnect } = useWebSocket();
+const { isConnected, segments, error, connect, sendAudioChunk, disconnect } = useAudioStream();
+const { resetRecording } = useRecording();
 
 const { isRecording, waveformBars, startRecording, stopRecording } = useAudioProcessor((chunk) => {
     if (isConnected.value) {

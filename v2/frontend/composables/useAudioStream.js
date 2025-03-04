@@ -1,12 +1,17 @@
 import { ref } from "vue";
 
-export const useWebSocket = () => {
+import { useConfig } from "./useConfig";
+
+const segments = ref([]);
+
+export const useAudioStream = () => {
     const ws = ref(null);
     const isConnected = ref(false);
-    const segments = ref([]);
     const error = ref(null);
     let reconnectTimeout = null;
     let sampleRate = 44100;
+
+    const { baseUrl } = useConfig();
 
     // Add queue for audio chunks and processing state
     const audioQueue = [];
@@ -19,7 +24,7 @@ export const useWebSocket = () => {
         }
 
         console.log("Attempting WebSocket connection...");
-        ws.value = new WebSocket("ws://localhost:8000/ws/call");
+        ws.value = new WebSocket(`ws://${baseUrl.value}/ws/call`);
 
         // Essential for efficient binary data
         ws.value.binaryType = "arraybuffer";
