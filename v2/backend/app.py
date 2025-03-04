@@ -1,5 +1,8 @@
 import os
 
+import nvidia.cublas.lib
+import nvidia.cudnn.lib
+
 from pathlib import Path
 import json
 import asyncio
@@ -14,7 +17,7 @@ import numpy as np
 import torch
 import torchaudio
 
-from diart_pipeline import OnlinePipeline, OnlinePipelineConfig
+from diart_pipeline import OnlinePipeline, OnlinePipelineConfig, LD_LIBRARY_PATH
 
 logging.basicConfig(
     level=logging.INFO,
@@ -128,6 +131,11 @@ class SpeechManager:
 # Create a single instance of the speech manager
 logger.info("Starting speech diarization server")
 speech_parser = SpeechManager()
+
+@app.on_event("startup")
+async def startup_event():
+    os.environ["LD_LIBRARY_PATH"] = LD_LIBRARY_PATH
+    print(os.environ.get("LD_LIBRARY_PATH", "Not set"))
 
 @app.websocket("/ws/call")
 async def websocket_endpoint(websocket: WebSocket):

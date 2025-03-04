@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 import nvidia.cublas.lib
 import nvidia.cudnn.lib
 
-# os.environ["LD_LIBRARY_PATH"] = f'{os.path.dirname(nvidia.cublas.lib.__file__)}:{os.path.dirname(nvidia.cudnn.lib.__file__)}'
+LD_LIBRARY_PATH = f'{os.path.dirname(nvidia.cublas.lib.__file__)}:{os.path.dirname(nvidia.cudnn.lib.__file__)}'
+os.environ["LD_LIBRARY_PATH"]
 
 from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple, List, Union
@@ -112,7 +113,7 @@ class OnlinePipelineConfig:
     segmentation_model_name: str = "pyannote/segmentation-3.0"
     embedding_model_name: str = "speechbrain/spkrec-ecapa-voxceleb" # "pyannote/embedding" "hbredin/wespeaker-voxceleb-resnet34-LM" "nvidia/speakerverification_en_titanet_large"
     whisper_type: str = "faster-whisper"  # one of ['whisper', 'faster-whisper']
-    whisper_model: str = "tiny"  # Model size (tiny, base, small, medium, large, large-v3, distil-large-v3)
+    whisper_model: str = "large-v3"  # Model size (tiny, base, small, medium, large, large-v3, distil-large-v3)
     hf_token: Optional[str] = None
     
     # Audio preprocessing settings

@@ -1,8 +1,10 @@
-torch>=2.5.0
-torchaudio>=2.5.0
+torch>=2.6.0
+torchaudio>=2.6.0
 numpy>=2.1.2
 scipy>=1.15.2
 
 fastapi[standard]
 
+pyannote.audio>=2.1.1
+ctranslate2==4.4.0
 diart>=0.9.2
