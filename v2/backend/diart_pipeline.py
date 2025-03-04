@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import nvidia.cublas.lib
 import nvidia.cudnn.lib
 
-os.environ["LD_LIBRARY_PATH"] = f'{os.path.dirname(nvidia.cublas.lib.__file__)}:{os.path.dirname(nvidia.cudnn.lib.__file__)}'
+# os.environ["LD_LIBRARY_PATH"] = f'{os.path.dirname(nvidia.cublas.lib.__file__)}:{os.path.dirname(nvidia.cudnn.lib.__file__)}'
 
 from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple, List, Union
@@ -83,8 +83,28 @@ class TranscribedSegment:
     segment: Segment
     label: str
     track: str
-    transcription: str
+    text: str
     deprecated: bool = False
+
+
+def transcription_to_rttm(
+    transcription: Sequence[TranscribedSegment], 
+    file_id='file_0'
+):
+    lines = []
+    for seg in transcription:
+        # RTTM format:
+        # Type file_id channel_id start_time duration ortho speaker_type speaker_name conf
+        # SPEAKER file_0 1 0.01 1.09 <NA> <NA> speaker_0 <NA>
+        
+        start = seg.segment.start
+        duration = seg.segment.end - seg.segment.start
+        speaker = seg.label
+        
+        line = f'SPEAKER {file_id} 1 {start:.3f} {duration:.3f} "{seg.text}" <NA> {speaker} <NA>'
+        lines.append(line)
+    
+    return "\n".join(lines)
 
 
 @dataclass
@@ -92,7 +112,7 @@ class OnlinePipelineConfig:
     segmentation_model_name: str = "pyannote/segmentation-3.0"
     embedding_model_name: str = "speechbrain/spkrec-ecapa-voxceleb" # "pyannote/embedding" "hbredin/wespeaker-voxceleb-resnet34-LM" "nvidia/speakerverification_en_titanet_large"
     whisper_type: str = "faster-whisper"  # one of ['whisper', 'faster-whisper']
-    whisper_model: str = "large-v3"  # Model size (tiny, base, small, medium, large)
+    whisper_model: str = "tiny"  # Model size (tiny, base, small, medium, large, large-v3, distil-large-v3)
     hf_token: Optional[str] = None
     
     # Audio preprocessing settings
@@ -274,12 +294,12 @@ class OnlinePipeline:
                 start_idx = int((segment.start - self.config.pre_detection_duration) * self.pipeline.config.sample_rate)
                 end_idx = int(segment.end * self.pipeline.config.sample_rate)
                 
-                transcription = ""
+                text = ""
                 if end_idx <= self.waveform.shape[0] and (end_idx - start_idx) > 0:
                     # Extract audio segment
                     audio_segment = self.waveform[start_idx:end_idx]
                     
-                    transcription = transcribe_audio_segment(
+                    text = transcribe_audio_segment(
                         self.whisper,
                         audio_segment
                     )
@@ -288,7 +308,7 @@ class OnlinePipeline:
                     segment=segment,
                     label=label,
                     track=track,
-                    transcription=transcription
+                    text=text
                 )
                 self._transcriptions.append(new_segment)
     

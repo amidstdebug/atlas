@@ -96,7 +96,7 @@ class SpeechManager:
                         'start': transcript.segment.start, 
                         'end': transcript.segment.end, 
                         'duration': transcript.segment.end - transcript.segment.start,
-                        'text': transcript.transcription
+                        'text': transcript.text
                     } 
                     for transcript in transcripts
                 ]
@@ -207,6 +207,7 @@ async def websocket_endpoint(websocket: WebSocket):
 async def reset_pipeline():
     """Reset the diarization pipeline to its initial state."""
     try:
+        print('reseting')
         # Reset the pipeline
         speech_parser.pipeline.reset()
         
