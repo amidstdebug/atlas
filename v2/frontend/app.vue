@@ -4,7 +4,7 @@
             <div class="flex flex-col gap-4">
                 <div class="flex flex-col items-center justify-center border-2 border-stone-800 bg-black p-6 rounded-2xl">
                     <!-- Connection status -->
-                    <div v-if="error" class="text-red-500">{{ error }}</div>
+                    <div v-if="error" class="text-red-500 text-xs">{{ error }}</div>
                     <!-- Debug status -->
                     <div class="text-xs text-gray-400">WebSocket: {{ isConnected ? "Connected" : "Disconnected" }}</div>
                     <!-- Waveform container -->
@@ -16,14 +16,28 @@
                             :style="{ height: `${bar}px` }"
                         ></div>
                     </div>
-                    <!-- Microphone button -->
-                    <button
-                        @click="toggleRecording"
-                        class="p-4 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
-                        :class="isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/20'"
-                    >
-                        <Icon name="tabler:microphone-filled" class="h-5 w-5" />
-                    </button>
+                    <div class="flex flex-row justify-center items-center gap-2">
+                        <!-- Reset button -->
+                        <button
+                            class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center bg-white/10 hover:bg-white/20"
+                        >
+                            <Icon name="tabler:trash-x-filled" class="h-4 w-4" />
+                        </button>
+                        <!-- Microphone button -->
+                        <button
+                            @click="toggleRecording"
+                            class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
+                            :class="isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/20'"
+                        >
+                            <Icon name="tabler:microphone-filled" class="h-4 w-4" />
+                        </button>
+                        <!-- Transcribe button -->
+                        <button
+                            class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center bg-white/10 hover:bg-white/20"
+                        >
+                            <Icon name="tabler:pencil-bolt" class="h-4 w-4" />
+                        </button>
+                    </div>
                 </div>
                 <!-- Transcription/Diarization Area -->
                 <div class="border-2 border-stone-800 bg-black p-6 rounded-2xl" v-if="segments.length > 0">
