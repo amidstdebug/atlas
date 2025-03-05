@@ -149,7 +149,7 @@ class MinutesPipeline:
         prompt = f"""
         Summarize the key points and decisions from this conversation segment in a professional manner.
         Include any decisions made, action items, or important information shared.
-        Keep the summary concise (2-3 paragraphs maximum):
+        Keep the summary concise (2-3 sentences maximum):
         
         {segments_text}
         """
@@ -172,7 +172,7 @@ class MinutesPipeline:
         prompt = f"""
         Summarize the key points and decisions from this conversation segment in a professional manner.
         Include any decisions made, action items, or important information shared.
-        Keep the summary concise (2-3 paragraphs maximum):
+        Keep the summary concise (2-3 sentences maximum):
         
         {segments_text}
         """

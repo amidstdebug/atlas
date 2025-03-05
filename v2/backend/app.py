@@ -17,7 +17,8 @@ import torch
 import torchaudio
 
 from diart_pipeline import OnlinePipeline, OnlinePipelineConfig, LD_LIBRARY_PATH, transcription_to_rttm
-from minutes_pipeline import MinutesPipeline
+from ollama_pipeline import MinutesPipeline
+from utils import EnhancedJSONEncoder
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +40,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def serialize_section(section):
+    """Convert a MinutesSection object to a serializable dictionary."""
+    if hasattr(section, '__dict__'):
+        return {
+            "title": section.title,
+            "description": section.description,
+            "speakers": section.speakers,
+            "start": section.start,
+            "end": section.end,
+            "segment_ids": section.segment_ids if hasattr(section, 'segment_ids') else []
+        }
+    return section  # Return as is if not a MinutesSection object
+
 class SpeechManager:
     def __init__(self):
         logger.info("Initializing SpeechManager")
@@ -51,7 +65,7 @@ class SpeechManager:
         self.pipeline = OnlinePipeline(config)
         
         # Initialize MinutesPipeline for meeting minutes
-        self.minutes_pipeline = MinutesPipeline("llama3")
+        self.minutes_pipeline = MinutesPipeline("phi4:14b-q8_0")
         
         # Audio storage settings
         self.sample_rate = 44100  # Default sample rate
@@ -155,13 +169,17 @@ class SpeechManager:
         # Get current transcription data
         transcripts = self.pipeline.get_transcription()
         
-        # Use the streaming minutes pipeline
-        for update in self.minutes_pipeline.stream_minutes(transcripts):
-            # Convert the update to a JSON string
-            yield json.dumps(update)
-            
-            # Brief pause to avoid overwhelming the client
-            await asyncio.sleep(0.05)
+        try:
+            # Use the streaming minutes pipeline
+            for update in self.minutes_pipeline.stream_minutes(transcripts):                
+                # Convert the update to a JSON string
+                yield json.dumps(update, cls=EnhancedJSONEncoder)
+                
+                # Brief pause to avoid overwhelming the client
+                await asyncio.sleep(0.05)
+        except Exception as e:
+            logger.error(f"Error in minutes stream serialization: {e}", exc_info=True)
+            yield json.dumps({"type": "error", "message": f"Error: {str(e)}"})
             
 
 # Create a single instance of the speech manager

@@ -1,3 +1,5 @@
+import dataclasses
+import json
 from typing import Tuple
 
 import torch
@@ -22,3 +24,9 @@ def load_audio(
         waveform = waveform / (torch.max(torch.abs(waveform)) + 1e-8)
         
     return waveform, target_sample_rate
+
+class EnhancedJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if dataclasses.is_dataclass(o):
+            return dataclasses.asdict(o)
+        return super().default(o)
