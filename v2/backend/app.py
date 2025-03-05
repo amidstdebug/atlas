@@ -1,8 +1,5 @@
 import os
 
-import nvidia.cublas.lib
-import nvidia.cudnn.lib
-
 from pathlib import Path
 import json
 import asyncio
@@ -11,6 +8,7 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 import numpy as np
@@ -30,6 +28,14 @@ logging.basicConfig(
 logger = logging.getLogger("diarization_server")
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify your frontend URL instead of "*"
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class SpeechManager:
     def __init__(self):
@@ -215,8 +221,6 @@ async def websocket_endpoint(websocket: WebSocket):
 async def reset_pipeline():
     """Reset the diarization pipeline to its initial state."""
     try:
-        print('reseting')
-        # Reset the pipeline
         speech_parser.pipeline.reset()
         
         # Also reset session-specific information
