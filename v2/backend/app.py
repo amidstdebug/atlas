@@ -15,7 +15,7 @@ import numpy as np
 import torch
 import torchaudio
 
-from diart_pipeline import OnlinePipeline, OnlinePipelineConfig, LD_LIBRARY_PATH
+from diart_pipeline import OnlinePipeline, OnlinePipelineConfig, LD_LIBRARY_PATH, transcription_to_rttm
 
 logging.basicConfig(
     level=logging.INFO,
@@ -97,6 +97,8 @@ class SpeechManager:
                 self.time_since_transcribe = 0
                 torchaudio.save(f"recorded_audio/save_{time.time()}.wav", torch.from_numpy(self.pipeline.waveform).permute(1, 0), self.pipeline.pipeline.config.sample_rate)
 
+                print(transcription_to_rttm(self.pipeline.get_transcription()))
+
             transcripts = self.pipeline.get_transcription()
             if len(transcripts) > 0:
                 output_segments = [
@@ -138,10 +140,10 @@ class SpeechManager:
 logger.info("Starting speech diarization server")
 speech_parser = SpeechManager()
 
-@app.on_event("startup")
-async def startup_event():
-    os.environ["LD_LIBRARY_PATH"] = LD_LIBRARY_PATH
-    print(os.environ.get("LD_LIBRARY_PATH", "Not set"))
+# @app.on_event("startup")
+# async def startup_event():
+#     os.environ["LD_LIBRARY_PATH"] = LD_LIBRARY_PATH
+    # logger.info(os.environ.get("LD_LIBRARY_PATH", "Not set"))
 
 @app.websocket("/ws/call")
 async def websocket_endpoint(websocket: WebSocket):
@@ -166,6 +168,8 @@ async def websocket_endpoint(websocket: WebSocket):
             # Receive message
             message = await websocket.receive()
             message_count += 1
+            
+            # logger.info(os.environ.get("LD_LIBRARY_PATH", "Not set"))
             
             # Handle configuration or JSON data
             if "text" in message:
