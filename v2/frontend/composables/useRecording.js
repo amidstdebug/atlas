@@ -7,7 +7,7 @@ export const useRecording = () => {
     const error = ref(null);
     const isProcessingReannote = ref(false);
 
-    const { segments } = useAudioStream();
+    const { segments, getSegments } = useAudioStream();
     const { baseUrl } = useConfig();
 
     const redoAnnotation = async () => {
@@ -28,6 +28,8 @@ export const useRecording = () => {
           error.value = e.message;
           console.error("Error redoing annotation:", e);
       }
+
+      getSegments();
       
       isProcessingReannote.value = false;
   };

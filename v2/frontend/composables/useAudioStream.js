@@ -164,9 +164,37 @@ export const useAudioStream = () => {
         return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     };
 
+    const getSegments = async () => {
+        try {
+            const response = await fetch(`http://${baseUrl.value}/segments`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.segments) {
+                segments.value = data.segments.map((segment) => ({
+                    ...segment,
+                    speaker: `${segment.speaker}`,
+                    startFormatted: formatTime(segment.start),
+                    endFormatted: formatTime(segment.end),
+                }));
+                console.log("Fetched segments:", segments.value.length);
+            } else {
+                console.error("Response does not contain segments:", data);
+            }
+        } catch (err) {
+            console.error("Error fetching segments:", err);
+            error.value = "Failed to fetch segments";
+        }
+    };
+    
     return {
         isConnected,
         segments,
+        getSegments,
         error,
         connect,
         sendAudioChunk,

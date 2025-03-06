@@ -77,7 +77,7 @@ const playAudio = async () => {
       });
       
       // Set the source - this will trigger the fetch
-      audioElement.value.src = `http://${baseUrl.value}/segment/${props.segmentId}/audio`;
+      audioElement.value.src = `http://${baseUrl.value}/segments/${props.segmentId}/audio`;
       
       // Wait for audio to be loaded
       await new Promise((resolve, reject) => {
