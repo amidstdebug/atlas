@@ -117,7 +117,7 @@ class SpeechManager:
                 self.time_since_transcribe = 0
                 torchaudio.save(f"recorded_audio/save_{time.time()}.wav", torch.from_numpy(self.pipeline.waveform).permute(1, 0), self.pipeline.pipeline.config.sample_rate)
                 
-                print(transcription_to_rttm(self.pipeline.get_transcription()))
+                # print(transcription_to_rttm(self.pipeline.get_transcription()))
 
             transcripts = self.pipeline.get_transcription()
             if len(transcripts) > 0:
@@ -127,7 +127,8 @@ class SpeechManager:
                         'start': transcript.segment.start, 
                         'end': transcript.segment.end, 
                         'duration': transcript.segment.end - transcript.segment.start,
-                        'text': transcript.text
+                        'text': transcript.text,
+                        'id': transcript.id
                     } 
                     for transcript in transcripts
                 ]

@@ -204,7 +204,7 @@ class ModOnlineSpeakerClustering:
             # Keep assignments under the distance threshold
             valid_map = dist_map.unmap_threshold(self.delta_new)
         except ValueError as e:
-            print(dist_map.mapping_matrix)
+            # print(dist_map.mapping_matrix)
             dist_map.mapping_matrix = np.nan_to_num(dist_map.mapping_matrix, nan=1e+10)
             valid_map = dist_map.unmap_threshold(self.delta_new)
 
@@ -231,7 +231,9 @@ class ModOnlineSpeakerClustering:
                 try:
                     _, g_assigned = valid_map.valid_assignments()
                 except ValueError as e:
-                    print(valid_map.mapping_matrix)
+                    valid_map.mapping_matrix = np.nan_to_num(valid_map.mapping_matrix, nan=1e+10)
+                    _, g_assigned = valid_map.valid_assignments()
+                    
                 free = [g_spk for g_spk in preferences if g_spk not in g_assigned]
                 if free:
                     # The best global speaker is the closest free one
@@ -294,7 +296,7 @@ class ModSpeakerDiarization(SpeakerDiarization):
         super().__init__(config)
 
         self.windows = []
-        self.batch_size = 16
+        self.batch_size = 4
         
     def reset(self):
         self.set_timestamp_shift(0)

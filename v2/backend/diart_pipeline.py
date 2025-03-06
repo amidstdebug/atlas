@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+import hashlib
 
 import nvidia.cublas.lib
 import nvidia.cudnn.lib
@@ -82,7 +83,6 @@ def transcribe_audio_segment(
         print(f"Error transcribing audio segment: {e}")
         return ""
 
-
 @dataclass
 class TranscribedSegment:
     segment: Segment
@@ -91,6 +91,10 @@ class TranscribedSegment:
     text: str
     deprecated: bool = False
 
+    @property
+    def id(self):    
+    	unique_str = f"{self.segment.start}_{self.segment.end}_{self.label}_{hash(self.text)}"
+    	return hashlib.md5(unique_str.encode()).hexdigest()
 
 def transcription_to_rttm(
     transcription: Sequence[TranscribedSegment], 
@@ -148,10 +152,10 @@ class OnlinePipeline:
         speaker_diarization_config = SpeakerDiarizationConfig(
             segmentation=segmentation,
             embedding=embedding,
-            latency=2,
+            # latency=2,
             # tau_active=0.555,
             # rho_update=0.422,
-            # delta_new=1.517
+            delta_new=1.2
         )
         
         self.pipeline = SpeakerDiarization(speaker_diarization_config)
