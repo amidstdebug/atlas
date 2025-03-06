@@ -199,8 +199,14 @@ class ModOnlineSpeakerClustering:
             [spk for spk in range(num_local_speakers) if spk not in active_speakers]
         )
         dist_map = dist_map.unmap_speakers(inactive_speakers, self.inactive_centers)
-        # Keep assignments under the distance threshold
-        valid_map = dist_map.unmap_threshold(self.delta_new)
+        
+        try:
+            # Keep assignments under the distance threshold
+            valid_map = dist_map.unmap_threshold(self.delta_new)
+        except ValueError as e:
+            print(dist_map.mapping_matrix)
+            dist_map.mapping_matrix = np.nan_to_num(dist_map.mapping_matrix, nan=1e+10)
+            valid_map = dist_map.unmap_threshold(self.delta_new)
 
         # Some speakers might be unidentified
         missed_speakers = [
@@ -222,7 +228,10 @@ class ModOnlineSpeakerClustering:
                     g_spk for g_spk in preferences if g_spk in self.active_centers
                 ]
                 # Get the free global speakers among the preferences
-                _, g_assigned = valid_map.valid_assignments()
+                try:
+                    _, g_assigned = valid_map.valid_assignments()
+                except ValueError as e:
+                    print(valid_map.mapping_matrix)
                 free = [g_spk for g_spk in preferences if g_spk not in g_assigned]
                 if free:
                     # The best global speaker is the closest free one
@@ -247,29 +256,30 @@ class ModOnlineSpeakerClustering:
 
     def redo(self):
         # Combine all embeddings from historical buffer
-        embeddings = torch.from_numpy(np.stack(self.embeddings))
-        embeddings = embeddings.unsqueeze(1)
-        total_samples = embeddings.shape[0]
-        
-        # Resample if exceeding maximum limit
-        if total_samples > self.max_cluster_embs:
-            if downsample_method == "random":
-                embeddings = random_resample(embeddings, self.max_cluster_embs)
-            elif downsample_method == "window_overcluster":
-                embeddings = window_overcluster_resample(
-                    input_tensor=embeddings, 
-                    target_count=self.max_cluster_embs
-                )
-        
-        # Perform fresh clustering
-        labels = get_clusters(embeddings, self.cluster_config)
-
-        self.clusters.clear()
-
-        embeddings = embeddings.squeeze(1)
-
-        for label in labels.unique():
-            self.clusters[int(label)] = list(np.unstack(embeddings[labels == label].detach().cpu().numpy(), axis=0))
+        if len(self.embeddings) >= 1:
+            embeddings = torch.from_numpy(np.stack(self.embeddings))
+            embeddings = embeddings.unsqueeze(1)
+            total_samples = embeddings.shape[0]
+            
+            # Resample if exceeding maximum limit
+            if total_samples > self.max_cluster_embs:
+                if downsample_method == "random":
+                    embeddings = random_resample(embeddings, self.max_cluster_embs)
+                elif downsample_method == "window_overcluster":
+                    embeddings = window_overcluster_resample(
+                        input_tensor=embeddings, 
+                        target_count=self.max_cluster_embs
+                    )
+            
+            # Perform fresh clustering
+            labels = get_clusters(embeddings, self.cluster_config)
+    
+            self.clusters.clear()
+    
+            embeddings = embeddings.squeeze(1)
+    
+            for label in labels.unique():
+                self.clusters[int(label)] = [embedding for embedding in embeddings[labels == label].detach().cpu().numpy()]
         
     def __call__(
         self, segmentation: SlidingWindowFeature, embeddings: torch.Tensor
@@ -284,7 +294,7 @@ class ModSpeakerDiarization(SpeakerDiarization):
         super().__init__(config)
 
         self.windows = []
-        self.batch_size = 32
+        self.batch_size = 16
         
     def reset(self):
         self.set_timestamp_shift(0)

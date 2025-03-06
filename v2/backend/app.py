@@ -442,6 +442,41 @@ async def redo_annotation():
             status_code=500,
             content={"status": "error", "message": f"Failed to reset pipeline: {str(e)}"}
         )
+        
+@app.get("/download/rttm")
+async def download_rttm():
+    """Download the current transcription as an RTTM file."""
+    try:
+        # Get the current transcription
+        transcripts = speech_parser.pipeline.get_transcription()
+        
+        if not transcripts:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": "No transcription data available"}
+            )
+        
+        # Generate RTTM content with current session ID as file_id
+        rttm_content = transcription_to_rttm(transcripts, file_id=speech_parser.session_id)
+        
+        # Create filename with session ID and timestamp
+        filename = f"transcript_{speech_parser.session_id}.rttm"
+        
+        # Return the RTTM content as a downloadable file
+        from fastapi.responses import Response
+        return Response(
+            content=rttm_content,
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error generating RTTM file: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to generate RTTM file: {str(e)}"}
+        )
 
 if __name__ == "__main__":
     logger.info("Server starting on 0.0.0.0:8000")

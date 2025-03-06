@@ -67,7 +67,7 @@ def transcribe_audio_segment(
         # Transcribe using faster-whisper
         segments, _ = whisper_model.transcribe(
             audio,
-            beam_size=3,
+            beam_size=5,
             language="en"
         )
         
