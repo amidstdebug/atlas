@@ -9,6 +9,25 @@ export const useRecording = () => {
     const { segments } = useAudioStream();
     const { baseUrl } = useConfig();
 
+    const redoAnnotation = async () => {
+      try {
+          // Post to the reset endpoint
+          const response = await fetch(`http://${baseUrl.value}/reannotate`, {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+              },
+          });
+
+          if (!response.ok) {
+              throw new Error(`Failed to redo annotation: ${response.status}`);
+          }
+      } catch (e) {
+          error.value = e.message;
+          console.error("Error redoing annotation:", e);
+      }
+  };
+
     const resetRecording = async () => {
         try {
             // Post to the reset endpoint
@@ -34,5 +53,6 @@ export const useRecording = () => {
     return {
         error,
         resetRecording,
+        redoAnnotation,
     };
 };

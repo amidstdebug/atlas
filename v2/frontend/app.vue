@@ -32,14 +32,23 @@
                         >
                             <Icon name="tabler:microphone-filled" class="h-4 w-4" />
                         </button>
-                        <!-- Minutes button -->
+                        <!-- Redo Annotation button - with disabled state -->
                         <button
+                            @click="redoAnnotation"
+                            class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
+                            :class="isRecording ? 'opacity-50 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'"
+                            :disabled="isRecording"
+                        >
+                            <Icon name="tabler:reload" class="h-4 w-4" />
+                        </button>
+                        <!-- Minutes button -->
+                        <!-- <button
                             @click="toggleMinutesPanel"
                             class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
                             :class="showMinutes ? 'bg-blue-500 hover:bg-blue-600' : 'bg-white/10 hover:bg-white/20'"
                         >
                             <Icon name="tabler:pencil-bolt" class="h-4 w-4" />
-                        </button>
+                        </button> -->
                     </div>
                 </div>
                 <!-- Transcription/Diarization Area -->
@@ -62,10 +71,9 @@ import { useAudioStream } from "~/composables/useAudioStream";
 import { useAudioProcessor } from "~/composables/useAudioProcessor";
 import { useRecording } from "~/composables/useRecording";
 import { useMinutes } from "~/composables/useMinutes";
-import MinutesBox from "~/components/MinutesBox.vue";
 
 const { isConnected, segments, error, connect, sendAudioChunk, disconnect } = useAudioStream();
-const { resetRecording } = useRecording();
+const { resetRecording, redoAnnotation } = useRecording();
 
 const { 
   isLoading: isMinutesLoading, 
