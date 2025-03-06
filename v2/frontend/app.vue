@@ -36,8 +36,8 @@
                         <button
                             @click="redoAnnotation"
                             class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
-                            :class="isRecording ? 'opacity-50 cursor-not-allowed bg-white/5' : 'bg-white/10 hover:bg-white/20'"
-                            :disabled="isRecording"
+                            :class="isProcessingReannote ? 'animate-spin bg-white/5 cursor-not-allowed': 'bg-white/10 hover:bg-white/20'"
+                            :disabled="isProcessingReannote"
                         >
                             <Icon name="tabler:reload" class="h-4 w-4" />
                         </button>
@@ -73,7 +73,7 @@ import { useRecording } from "~/composables/useRecording";
 import { useMinutes } from "~/composables/useMinutes";
 
 const { isConnected, segments, error, connect, sendAudioChunk, disconnect } = useAudioStream();
-const { resetRecording, redoAnnotation } = useRecording();
+const { resetRecording, redoAnnotation, isProcessingReannote } = useRecording();
 
 const { 
   isLoading: isMinutesLoading, 

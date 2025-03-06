@@ -5,12 +5,14 @@ import { useConfig } from "./useConfig";
 
 export const useRecording = () => {
     const error = ref(null);
+    const isProcessingReannote = ref(false);
 
     const { segments } = useAudioStream();
     const { baseUrl } = useConfig();
 
     const redoAnnotation = async () => {
       try {
+          isProcessingReannote.value = true;
           // Post to the reset endpoint
           const response = await fetch(`http://${baseUrl.value}/reannotate`, {
               method: "POST",
@@ -26,6 +28,8 @@ export const useRecording = () => {
           error.value = e.message;
           console.error("Error redoing annotation:", e);
       }
+      
+      isProcessingReannote.value = false;
   };
 
     const resetRecording = async () => {
@@ -53,6 +57,8 @@ export const useRecording = () => {
     return {
         error,
         resetRecording,
+
         redoAnnotation,
+        isProcessingReannote,
     };
 };
