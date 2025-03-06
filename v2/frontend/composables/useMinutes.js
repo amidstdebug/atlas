@@ -5,105 +5,79 @@ export const useMinutes = () => {
     const { baseUrl } = useConfig();
     
     // State
-    const isStreaming = ref(false);
     const isLoading = ref(false);
     const error = ref(null);
     const minutesSections = ref([]);
     const currentStatus = ref("Idle");
     const showMinutes = ref(false);
+    const progressPercentage = ref(0);
     
-    // EventSource reference
-    let eventSource = null;
+    // EventSource reference for progress updates
+    let progressEventSource = null;
     
-    // Connect to the SSE stream
-    const startMinutesStream = () => {
-        // Reset state
-        isLoading.value = true;
-        error.value = null;
-        currentStatus.value = "Connecting...";
-        
+    // Start the minutes generation and connect to progress stream
+    const generateMinutes = async () => {
         try {
+            isLoading.value = true;
+            error.value = null;
+            currentStatus.value = "Starting minutes generation...";
+            progressPercentage.value = 0;
+            minutesSections.value = []; // Clear existing minutes
+            
             // Close existing connection if any
-            if (eventSource) {
-                eventSource.close();
+            if (progressEventSource) {
+                progressEventSource.close();
+                progressEventSource = null;
             }
             
-            // Connect to the minutes stream
-            eventSource = new EventSource(`http://${baseUrl.value}/minutes/stream`);
-            isStreaming.value = true;
+            // Connect to the progress stream
+            progressEventSource = new EventSource(`http://${baseUrl.value}/minutes/progress`);
             
             // Handle connection open
-            eventSource.onopen = () => {
-                currentStatus.value = "Connected to minutes stream";
+            progressEventSource.onopen = () => {
+                currentStatus.value = "Connected to progress stream";
             };
             
-            // Handle start event
-            eventSource.addEventListener('start', (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    currentStatus.value = data.message;
-                } catch (err) {
-                    console.error("Error parsing start event:", err, event.data);
-                    currentStatus.value = "Connected (error parsing start data)";
-                }
-            });
-            
             // Handle updates
-            eventSource.addEventListener('update', (event) => {
+            progressEventSource.addEventListener('update', (event) => {
                 try {
-                    const updateText = event.data;
-                    const data = JSON.parse(updateText);
-                    handleUpdate(data);
+                    const update = JSON.parse(event.data);
+                    handleProgressUpdate(update);
                 } catch (err) {
-                    console.error("Error parsing update event:", err, event.data);
+                    console.error("Error parsing progress update:", err, event.data);
                     error.value = `Error processing update: ${err.message}`;
                 }
             });
             
             // Handle errors
-            eventSource.addEventListener('error', (event) => {
-                error.value = "Error connecting to minutes stream";
-                isStreaming.value = false;
+            progressEventSource.addEventListener('error', (event) => {
+                closeProgressStream();
+                error.value = "Error connecting to progress stream";
                 isLoading.value = false;
-                if (eventSource) {
-                    eventSource.close();
-                    eventSource = null;
-                }
             });
+            
+            return true;
         } catch (err) {
             error.value = `Failed to connect: ${err.message}`;
-            isStreaming.value = false;
             isLoading.value = false;
+            return false;
         }
     };
     
-    // Handle different types of updates
-    const handleUpdate = (update) => {
+    // Handle different types of progress updates
+    const handleProgressUpdate = (update) => {
         try {
+            console.log("Progress update:", update);
+            
             switch (update.type) {
                 case 'status':
                     currentStatus.value = update.message;
                     break;
                     
-                case 'title':
-                    // A new section is being created
-                    const newSection = {
-                        id: Date.now().toString(), // Temporary ID
-                        title: update.title,
-                        description: "",
-                        speakers: [],
-                        start: 0,
-                        end: 0,
-                        isComplete: false
-                    };
-                    minutesSections.value.push(newSection);
-                    break;
-                    
-                case 'summary_chunk':
-                    // Update the description of a section
-                    if (minutesSections.value.length > 0) {
-                        const lastSection = minutesSections.value[minutesSections.value.length - 1];
-                        lastSection.description += update.chunk;
+                case 'title_generated':
+                    // A new section title has been generated
+                    if (update.title) {
+                        currentStatus.value = `Generated title: ${update.title}`;
                     }
                     break;
                     
@@ -111,67 +85,74 @@ export const useMinutes = () => {
                     // Update with complete section data
                     const section = update.section;
                     if (section) {
-                        // Find if we already have this section
-                        const existingIndex = minutesSections.value.findIndex(s => 
-                            s.start === section.start && s.end === section.end);
-                        
-                        if (existingIndex >= 0) {
-                            // Update existing section
-                            minutesSections.value[existingIndex] = {
-                                ...minutesSections.value[existingIndex],
-                                ...section,
-                                isComplete: true
-                            };
-                        } else {
-                            // Add new section
-                            minutesSections.value.push({
-                                ...section,
-                                id: Date.now().toString(),
-                                isComplete: true
-                            });
-                        }
+                        // Add new section
+                        minutesSections.value.push({
+                            ...section,
+                            id: `${section.start}-${section.end}`,
+                            isComplete: true
+                        });
                         
                         // Sort sections by start time
                         minutesSections.value.sort((a, b) => a.start - b.start);
+                    }
+                    
+                    // Update progress percentage if available
+                    if (update.progress_percentage) {
+                        progressPercentage.value = update.progress_percentage;
                     }
                     break;
                     
                 case 'complete':
                     currentStatus.value = "Minutes generation complete";
                     isLoading.value = false;
+                    progressPercentage.value = 100;
+                    closeProgressStream();
                     break;
                     
                 case 'error':
                     error.value = update.message || "Unknown error in minutes generation";
                     isLoading.value = false;
+                    closeProgressStream();
+                    break;
+                    
+                case 'heartbeat':
+                    // Just a keep-alive, no action needed
                     break;
                     
                 default:
                     console.log("Unknown update type:", update.type, update);
             }
         } catch (err) {
-            console.error("Error handling update:", err, update);
+            console.error("Error handling progress update:", err, update);
             error.value = `Error processing update: ${err.message}`;
         }
     };
     
-    // Stop the stream
-    const stopMinutesStream = () => {
-        if (eventSource) {
-            eventSource.close();
-            eventSource = null;
+    // Close the progress stream
+    const closeProgressStream = () => {
+        if (progressEventSource) {
+            progressEventSource.close();
+            progressEventSource = null;
         }
-        isStreaming.value = false;
-        currentStatus.value = "Disconnected";
     };
     
-    // Fetch complete minutes
+    // Fetch complete minutes (for when they're already generated)
     const fetchCompleteMinutes = async () => {
         try {
             isLoading.value = true;
             error.value = null;
+            currentStatus.value = "Fetching minutes...";
             
             const response = await fetch(`http://${baseUrl.value}/minutes`);
+            
+            // If minutes are still being generated, start the progress stream
+            if (response.status === 202) {
+                const data = await response.json();
+                currentStatus.value = data.message || "Minutes generation in progress...";
+                // Start progress updates
+                return await generateMinutes();
+            }
+            
             if (!response.ok) {
                 throw new Error(`Server returned ${response.status}`);
             }
@@ -185,8 +166,11 @@ export const useMinutes = () => {
                         id: `${section.start}-${section.end}`,
                         isComplete: true
                     }));
+                    currentStatus.value = "Minutes loaded successfully";
+                    progressPercentage.value = 100;
                 } else {
                     console.warn("Received non-array sections data:", data.sections);
+                    currentStatus.value = "Error: Invalid minutes data format";
                 }
                 return data.minutes; // Return formatted minutes
             } else {
@@ -194,6 +178,7 @@ export const useMinutes = () => {
             }
         } catch (err) {
             error.value = err.message;
+            currentStatus.value = `Error: ${err.message}`;
             return null;
         } finally {
             isLoading.value = false;
@@ -212,38 +197,40 @@ export const useMinutes = () => {
     const toggleMinutesPanel = async () => {
         showMinutes.value = !showMinutes.value;
         
+        // Clear any previous errors when toggling
         if (showMinutes.value) {
-            // If we're showing minutes for the first time, start streaming
-            if (!isStreaming.value && minutesSections.value.length === 0) {
-                startMinutesStream();
+            error.value = null;
+            currentStatus.value = "Ready to generate minutes";
+            
+            // Try to fetch minutes if panel is shown
+            if (minutesSections.value.length === 0) {
+                await fetchCompleteMinutes();
             }
         } else {
-            // When hiding, we can optionally stop the stream to save resources
-            // stopMinutesStream();
+            // Close the progress stream when hiding the panel
+            closeProgressStream();
         }
     };
     
-    // Reconnect the stream if there's an error
-    const reconnectStream = () => {
-        stopMinutesStream();
-        startMinutesStream();
+    // Clean up resources when component is unmounted
+    const cleanup = () => {
+        closeProgressStream();
     };
     
     return {
         // State
-        isStreaming,
         isLoading,
         error,
         minutesSections,
         currentStatus,
         showMinutes,
+        progressPercentage,
         
         // Methods
-        startMinutesStream,
-        stopMinutesStream,
+        generateMinutes,
         fetchCompleteMinutes,
         formatTime,
         toggleMinutesPanel,
-        reconnectStream
+        cleanup
     };
 };

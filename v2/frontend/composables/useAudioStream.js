@@ -65,7 +65,6 @@ export const useAudioStream = () => {
 
         ws.value.onmessage = (event) => {
             // Handle text data (JSON responses)
-            console.log(event.data);
             if (typeof event.data === "string") {
                 try {
                     const data = JSON.parse(event.data);

@@ -32,11 +32,15 @@
                       >
                           <Icon name="tabler:microphone-filled" class="h-4 w-4" />
                       </button>
-                      <!-- Minutes button -->
+                      <!-- Minutes button - disabled during recording -->
                       <button
-                          @click="toggleMinutesPanel"
+                          @click="generateMinutes"
                           class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
-                          :class="showMinutes ? 'bg-blue-500 hover:bg-blue-600' : 'bg-white/10 hover:bg-white/20'"
+                          :class="[
+                            showMinutes ? 'bg-blue-500 hover:bg-blue-600' : 'bg-white/10 hover:bg-white/20',
+                            isRecording ? 'opacity-50 cursor-not-allowed' : ''
+                          ]"
+                          :disabled="isRecording"
                       >
                           <Icon name="tabler:pencil-bolt" class="h-4 w-4" />
                       </button>
@@ -54,22 +58,36 @@
               class="border-2 border-stone-800 bg-black p-6 rounded-2xl min-w-64 max-w-xl"
           >
               <div class="flex flex-col h-full">
-                  <div class="flex justify-between items-center mb-4">
+                  <div class="flex justify-between items-center mb-2">
                       <h2 class="text-lg font-semibold">Meeting Minutes</h2>
-                      <div class="text-xs text-gray-400">{{ currentStatus }}</div>
+                      <button 
+                          v-if="!isMinutesLoading && segments.length > 0" 
+                          @click="regenerateMinutes"
+                          class="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                          Regenerate
+                      </button>
                   </div>
                   
+                  <!-- Status display -->
+                  <div class="text-xs text-gray-400 mb-2">{{ currentStatus }}</div>
+                  
+                  <!-- Error display -->
                   <div v-if="minutesError" class="text-red-500 text-sm mb-2">{{ minutesError }}</div>
                   
-                  <!-- Loading state -->
-                  <div v-if="isMinutesLoading && minutesSections.length === 0" class="flex flex-col items-center justify-center py-8">
-                      <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mb-2"></div>
-                      <div class="text-sm text-gray-400">Generating minutes...</div>
+                  <!-- Progress bar when loading -->
+                  <div v-if="isMinutesLoading" class="mb-4">
+                      <div class="h-2 w-full bg-gray-700 rounded-full overflow-hidden">
+                          <div 
+                              class="h-full bg-blue-500 transition-all duration-300"
+                              :style="{ width: `${progressPercentage}%` }"
+                          ></div>
+                      </div>
                   </div>
                   
                   <!-- Minutes sections -->
-                  <div v-else class="overflow-y-auto max-h-96 pr-2 space-y-4">
-                      <div v-if="minutesSections.length === 0" class="text-center text-gray-400 py-8">
+                  <div class="overflow-y-auto max-h-96 pr-2 space-y-4">
+                      <div v-if="minutesSections.length === 0 && !isMinutesLoading" class="text-center text-gray-400 py-8">
                           No minutes available yet. Keep talking to generate content.
                       </div>
                       
@@ -109,16 +127,17 @@ const { isConnected, segments, error, connect, sendAudioChunk, disconnect } = us
 const { resetRecording } = useRecording();
 
 const { 
-  isStreaming, 
   isLoading: isMinutesLoading, 
   error: minutesError, 
   minutesSections, 
   currentStatus,
   showMinutes,
-  startMinutesStream, 
-  stopMinutesStream,
+  progressPercentage,
+  generateMinutes: startMinutesGeneration,
+  fetchCompleteMinutes,
   formatTime,
-  toggleMinutesPanel
+  toggleMinutesPanel,
+  cleanup: cleanupMinutes
 } = useMinutes();
 
 const { isRecording, waveformBars, startRecording, stopRecording } = useAudioProcessor((chunk) => {
@@ -134,15 +153,29 @@ const toggleRecording = async () => {
       console.log("Starting recording flow...");
       connect();
       await startRecording();
-      
-      // Automatically start minutes streaming when recording begins
-      if (showMinutes.value && !isStreaming.value) {
-          startMinutesStream();
-      }
   } else {
       console.log("Stopping recording flow...");
       stopRecording();
       disconnect();
+  }
+};
+
+// Generate minutes only when not recording
+const generateMinutes = async () => {
+  if (!isRecording.value) {
+    if (!showMinutes.value) {
+      toggleMinutesPanel();
+    } else if (segments.length > 0) {
+      // If minutes panel is already visible, start generation
+      await startMinutesGeneration();
+    }
+  }
+};
+
+// Regenerate minutes
+const regenerateMinutes = async () => {
+  if (!isRecording.value && segments.length > 0) {
+    await startMinutesGeneration();
   }
 };
 
@@ -151,6 +184,6 @@ onUnmounted(() => {
   console.log("Component unmounting...");
   stopRecording();
   disconnect();
-  stopMinutesStream();
+  cleanupMinutes();
 });
 </script>
