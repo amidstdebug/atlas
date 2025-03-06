@@ -68,7 +68,8 @@ def transcribe_audio_segment(
         # Transcribe using faster-whisper
         segments, _ = whisper_model.transcribe(
             audio,
-            beam_size=5,
+            beam_size=10,
+            best_of=10,
             language="en"
         )
         
@@ -164,7 +165,7 @@ class OnlinePipeline:
         self.waveform: Optional[np.ndarray] = None
         self.last_processed_start_time: int = 0  # adjusted by sample_rate
         self._annotation = Annotation()
-        self._transcriptions: Sequence[TranscribedSegment] = []
+        self._transcription: Sequence[TranscribedSegment] = []
         
         # Initialize Whisper model
         if config.whisper_type == "faster-whisper":
@@ -230,6 +231,7 @@ class OnlinePipeline:
         
     def reannotate(self):
         self._annotation = Annotation()
+        self._transcription = []
         
         outputs = self.pipeline.redo()
 
@@ -279,11 +281,11 @@ class OnlinePipeline:
         self.waveform = None
         self.last_processed_start_time = 0
         self._annotation = Annotation()
-        self._transcriptions = []
+        self._transcription = []
         
     def transcribe(self):
         anno = self.get_annotation()
-        for t_segment in self._transcriptions:
+        for t_segment in self._transcription:
             t_segment.deprecated = True
             for segment, track, label in anno.itertracks(yield_label=True):
                 if (t_segment.segment.start == segment.start and 
@@ -292,15 +294,15 @@ class OnlinePipeline:
                     t_segment.deprecated = False
                     break
                 
-        self._transcriptions = list(filter(lambda x: not x.deprecated, self._transcriptions))
-        self._transcriptions.sort(key=lambda x: x.segment.start)
+        self._transcription = list(filter(lambda x: not x.deprecated, self._transcription))
+        self._transcription.sort(key=lambda x: x.segment.start)
         
         for segment, track, label in anno.itertracks(yield_label=True):
             if (segment.end - segment.start) <= self.config.min_transcription_duration:
                 continue
                 
             track_exists = False
-            for t_segment in self._transcriptions:
+            for t_segment in self._transcription:
                 if (t_segment.segment.start == segment.start and 
                     t_segment.segment.end == segment.end and 
                     t_segment.label == label):
@@ -330,7 +332,7 @@ class OnlinePipeline:
                     track=track,
                     text=text
                 )
-                self._transcriptions.append(new_segment)
+                self._transcription.append(new_segment)
     
     def get_transcription(self):
-        return self._transcriptions
+        return list(filter(lambda x: len(x.text.strip()) > 0, self._transcription))

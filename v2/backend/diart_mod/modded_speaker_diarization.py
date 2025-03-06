@@ -296,7 +296,7 @@ class ModSpeakerDiarization(SpeakerDiarization):
         super().__init__(config)
 
         self.windows = []
-        self.batch_size = 4
+        self.batch_size = 1
         
     def reset(self):
         self.set_timestamp_shift(0)

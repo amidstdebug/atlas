@@ -102,6 +102,36 @@ class SpeechManager:
         self.is_generating_minutes = False
         
         logger.info(f"SpeechManager initialized in {time.time() - start_time:.2f}s")
+
+    def get_output_segments(self):
+        transcripts = self.pipeline.get_transcription()
+        if len(transcripts) > 0:
+            output_segments = [
+                {
+                    'speaker': transcript.label, 
+                    'start': transcript.segment.start, 
+                    'end': transcript.segment.end, 
+                    'duration': transcript.segment.end - transcript.segment.start,
+                    'text': transcript.text,
+                    'id': transcript.id
+                } 
+                for transcript in transcripts
+            ]
+        else:            
+            # Format segments for JSON response
+            annotation = self.pipeline.get_annotation()
+            output_segments = [
+                {
+                    'speaker': label, 
+                    'start': segment.start, 
+                    'end': segment.end, 
+                    'duration': segment.end - segment.start,
+                    'text': f"[{label} audio]"
+                } 
+                for segment, _, label in annotation.itertracks(yield_label=True)
+            ]
+
+        return output_segments
     
     def process_chunk(self, waveform: np.ndarray) -> Dict:
         """Process a single chunk of audio and return diarization results."""
@@ -114,40 +144,14 @@ class SpeechManager:
             self.time_since_transcribe += increment_duration
             
             waveform = np.expand_dims(waveform, 1)
-            anno = self.pipeline(waveform, self.sample_rate)
+            self.pipeline(waveform, self.sample_rate)
             
             if self.time_since_transcribe > self.transcribe_duration * self.sample_rate:
                 self.pipeline.transcribe()
                 self.time_since_transcribe = 0
                 torchaudio.save(f"recorded_audio/save_{time.time()}.wav", torch.from_numpy(self.pipeline.waveform).permute(1, 0), self.pipeline.pipeline.config.sample_rate)
                 
-                # print(transcription_to_rttm(self.pipeline.get_transcription()))
-
-            transcripts = self.pipeline.get_transcription()
-            if len(transcripts) > 0:
-                output_segments = [
-                    {
-                        'speaker': transcript.label, 
-                        'start': transcript.segment.start, 
-                        'end': transcript.segment.end, 
-                        'duration': transcript.segment.end - transcript.segment.start,
-                        'text': transcript.text,
-                        'id': transcript.id
-                    } 
-                    for transcript in transcripts
-                ]
-            else:            
-                # Format segments for JSON response
-                output_segments = [
-                    {
-                        'speaker': label, 
-                        'start': segment.start, 
-                        'end': segment.end, 
-                        'duration': segment.end - segment.start,
-                        'text': f"[{label} audio]"
-                    } 
-                    for segment, _, label in anno.itertracks(yield_label=True)
-                ]
+            output_segments = self.get_output_segments()
             
             total_time = time.time() - chunk_start_time
             logger.info(f"Processing complete: {len(output_segments)} segments in {total_time:.2f}s")
@@ -483,7 +487,25 @@ async def download_rttm():
             content={"status": "error", "message": f"Failed to generate RTTM file: {str(e)}"}
         )
 
-@app.get("/segment/{segment_id}/audio")
+@app.get("/segments")
+async def get_segments():
+    try:
+        output_segments = speech_parser.get_output_segments()
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "segments": output_segments
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error getting segments: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to get segments: {str(e)}"}
+        )
+
+@app.get("/segments/{segment_id}/audio")
 async def get_segment_audio(segment_id: str, background_tasks: BackgroundTasks):
     """
     Return the audio waveform for a specific transcription segment by ID.
