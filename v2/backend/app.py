@@ -9,11 +9,15 @@ from pathlib import Path
 import queue
 import threading
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+
 from sse_starlette.sse import EventSourceResponse
 import uvicorn
+
+import tempfile
+
 import numpy as np
 import torch
 import torchaudio
@@ -117,7 +121,7 @@ class SpeechManager:
                 self.time_since_transcribe = 0
                 torchaudio.save(f"recorded_audio/save_{time.time()}.wav", torch.from_numpy(self.pipeline.waveform).permute(1, 0), self.pipeline.pipeline.config.sample_rate)
                 
-                print(transcription_to_rttm(self.pipeline.get_transcription()))
+                # print(transcription_to_rttm(self.pipeline.get_transcription()))
 
             transcripts = self.pipeline.get_transcription()
             if len(transcripts) > 0:
@@ -127,7 +131,8 @@ class SpeechManager:
                         'start': transcript.segment.start, 
                         'end': transcript.segment.end, 
                         'duration': transcript.segment.end - transcript.segment.start,
-                        'text': transcript.text
+                        'text': transcript.text,
+                        'id': transcript.id
                     } 
                     for transcript in transcripts
                 ]
@@ -441,6 +446,138 @@ async def redo_annotation():
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": f"Failed to reset pipeline: {str(e)}"}
+        )
+        
+@app.get("/download/rttm")
+async def download_rttm():
+    """Download the current transcription as an RTTM file."""
+    try:
+        # Get the current transcription
+        transcripts = speech_parser.pipeline.get_transcription()
+        
+        if not transcripts:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": "No transcription data available"}
+            )
+        
+        # Generate RTTM content with current session ID as file_id
+        rttm_content = transcription_to_rttm(transcripts, file_id=speech_parser.session_id)
+        
+        # Create filename with session ID and timestamp
+        filename = f"transcript_{speech_parser.session_id}.rttm"
+        
+        # Return the RTTM content as a downloadable file
+        from fastapi.responses import Response
+        return Response(
+            content=rttm_content,
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error generating RTTM file: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to generate RTTM file: {str(e)}"}
+        )
+
+@app.get("/segment/{segment_id}/audio")
+async def get_segment_audio(segment_id: str, background_tasks: BackgroundTasks):
+    """
+    Return the audio waveform for a specific transcription segment by ID.
+    
+    Parameters:
+    - segment_id: The unique identifier of the transcription segment
+    - background_tasks: FastAPI background tasks handler (injected automatically)
+    
+    Returns:
+    - Audio file in WAV format
+    """
+    temp_path = None
+    try:
+        # Find the segment with the matching ID
+        transcripts = speech_parser.pipeline.get_transcription()
+        
+        # Find the target segment
+        target_segment = None
+        for transcript in transcripts:
+            if transcript.id == segment_id:
+                target_segment = transcript
+                break
+        
+        if not target_segment:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": f"Segment with ID {segment_id} not found"}
+            )
+        
+        # Extract timing information
+        sample_rate = speech_parser.pipeline.pipeline.config.sample_rate
+        start_idx = int(target_segment.segment.start * sample_rate)
+        end_idx = int(target_segment.segment.end * sample_rate)
+        
+        # Ensure indices are within bounds
+        start_idx = max(0, start_idx)
+        end_idx = min(len(speech_parser.pipeline.waveform), end_idx)
+        
+        # Extract the segment waveform
+        segment_waveform = speech_parser.pipeline.waveform[start_idx:end_idx]
+        
+        # Convert numpy array to torch tensor for torchaudio
+        segment_tensor = torch.from_numpy(segment_waveform).permute(1, 0)  # Reshape to [channels, samples]
+        
+        # Create a temporary file with a more robust approach
+        temp_dir = Path("temp_audio")
+        temp_dir.mkdir(exist_ok=True)
+        
+        temp_filename = f"segment_{segment_id}_{int(time.time())}.wav"
+        temp_path = temp_dir / temp_filename
+        
+        # Save the audio segment to the file
+        torchaudio.save(str(temp_path), segment_tensor, sample_rate)
+        
+        # Ensure the file exists before returning
+        if not temp_path.exists():
+            raise FileNotFoundError(f"Failed to create audio file at {temp_path}")
+            
+        # Log file creation
+        logger.info(f"Created audio file for segment {segment_id} at {temp_path}")
+        
+        # Define a proper cleanup function for the background task
+        def cleanup_temp_file():
+            try:
+                # Add a slight delay to ensure the file is fully sent before deletion
+                time.sleep(2)
+                if temp_path.exists():
+                    temp_path.unlink()
+                    logger.info(f"Cleaned up temporary file: {temp_path}")
+            except Exception as e:
+                logger.error(f"Error cleaning up temp file {temp_path}: {e}")
+        
+        # Add the cleanup function to background tasks
+        background_tasks.add_task(cleanup_temp_file)
+        
+        # Return the WAV file
+        return FileResponse(
+            path=str(temp_path),
+            media_type="audio/wav",
+            filename=f"segment_{segment_id}.wav"
+        )
+            
+    except Exception as e:
+        logger.error(f"Error extracting segment audio: {e}", exc_info=True)
+        # Clean up temp file if it exists
+        if temp_path and Path(temp_path).exists():
+            try:
+                Path(temp_path).unlink()
+            except Exception:
+                pass
+                
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to extract segment audio: {str(e)}"}
         )
 
 if __name__ == "__main__":
