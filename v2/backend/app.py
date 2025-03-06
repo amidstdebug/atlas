@@ -424,6 +424,25 @@ async def reset_pipeline():
             content={"status": "error", "message": f"Failed to reset pipeline: {str(e)}"}
         )
 
+@app.post("/reannotate")
+async def redo_annotation():
+    """Reset the diarization pipeline to its initial state."""
+    try:
+        speech_parser.pipeline.reannotate()
+        
+        logger.info(f"Transcript reannotated.")
+        
+        return JSONResponse(
+            status_code=200,
+            content={"status": "success", "message": "Pipeline reannotated successfully"}
+        )
+    except Exception as e:
+        logger.error(f"Error resetting pipeline: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to reset pipeline: {str(e)}"}
+        )
+
 if __name__ == "__main__":
     logger.info("Server starting on 0.0.0.0:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
