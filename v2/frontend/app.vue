@@ -28,16 +28,25 @@
                         <button
                             @click="toggleRecording"
                             class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
-                            :class="isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-white/10 hover:bg-white/20'"
+                            :class="{
+                                'bg-red-500 hover:bg-red-600': isRecording,
+                                'bg-white/5 cursor-not-allowed': isProcessingReannote,
+                                'bg-white/10 hover:bg-white/20': !isRecording && !isProcessingReannote
+                            }"
+                            :disabled="isProcessingReannote"
                         >
                             <Icon name="tabler:microphone-filled" class="h-4 w-4" />
                         </button>
-                        <!-- Redo Annotation button - with disabled state -->
+                        <!-- Redo Annotation button -->
                         <button
                             @click="redoAnnotation"
                             class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
-                            :class="isProcessingReannote ? 'animate-spin bg-white/5 cursor-not-allowed': 'bg-white/10 hover:bg-white/20'"
-                            :disabled="isProcessingReannote"
+                            :class="{
+                                'animate-spin': isProcessingReannote,
+                                'bg-white/5 cursor-not-allowed': isRecording || isProcessingReannote,
+                                'bg-white/10 hover:bg-white/20': !isRecording && !isProcessingReannote
+                            }"
+                            :disabled="isProcessingReannote || isRecording"
                         >
                             <Icon name="tabler:reload" class="h-4 w-4" />
                         </button>

@@ -11,6 +11,7 @@
       :text="segment.text"
       :start="segment.startFormatted"
       :end="segment.endFormatted"
+      :segment-id="segment.id"
     />
   </div>
 </template>
