@@ -40,7 +40,7 @@ class ModOnlineSpeakerClustering:
         metric: Optional[str] = "cosine",
         max_speakers: int = 20,
         max_cluster_embs: int = MAX_SPECTRAL_CLUSTERING_SAMPLES,
-        downsample_method: str = "random"
+        downsample_method: str = "window_overcluster"
     ):
         self.tau_active = tau_active
         self.rho_update = rho_update
@@ -265,9 +265,9 @@ class ModOnlineSpeakerClustering:
             
             # Resample if exceeding maximum limit
             if total_samples > self.max_cluster_embs:
-                if downsample_method == "random":
+                if self.downsample_method == "random":
                     embeddings = random_resample(embeddings, self.max_cluster_embs)
-                elif downsample_method == "window_overcluster":
+                elif self.downsample_method == "window_overcluster":
                     embeddings = window_overcluster_resample(
                         input_tensor=embeddings, 
                         target_count=self.max_cluster_embs
