@@ -231,6 +231,8 @@ class OnlinePipeline:
 
         for annotation, _ in outputs:
             self._annotation.update(annotation)
+
+        self.transcribe()
             
     def __call__(self, waveform: Union[torch.Tensor, np.ndarray], sample_rate: int = 16_000):
         """
