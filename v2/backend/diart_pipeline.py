@@ -19,7 +19,9 @@ import torchaudio.functional as F  # Added for resampling
 
 from pyannote.core import SlidingWindow, SlidingWindowFeature, Annotation, Timeline, Segment
 from diart.models import EmbeddingModel, SegmentationModel
-from diart import SpeakerDiarization, SpeakerDiarizationConfig
+# from diart import SpeakerDiarization, SpeakerDiarizationConfig
+from diart_mod import SpeakerDiarization
+from diart import SpeakerDiarizationConfig
 
 from faster_whisper import WhisperModel
 
@@ -146,6 +148,7 @@ class OnlinePipeline:
         speaker_diarization_config = SpeakerDiarizationConfig(
             segmentation=segmentation,
             embedding=embedding,
+            latency=2,
             # tau_active=0.555,
             # rho_update=0.422,
             # delta_new=1.517
@@ -221,6 +224,14 @@ class OnlinePipeline:
         annotation, _ = self.pipeline([waveform])[0]
         self._annotation.update(annotation)
         
+    def reannotate(self):
+        self._annotation = Annotation()
+        
+        outputs = self.pipeline.redo()
+
+        for annotation, _ in outputs:
+            self._annotation.update(annotation)
+            
     def __call__(self, waveform: Union[torch.Tensor, np.ndarray], sample_rate: int = 16_000):
         """
         Process an audio waveform for speaker diarization.

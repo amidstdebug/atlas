@@ -6,6 +6,8 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Optional, AsyncGenerator
 from pathlib import Path
+import queue
+import threading
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,7 +19,8 @@ import torch
 import torchaudio
 
 from diart_pipeline import OnlinePipeline, OnlinePipelineConfig, LD_LIBRARY_PATH, transcription_to_rttm
-from minutes_pipeline import MinutesPipeline
+from ollama_pipeline import MinutesPipeline
+from utils import EnhancedJSONEncoder
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +42,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def serialize_section(section):
+    """Convert a MinutesSection object to a serializable dictionary."""
+    if hasattr(section, '__dict__'):
+        return {
+            "title": section.title,
+            "description": section.description,
+            "speakers": section.speakers,
+            "start": section.start,
+            "end": section.end,
+            "segment_ids": section.segment_ids if hasattr(section, 'segment_ids') else []
+        }
+    return section  # Return as is if not a MinutesSection object
+
 class SpeechManager:
     def __init__(self):
         logger.info("Initializing SpeechManager")
@@ -51,7 +67,8 @@ class SpeechManager:
         self.pipeline = OnlinePipeline(config)
         
         # Initialize MinutesPipeline for meeting minutes
-        self.minutes_pipeline = MinutesPipeline("llama3")
+        self.minutes_pipeline = MinutesPipeline("phi4:latest")
+        # self.minutes_pipeline = MinutesPipeline("phi4:14b-q8_0")
         
         # Audio storage settings
         self.sample_rate = 44100  # Default sample rate
@@ -76,9 +93,9 @@ class SpeechManager:
         # Flags
         self.save_audio = True  # Whether to save audio chunks
         
-        # Track the last minute update time to avoid excessive updates
-        self.last_minutes_update = 0
-        self.minutes_update_interval = 5  # Only update minutes every 5 seconds
+        # Queue for progress updates
+        self.progress_queue = queue.Queue()
+        self.is_generating_minutes = False
         
         logger.info(f"SpeechManager initialized in {time.time() - start_time:.2f}s")
     
@@ -101,12 +118,6 @@ class SpeechManager:
                 torchaudio.save(f"recorded_audio/save_{time.time()}.wav", torch.from_numpy(self.pipeline.waveform).permute(1, 0), self.pipeline.pipeline.config.sample_rate)
                 
                 print(transcription_to_rttm(self.pipeline.get_transcription()))
-                
-                # Update minutes when new transcription is available
-                current_time = time.time()
-                if current_time - self.last_minutes_update > self.minutes_update_interval:
-                    self.minutes_pipeline(self.pipeline.get_transcription())
-                    self.last_minutes_update = current_time
 
             transcripts = self.pipeline.get_transcription()
             if len(transcripts) > 0:
@@ -145,33 +156,104 @@ class SpeechManager:
                 "segments": []
             }
     
-    async def stream_minutes_updates(self) -> AsyncGenerator[str, None]:
-        """Stream meeting minutes updates as they're generated."""
-        if not self.pipeline.get_transcription():
-            # No transcription available yet
-            yield json.dumps({"event": "info", "data": "Waiting for transcription data..."})
-            return
-        
-        # Get current transcription data
+    def progress_callback(self, update):
+        """Callback to receive progress updates from minutes generation"""
+        # Add to progress queue to be consumed by SSE
+        self.progress_queue.put(update)
+        logger.info(f"Minutes progress: {update.get('type', 'unknown')} - {update.get('message', '')}")
+    
+    def generate_minutes_thread(self, transcripts):
+        """Generate minutes in a separate thread to avoid blocking"""
+        try:
+            self.is_generating_minutes = True
+            self.minutes_pipeline.generate_minutes_with_progress(transcripts, self.progress_callback)
+            self.is_generating_minutes = False
+        except Exception as e:
+            logger.error(f"Error in minutes generation thread: {e}", exc_info=True)
+            self.progress_callback({"type": "error", "message": f"Error: {str(e)}"})
+            self.is_generating_minutes = False
+    
+    def start_minutes_generation(self):
+        """Start minutes generation in the background with progress updates"""
         transcripts = self.pipeline.get_transcription()
+        if not transcripts:
+            return False, "No transcription data available"
         
-        # Use the streaming minutes pipeline
-        for update in self.minutes_pipeline.stream_minutes(transcripts):
-            # Convert the update to a JSON string
-            yield json.dumps(update)
+        # Clear the progress queue
+        while not self.progress_queue.empty():
+            self.progress_queue.get()
             
-            # Brief pause to avoid overwhelming the client
-            await asyncio.sleep(0.05)
-            
+        # Start generation in a thread to avoid blocking
+        threading.Thread(
+            target=self.generate_minutes_thread,
+            args=(transcripts,),
+            daemon=True
+        ).start()
+        
+        return True, "Minutes generation started"
+    
+    async def stream_minutes_progress(self) -> AsyncGenerator[str, None]:
+        """Stream progress updates about minutes generation"""
+        # Initial update
+        yield json.dumps({
+            "type": "status", 
+            "message": "Starting minutes generation...",
+            "timestamp": time.time()
+        }, cls=EnhancedJSONEncoder)
+        
+        # Keep checking the progress queue for updates
+        timeout_seconds = 180  # 3 minutes timeout
+        start_time = time.time()
+        
+        while True:
+            try:
+                # Check if we've been running too long
+                if time.time() - start_time > timeout_seconds:
+                    yield json.dumps({
+                        "type": "error", 
+                        "message": "Minutes generation timed out",
+                        "timestamp": time.time()
+                    }, cls=EnhancedJSONEncoder)
+                    break
+                
+                # Check if minutes generation is complete
+                if not self.is_generating_minutes and self.progress_queue.empty():
+                    # One final message if everything succeeded
+                    yield json.dumps({
+                        "type": "complete", 
+                        "message": "Minutes generation complete",
+                        "timestamp": time.time()
+                    }, cls=EnhancedJSONEncoder)
+                    break
+                
+                # Try to get an update from the queue with a timeout
+                try:
+                    update = self.progress_queue.get(timeout=0.5)
+                    # Add timestamp to the update
+                    update["timestamp"] = time.time()
+                    yield json.dumps(update, cls=EnhancedJSONEncoder)
+                except queue.Empty:
+                    # No updates yet, yield a heartbeat message
+                    yield json.dumps({
+                        "type": "heartbeat", 
+                        "timestamp": time.time()
+                    }, cls=EnhancedJSONEncoder)
+                    
+                # Short sleep to avoid overwhelming the client
+                await asyncio.sleep(0.1)
+                
+            except Exception as e:
+                logger.error(f"Error in progress stream: {e}", exc_info=True)
+                yield json.dumps({
+                    "type": "error", 
+                    "message": f"Error in progress stream: {str(e)}",
+                    "timestamp": time.time()
+                }, cls=EnhancedJSONEncoder)
+                break
 
 # Create a single instance of the speech manager
 logger.info("Starting speech diarization server")
 speech_parser = SpeechManager()
-
-# @app.on_event("startup")
-# async def startup_event():
-#     os.environ["LD_LIBRARY_PATH"] = LD_LIBRARY_PATH
-    # logger.info(os.environ.get("LD_LIBRARY_PATH", "Not set"))
 
 @app.websocket("/ws/call")
 async def websocket_endpoint(websocket: WebSocket):
@@ -197,8 +279,6 @@ async def websocket_endpoint(websocket: WebSocket):
             message = await websocket.receive()
             message_count += 1
             
-            # logger.info(os.environ.get("LD_LIBRARY_PATH", "Not set"))
-            
             # Handle configuration or JSON data
             if "text" in message:
                 try:
@@ -208,10 +288,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         client_config = data
                         # Update sample rate from client config
                         speech_parser.sample_rate = data.get("sampleRate", 44100)
-                        # speech_parser.transform = torchaudio.transforms.Resample(
-                        #     orig_freq = speech_parser.sample_rate,
-                        #     new_freq = speech_parser.pipeline.pipeline.config.sample_rate
-                        # )
                         logger.info(f"Config received: sample rate={speech_parser.sample_rate}Hz")
                         await websocket.send_json({"status": "config_received"})
                         continue
@@ -249,49 +325,34 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"WebSocket error: {e}", exc_info=True)
         await websocket.close(code=1001, reason=str(e))
 
-@app.get("/minutes/stream")
-async def stream_minutes(request: Request):
-    """Stream meeting minutes updates to the client using SSE."""
-    async def event_generator():
-        try:
-            # Send initial message
-            yield {
-                "event": "start",
-                "data": json.dumps({
-                    "message": "Starting minutes stream",
-                    "session_id": speech_parser.session_id
-                })
-            }
-            
-            # Stream minutes updates
-            async for update in speech_parser.stream_minutes_updates():
-                if await request.is_disconnected():
-                    logger.info("Client disconnected from minutes stream")
-                    break
-                
-                yield {
-                    "event": "update",
-                    "data": update
-                }
-                
-                # Small delay to control flow rate
-                await asyncio.sleep(0.1)
-                
-            # Send completion message
-            yield {
-                "event": "complete",
-                "data": json.dumps({
-                    "message": "Minutes generation complete"
-                })
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in minutes stream: {e}", exc_info=True)
+@app.get("/minutes/progress")
+async def stream_minutes_progress(request: Request):
+    """Stream progress updates during minutes generation using SSE."""
+    # Start the minutes generation process
+    success, message = speech_parser.start_minutes_generation()
+    
+    if not success:
+        # If we can't start minutes generation, return an error event
+        async def error_generator():
             yield {
                 "event": "error",
                 "data": json.dumps({
-                    "message": f"Error: {str(e)}"
+                    "type": "error",
+                    "message": message
                 })
+            }
+        return EventSourceResponse(error_generator())
+    
+    # Stream progress updates
+    async def event_generator():
+        async for update in speech_parser.stream_minutes_progress():
+            if await request.is_disconnected():
+                logger.info("Client disconnected from progress stream")
+                break
+            
+            yield {
+                "event": "update",
+                "data": update
             }
     
     return EventSourceResponse(event_generator())
@@ -300,7 +361,18 @@ async def stream_minutes(request: Request):
 async def get_minutes():
     """Get the current meeting minutes as a complete document."""
     try:
-        # Format the current minutes
+        # Check if minutes have already been generated
+        if not speech_parser.minutes_pipeline.minutes:
+            # If not, try to generate them - but don't wait for completion
+            return JSONResponse(
+                status_code=202,  # Accepted, but processing
+                content={
+                    "status": "processing", 
+                    "message": "Minutes generation in progress. Use the /minutes/progress endpoint to track status."
+                }
+            )
+        
+        # Format the minutes if they're already available
         minutes_text = speech_parser.minutes_pipeline.format_minutes()
         
         return JSONResponse(
@@ -338,13 +410,31 @@ async def reset_pipeline():
         speech_parser.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         speech_parser.chunk_counter = 0
         speech_parser.time_since_transcribe = 0
-        speech_parser.last_minutes_update = 0
         
         logger.info(f"Pipeline reset. New session: {speech_parser.session_id}")
         
         return JSONResponse(
             status_code=200,
             content={"status": "success", "message": "Pipeline reset successfully", "new_session_id": speech_parser.session_id}
+        )
+    except Exception as e:
+        logger.error(f"Error resetting pipeline: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to reset pipeline: {str(e)}"}
+        )
+
+@app.post("/reannotate")
+async def redo_annotation():
+    """Reset the diarization pipeline to its initial state."""
+    try:
+        speech_parser.pipeline.reannotate()
+        
+        logger.info(f"Transcript reannotated.")
+        
+        return JSONResponse(
+            status_code=200,
+            content={"status": "success", "message": "Pipeline reannotated successfully"}
         )
     except Exception as e:
         logger.error(f"Error resetting pipeline: {e}", exc_info=True)
