@@ -52,7 +52,7 @@ class OnlinePipeline:
         self._transcription: Sequence[TranscribedSegment] = []
         
         if config.whisper_type == "faster-whisper":
-            self.whisper: WhisperModel = initialize_whisper_model(config.whisper_model)
+            self.whisper: WhisperModel = initialize_whisper_model(config.whisper_model, token=hf_token, cache_dir=".cache/")
         else:
             # Default to faster-whisper as specified in config
             raise ValueError(f"Unsupported whisper type: {config.whisper_type}. Only 'faster-whisper' is implemented.")
