@@ -8,6 +8,33 @@ const apiClient = axios.create({
 //   baseURL: 'https://jwong.dev/api/'
 });
 
+// Login helper function to get JWT token
+export async function login(userId, password) {
+  try {
+    const response = await apiClient.post('/auth/login', { 
+      user_id: userId, 
+      password: password 
+    });
+    
+    if (response.data && response.data.token) {
+      Cookies.set('auth_token', response.data.token);
+      apiClient.defaults.headers['Authorization'] = `Bearer ${response.data.token}`;
+      return { success: true };
+    } else {
+      return { 
+        success: false, 
+        error: 'Invalid response from server' 
+      };
+    }
+  } catch (error) {
+    console.error('Login failed:', error);
+    return { 
+      success: false, 
+      error: error.response?.data?.detail || 'Login failed' 
+    };
+  }
+}
+
 let isRefreshing = false;
 let failedQueue = [];
 
@@ -98,5 +125,37 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+let loadingStatus = { loading: false, error: null, success: null };
+
+apiClient.interceptors.request.use(
+  config => {
+    loadingStatus.loading = true;
+    loadingStatus.error = null;
+    loadingStatus.success = null;
+    return config;
+  },
+  error => {
+    loadingStatus.loading = false;
+    return Promise.reject(error);
+  }
+);
+
+apiClient.interceptors.response.use(
+  response => {
+    loadingStatus.loading = false;
+    loadingStatus.success = true;
+    return response;
+  },
+  error => {
+    loadingStatus.loading = false;
+    loadingStatus.error = error && error.response && error.response.data ? error.response.data.detail : error.message;
+    return Promise.reject(error);
+  }
+);
+
+export function getLoadingStatus() {
+  return loadingStatus;
+}
 
 export default apiClient;

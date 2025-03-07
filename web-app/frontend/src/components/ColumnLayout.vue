@@ -11,22 +11,29 @@
                 <span style="color:#29353C">{{ leftBoxHeader }}</span>
               </div>
             </template>
+
             <div class="transcription-box" ref="transcriptionBox">
-              <div v-if="transcriptionSegments.length > 0" class="transcription-content">
-                <div
-                  v-for="(segment, index) in transcriptionSegments"
-                  :key="index"
-                  class="segment"
-                >
-                  <span class="speaker-label" :style="getSpeakerStyle(segment.speaker)">
-                    Speaker {{ segment.speaker }}:
-                  </span>
-                  <span class="segment-text">{{ segment.transcription }}</span>
+                <div v-if="parsedSegments.length > 0" class="transcription-content">
+                    <div 
+                    v-for="(segment, index) in parsedSegments" 
+                    :key="index" 
+                    class="segment"
+                    >
+                        <!-- Use the "start" property for the timestamp -->
+                        <span class="segment-timestamp">
+                            {{ formatTimestamp(segment.start) }}
+                        </span>
+                        
+                        <!-- Display the main text -->
+                        <span class="segment-text">
+                            {{ segment.text }}
+                        </span>
+                    </div>
                 </div>
-              </div>
-              <div v-else class="initial-text">
-                <p>{{ leftBoxInitial }}</p>
-              </div>
+                <!-- Otherwise, show placeholder text -->
+                <div v-else class="initial-text">
+                    <p>Upload recording or record audio to transcribe.</p>
+                </div>
             </div>
           </el-card>
         </el-col>
@@ -113,6 +120,14 @@
           Stop Recording
         </el-button>
 
+        <!-- Generate Summary Button -->
+        <el-button
+          class="centered-button same-width-button"
+          @click="generateSummary"
+        >
+          Generate Summary
+        </el-button>
+
         <!-- Clear Transcript Button -->
         <el-button
           class="centered-button same-width-button"
@@ -135,6 +150,7 @@
 </template>
 
 <script>
+import apiClient, { getLoadingStatus } from '@/router/apiClient';
 import {
   ElContainer,
   ElMain,
@@ -145,16 +161,18 @@ import {
   ElIcon,
   ElTag,
   ElCarousel,
-  ElCarouselItem
+  ElCarouselItem,
+  ElLoading,
+  ElMessage
 } from 'element-plus';
 import { Microphone, Upload } from '@element-plus/icons-vue';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism.css';
 import { typeWriterMultiple } from '@/methods/utils/typeWriter';
 import { tabConfigurations } from '@/config/columnConfig';
-// Removed axios import since HTTP sending is no longer used.
 import { AudioRecorderService } from '@/services/audioRecorderService';
-import {jsonrepair} from "jsonrepair";
+import { jsonrepair } from 'jsonrepair';
+import Cookies from 'js-cookie';
 
 const typingMappings = [
   { configPath: ['headers', 'leftBoxHeader'], dataKey: 'leftBoxHeader' },
@@ -212,22 +230,44 @@ export default {
       typingSpeed: 11,
       cancelTypingFunctions: [],
       isTranscribing: false,
-      // Removed cancelTokenSource and file upload related properties.
-      recordedSamples: [],
-      sampleRate: 48000,
-      chunkSize: 1600000,
-      lastSent: false,
       isRecording: false,
       audioRecorder: null,
+      liveTranscription: {
+        segments: []
+      },
+      apiStatus: getLoadingStatus()
     };
   },
   computed: {
+    parsedSegments() {
+        // If your current data always puts the real JSON in the FIRST segment’s "transcription"
+        const segments = this.transcriptionSegments;
+        if (!segments.length) return [];
+
+        const firstItem = segments[0];
+        if (!firstItem || !firstItem.transcription) return [];
+
+        try {
+        // Attempt to parse the JSON string
+            const parsed = JSON.parse(firstItem.transcription);
+
+            // If "parsed.segments" is the real data, return that array
+            if (parsed.segments && Array.isArray(parsed.segments)) {
+                return parsed.segments;
+            }
+        } catch (err) {
+            console.error("Could not parse JSON in first transcription:", err);
+        }
+
+        // If something fails, return an empty array
+        return [];
+    },
     transcriptionSegments() {
-      if (
-        this.transcription &&
-        typeof this.transcription === 'object' &&
-        Array.isArray(this.transcription.segments)
-      ) {
+      if (this.liveTranscription && Array.isArray(this.liveTranscription.segments)) {
+        return this.liveTranscription.segments;
+      }
+      // Fallback: if transcription prop is a JSON string/object with segments.
+      if (this.transcription && typeof this.transcription === 'object' && Array.isArray(this.transcription.segments)) {
         return this.transcription.segments;
       }
       if (typeof this.transcription === 'string') {
@@ -247,6 +287,12 @@ export default {
     },
   },
   methods: {
+    formatTimestamp(seconds) {
+        if (typeof seconds !== 'number' || isNaN(seconds)) return '';
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    },
     handleActiveTabChange(newTab) {
       this.cancelTypingFunctions.forEach(cancelFn => cancelFn());
       this.cancelTypingFunctions = [];
@@ -270,27 +316,37 @@ export default {
         console.warn(`No configuration found for activeTab: ${newTab}`);
       }
     },
-    // File upload methods updated to use the AudioRecorderService function.
+    // Trigger file upload by clicking the hidden file input.
     uploadRecording() {
       this.$refs.audioFileInput.click();
     },
+    // File upload using HTTP POST to /transcribe.
     async handleFileUpload(event) {
       const file = event.target.files[0];
       if (file) {
-        if (!this.audioRecorder) {
-          this.audioRecorder = new AudioRecorderService({ preBufferDuration: 0.4 });
-          // Update the URL accordingly.
-          this.audioRecorder.connectWebSocket('ws://your-websocket-server-url');
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+          const loadingInstance = ElLoading.service({
+            fullscreen: true,
+            text: 'Uploading and transcribing...'
+          });
+          
+          const response = await apiClient.post('transcribe', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          });
+          
+          // Assume response.data.transcription contains the transcription details.
+          this.addTranscription(response.data.transcription);
+          ElMessage.success('Transcription completed successfully');
+        } catch (error) {
+          console.error('Error uploading file:', error);
+          ElMessage.error('Failed to transcribe file');
+        } finally {
+          ElLoading.service().close();
         }
-        const arrayBuffer = await file.arrayBuffer();
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        // Use the first channel's float32 samples.
-        const float32Array = audioBuffer.getChannelData(0);
-        // Set the recordedSamples property so that sendRecordedAudio() will send this data.
-        this.audioRecorder.recordedSamples = Array.from(float32Array);
-        await this.audioRecorder.sendRecordedAudio();
-        console.log('File upload payload sent via WebSocket.');
       }
     },
     clearTranscription() {
@@ -298,16 +354,8 @@ export default {
       this.summaries = [];
       this.$refs.audioFileInput.value = '';
       this.isTranscribing = false;
-    },
-    // Microphone recording methods:
-    async startMicRecording() {
-      if (!this.audioRecorder) {
-        this.audioRecorder = new AudioRecorderService({ preBufferDuration: 0.4 });
-        // Update the URL accordingly.
-        this.audioRecorder.connectWebSocket('ws://your-websocket-server-url');
-      }
-      await this.audioRecorder.startRecording();
-      this.isRecording = true;
+      // Clear live transcription
+      this.liveTranscription.segments = [];
     },
     async stopMicRecording() {
       await this.audioRecorder.stopRecording();
@@ -315,6 +363,44 @@ export default {
         this.audioRecorder.audioStream.getTracks().forEach(track => track.stop());
       }
       this.isRecording = false;
+    },
+    // Button handler to generate summary via HTTP POST /summary.
+    async generateSummary() {
+      if (!this.aggregatedTranscription.trim()) {
+        ElMessage.warning("No transcription to summarize.");
+        return;
+      }
+      try {
+        const loadingInstance = ElLoading.service({
+          fullscreen: true,
+          text: 'Generating summary...'
+        });
+        
+        const payload = {
+          transcription: this.aggregatedTranscription,
+          previous_report: "",
+          summary_mode: "minutes"
+        };
+        
+        const response = await apiClient.post('summary', payload);
+        
+        // The response message is assumed to be wrapped in markdown code block.
+        const apiSummary = response.data.message.content;
+        const summaryObj = this.extractSummary(apiSummary);
+        if (summaryObj) {
+          // Assume the summary object has a property "meeting_minutes".
+          this.addSummary(summaryObj.meeting_minutes || summaryObj);
+          ElMessage.success('Summary generated successfully');
+        } else {
+          console.error('Failed to extract summary JSON');
+          ElMessage.error('Failed to parse summary response');
+        }
+      } catch (error) {
+        console.error('Error generating summary:', error);
+        ElMessage.error('Failed to generate summary');
+      } finally {
+        ElLoading.service().close();
+      }
     },
     getSpeakerStyle(speaker) {
       const colors = {
@@ -330,10 +416,13 @@ export default {
       };
     },
     addTranscription(newText) {
-      this.$emit('transcription-received', newText);
-    },
-    encodeWAV(samples, sampleRate) {
-      return window.encodeWAV(samples, sampleRate);
+      // When receiving transcription data (from file upload), update live transcription.
+      if (newText && newText.segments) {
+        this.liveTranscription.segments.push(...newText.segments);
+      } else if (typeof newText === 'string') {
+        // If simple text, wrap it in a segment.
+        this.liveTranscription.segments.push({ speaker: 0, transcription: newText });
+      }
     },
     convertCamelCase(text) {
       return text.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
@@ -412,11 +501,18 @@ export default {
   },
   watch: {
     transcription(newVal) {
-      // Additional logic for transcription updates.
+      // Additional logic for transcription updates if needed.
     },
     activeTab(newTab) {
       this.handleActiveTabChange(newTab);
     },
+    'apiStatus.loading'(isLoading) {
+      if (isLoading) {
+        this.isTranscribing = true;
+      } else {
+        this.isTranscribing = false;
+      }
+    }
   },
   mounted() {
     this.$watch(
@@ -435,20 +531,6 @@ export default {
     this.cancelTypingFunctions.forEach((cancelFn) => cancelFn());
   },
 };
-
-/*
-Helper function to convert an ArrayBuffer to a base64 string.
-This helper could also be imported from a shared utilities file.
-*/
-function arrayBufferToBase64(buffer) {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
-}
 </script>
 
 <style scoped>
@@ -592,5 +674,23 @@ function arrayBufferToBase64(buffer) {
 .el-button[disabled] {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+.segment {
+  margin-bottom: 10px;
+}
+
+.segment-timestamp {
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+/* 
+  Ensures text wraps instead of scrolling. 
+  'pre-wrap' respects newlines but wraps text as needed.
+*/
+.segment-text {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

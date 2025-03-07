@@ -15,9 +15,19 @@ export class AudioRecorderService {
     this.ws = null; // WebSocket connection
 
     // For tracking pending chunks
-    this.pendingChunks = new Set(); // holds chunk ids for which we have not received a response
+    this.pendingChunks = new Set();
+    
+    // Connection status
+    this.connectionStatus = {
+      connected: false,
+      connecting: false,
+      error: null,
+      lastErrorMessage: null,
+      reconnectAttempts: 0,
+      maxReconnectAttempts: 3
+    };
 
-    // Recording/reactivation settings (unchanged)
+    // Recording/reactivation settings
     this.thresholdPercentage = 0.1;
     this.sensitivity = { activity: 0.5, reduced: 0.5 };
     this.delayDuration = 250; // ms
@@ -41,6 +51,10 @@ export class AudioRecorderService {
     this.audioContext = null;
     this.audioStream = null;
     this.audioWorkletNode = null;
+
+    // Callback for incoming transcription responses and status updates
+    this.onTranscription = null;
+    this.onStatusChange = null;
   }
 
   async setupAudio() {
@@ -64,6 +78,7 @@ export class AudioRecorderService {
       await this.audioContext.audioWorklet.addModule('/atlas/audio/processor.js')
         .catch((error) => {
           console.error('Error loading AudioWorkletProcessor:', error);
+          this.updateStatus({ error: true, lastErrorMessage: 'Failed to load audio processor' });
         });
       this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
       source.connect(this.audioWorkletNode);
@@ -85,6 +100,7 @@ export class AudioRecorderService {
       };
     } catch (error) {
       console.error('Error in setupAudio:', error);
+      this.updateStatus({ error: true, lastErrorMessage: 'Failed to access microphone' });
     }
   }
 
@@ -100,6 +116,14 @@ export class AudioRecorderService {
   }
 
   async startRecording() {
+    if (!this.connectionStatus.connected) {
+      this.updateStatus({ 
+        error: true, 
+        lastErrorMessage: 'Cannot start recording: WebSocket not connected' 
+      });
+      return;
+    }
+    
     if (!this.audioContext) {
       await this.setupAudio();
     } else if (this.audioContext.state === 'suspended') {
@@ -118,13 +142,10 @@ export class AudioRecorderService {
 
   async stopRecording() {
     this.isRecording = false;
-    // Clear pending timers
     if (this.inactiveTimer) { clearTimeout(this.inactiveTimer); this.inactiveTimer = null; }
     if (this.delayTimer) { clearTimeout(this.delayTimer); this.delayTimer = null; }
     if (this.forceSendTimer) { clearTimeout(this.forceSendTimer); this.forceSendTimer = null; }
-    // Send any remaining audio chunk
     await this.sendRecordedAudio();
-    // Close microphone and audio context
     this.closeAudio();
     this.resetState();
   }
@@ -156,29 +177,133 @@ export class AudioRecorderService {
   }
 
   connectWebSocket(url) {
-    this.ws = new WebSocket(url);
-    this.ws.onopen = () => { console.log('WebSocket connection established.'); };
+    if (this.connectionStatus.connecting) {
+      return;
+    }
+    
+    this.updateStatus({ connecting: true, error: false });
+    
+    try {
+      // Get JWT token from cookies
+      const token = this.getCookie('auth_token');
+      
+      // Add token to URL as query parameter if available
+      const wsUrl = token ? `${url}?token=${encodeURIComponent(token)}` : url;
+      
+      this.ws = new WebSocket(wsUrl);
+      
+      this.ws.onopen = () => { 
+        console.log('WebSocket connection established.');
+        this.updateStatus({ connected: true, connecting: false, error: false });
+        // Reset reconnect attempts on successful connection
+        this.connectionStatus.reconnectAttempts = 0;
+      };
 
-    // Listen for responses from the backend
-    this.ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.chunk_id) {
-          console.log('Received response for chunk_id', data.chunk_id);
-          // Remove the pending chunk since we got the response.
-          this.pendingChunks.delete(data.chunk_id);
-          // Flush any queued chunks stored in cookies if there are none pending now.
-          if (this.pendingChunks.size === 0) {
-            this.flushCookieQueue();
+      // Listen for responses from the backend.
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          // If the backend returns a transcription, forward it via the callback.
+          if (data.transcription) {
+            if (this.onTranscription) {
+              this.onTranscription(data.transcription);
+            }
           }
+          if (data.chunk_id) {
+            console.log('Received response for chunk_id', data.chunk_id);
+            this.pendingChunks.delete(data.chunk_id);
+            if (this.pendingChunks.size === 0) {
+              this.flushCookieQueue();
+            }
+          }
+          // Handle authentication errors
+          if (data.error && data.error === 'authentication_failed') {
+            this.updateStatus({ 
+              error: true, 
+              connected: false, 
+              lastErrorMessage: 'Authentication failed. Please log in again.' 
+            });
+          }
+        } catch (e) {
+          console.error('Error parsing WebSocket message:', e);
+          this.updateStatus({ 
+            error: true, 
+            lastErrorMessage: 'Error processing server response' 
+          });
         }
-      } catch (e) {
-        console.error('Error parsing WebSocket message:', e);
-      }
-    };
+      };
 
-    this.ws.onerror = (error) => { console.error('WebSocket error:', error); };
-    this.ws.onclose = () => { console.log('WebSocket connection closed.'); };
+      this.ws.onerror = (error) => { 
+        console.error('WebSocket error:', error); 
+        this.updateStatus({ 
+          error: true, 
+          connected: false, 
+          lastErrorMessage: 'Connection error' 
+        });
+      };
+      
+      this.ws.onclose = (event) => { 
+        console.log('WebSocket connection closed.', event.code, event.reason);
+        
+        this.updateStatus({ 
+          connected: false, 
+          connecting: false 
+        });
+        
+        // Attempt to reconnect if not closed intentionally
+        if (event.code !== 1000 && event.code !== 1001) {
+          this.attemptReconnect();
+        }
+      };
+    } catch (error) {
+      console.error('Error establishing WebSocket connection:', error);
+      this.updateStatus({ 
+        error: true, 
+        connected: false, 
+        connecting: false,
+        lastErrorMessage: 'Failed to establish connection' 
+      });
+    }
+  }
+  
+  attemptReconnect() {
+    if (this.connectionStatus.reconnectAttempts < this.connectionStatus.maxReconnectAttempts) {
+      this.connectionStatus.reconnectAttempts++;
+      const delay = Math.pow(2, this.connectionStatus.reconnectAttempts) * 1000; // Exponential backoff
+      
+      console.log(`Attempting to reconnect in ${delay/1000} seconds (attempt ${this.connectionStatus.reconnectAttempts})`);
+      this.updateStatus({ 
+        connecting: false, 
+        lastErrorMessage: `Connection lost. Reconnecting in ${delay/1000} seconds...` 
+      });
+      
+      setTimeout(() => {
+        if (!this.connectionStatus.connected && !this.connectionStatus.connecting) {
+          this.connectWebSocket(this.ws.url.split('?')[0]); // Remove any query params
+        }
+      }, delay);
+    } else {
+      this.updateStatus({ 
+        error: true,
+        connecting: false,
+        lastErrorMessage: 'Failed to reconnect after multiple attempts. Please reload the page.' 
+      });
+    }
+  }
+
+  updateStatus(statusUpdate) {
+    this.connectionStatus = { ...this.connectionStatus, ...statusUpdate };
+    
+    if (this.onStatusChange) {
+      this.onStatusChange(this.connectionStatus);
+    }
+  }
+  
+  disconnectWebSocket() {
+    if (this.ws) {
+      this.ws.close(1000, "Disconnected by user");
+      this.updateStatus({ connected: false, connecting: false });
+    }
   }
 
   startReactivationLoop() {
@@ -199,16 +324,12 @@ export class AudioRecorderService {
     const minVal = Math.min(...this.dataArray);
     const maxVal = Math.max(...this.dataArray);
     const withinThreshold = (Math.abs(maxVal - center) < reducedThreshold &&
-                             Math.abs(minVal - center) < reducedThreshold);
+                           Math.abs(minVal - center) < reducedThreshold);
     if (withinThreshold) {
       this.conditionCounter++;
       const activationThreshold = this.sensitivity.activity * this.fps;
       if (this.conditionCounter >= activationThreshold && this.isActive) {
-        if (this.reactivationCount >= this.maxReactivations) {
-          this.forceSendChunk('max');
-        } else {
-          this.deactivateRecording();
-        }
+        this.forceSendChunk('max');
       }
     } else {
       if (!this.isActive && !this.chunkSent) {
@@ -235,14 +356,6 @@ export class AudioRecorderService {
     this.chunkSent = false;
   }
 
-  deactivateRecording() {
-    console.log('Deactivating recording (chunk end)');
-    this.isActive = false;
-    this.delayTimer = setTimeout(() => { this.startInactiveTimer(); }, this.delayDuration);
-    this.reactivationCount++;
-    this.chunkSent = false;
-  }
-
   forceSendChunk(reason) {
     console.log(`Force–sending chunk due to ${reason}`);
     this.sendRecordedAudio();
@@ -252,24 +365,21 @@ export class AudioRecorderService {
     this.isActive = false;
   }
 
-  startInactiveTimer() {
-    if (this.inactiveTimer) return;
-    this.inactiveTimer = setTimeout(() => {
-      this.sendRecordedAudio();
-      this.reactivationCount = 0;
-      this.chunkSent = true;
-      setTimeout(() => { this.chunkSent = false; }, this.chunkBeepDuration);
-      this.inactiveTimer = null;
-    }, this.delayDuration);
-  }
-
-  // Updated sendRecordedAudio() now adds a chunk_id and checks for pending responses.
+  // Updated sendRecordedAudio() sends the current recordedSamples via WebSocket.
   async sendRecordedAudio() {
     if (this.isSending) {
       console.log('Already sending audio, skipping.');
       return;
     }
-    // If there are pending chunk responses, queue this chunk in the cookie
+    
+    if (!this.connectionStatus.connected) {
+      this.updateStatus({ 
+        error: true, 
+        lastErrorMessage: 'Cannot send audio: WebSocket not connected' 
+      });
+      return;
+    }
+    
     if (this.pendingChunks.size > 0) {
       console.log('Previous chunk(s) still pending; queuing new chunk in cookie.');
       if (this.recordedSamples.length) {
@@ -282,24 +392,36 @@ export class AudioRecorderService {
       }
       return;
     }
-
+    
     if (this.recordedSamples.length) {
       this.isSending = true;
       try {
         const float32Array = new Float32Array(this.recordedSamples);
         const base64Audio = arrayBufferToBase64(float32Array.buffer);
         const payload = { chunk_id: this.chunkNumber, audio: base64Audio };
-        console.log('Sending chunk', this.chunkNumber, payload);
+        
+        // Get JWT token from cookies and add to payload if available
+        const token = this.getCookie('auth_token');
+        if (token) {
+          payload.token = token;
+        }
+        
+        console.log('Sending chunk', this.chunkNumber);
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify(payload));
           console.log('Chunk sent over WebSocket.');
-          // Mark this chunk as pending a response.
           this.pendingChunks.add(this.chunkNumber);
         } else {
-          console.error('WebSocket is not connected.');
+          const errorMsg = 'WebSocket is not connected.';
+          console.error(errorMsg);
+          this.updateStatus({ error: true, lastErrorMessage: errorMsg });
         }
       } catch (error) {
         console.error('Error sending recorded audio:', error);
+        this.updateStatus({ 
+          error: true, 
+          lastErrorMessage: 'Failed to send audio data' 
+        });
       } finally {
         this.chunkNumber++;
         this.isSending = false;
@@ -331,22 +453,34 @@ export class AudioRecorderService {
       try {
         const queue = JSON.parse(existing);
         if (queue.length > 0) {
+          // Get JWT token from cookies
+          const token = this.getCookie('auth_token');
+          
           for (let payload of queue) {
+            // Add token to each payload if available
+            if (token) {
+              payload.token = token;
+            }
+            
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
               this.ws.send(JSON.stringify(payload));
               console.log('Flushed queued chunk: chunk_id', payload.chunk_id);
-              // Mark the flushed chunk as pending.
               this.pendingChunks.add(payload.chunk_id);
             } else {
-              console.error('WebSocket is not connected. Cannot flush cookie queue.');
+              const errorMsg = 'WebSocket is not connected. Cannot flush cookie queue.';
+              console.error(errorMsg);
+              this.updateStatus({ error: true, lastErrorMessage: errorMsg });
               break;
             }
           }
-          // Once flushed, clear the cookie.
           this.deleteCookie(cookieName);
         }
       } catch (e) {
         console.error('Error parsing chunk queue cookie:', e);
+        this.updateStatus({ 
+          error: true, 
+          lastErrorMessage: 'Error processing queued audio chunks' 
+        });
       }
     }
   }
