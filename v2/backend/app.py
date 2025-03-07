@@ -22,7 +22,8 @@ import numpy as np
 import torch
 import torchaudio
 
-from diart_pipeline import OnlinePipeline, OnlinePipelineConfig, LD_LIBRARY_PATH, transcription_to_rttm
+from pipeline import OnlinePipeline, OnlinePipelineConfig, LD_LIBRARY_PATH
+from pipeline.utils import transcription_to_rttm
 from ollama_pipeline import MinutesPipeline
 from utils import EnhancedJSONEncoder
 
@@ -76,15 +77,14 @@ class SpeechManager:
         
         # Audio storage settings
         self.sample_rate = 44100  # Default sample rate
+        
         self.transcribe_duration = 2
         self.time_since_transcribe = 0
+        self.save_duration = 60
+        self.time_since_save = 0
+        
         self.output_dir = Path("recorded_audio")
         self.output_dir.mkdir(exist_ok=True)
-        
-        self.transform = torchaudio.transforms.Resample(
-            orig_freq = self.sample_rate,
-            new_freq = self.pipeline.pipeline.config.sample_rate
-        )
         
         # Create test_output directory for segment saving
         self.segments_dir = Path("test_output")
@@ -142,6 +142,7 @@ class SpeechManager:
             # waveform is processed as in the original code...
             increment_duration = waveform.shape[0]
             self.time_since_transcribe += increment_duration
+            self.time_since_save += increment_duration
             
             waveform = np.expand_dims(waveform, 1)
             self.pipeline(waveform, self.sample_rate)
@@ -149,7 +150,12 @@ class SpeechManager:
             if self.time_since_transcribe > self.transcribe_duration * self.sample_rate:
                 self.pipeline.transcribe()
                 self.time_since_transcribe = 0
-                torchaudio.save(f"recorded_audio/save_{time.time()}.wav", torch.from_numpy(self.pipeline.waveform).permute(1, 0), self.pipeline.pipeline.config.sample_rate)
+
+            if self.time_since_save > self.save_duration * self.sample_rate:
+                pipeline_sample_rate = self.pipeline.get_pipeline().config.sample_rate
+                pipeline_waveform = torch.from_numpy(self.pipeline.waveform).permute(1, 0)
+                torchaudio.save(f"recorded_audio/save_{time.time()}.wav", pipeline_waveform, pipeline_sample_rate)
+                self.time_since_save = 0
                 
             output_segments = self.get_output_segments()
             
@@ -536,7 +542,7 @@ async def get_segment_audio(segment_id: str, background_tasks: BackgroundTasks):
             )
         
         # Extract timing information
-        sample_rate = speech_parser.pipeline.pipeline.config.sample_rate
+        sample_rate = speech_parser.pipeline.get_pipeline().config.sample_rate
         start_idx = int(target_segment.segment.start * sample_rate)
         end_idx = int(target_segment.segment.end * sample_rate)
         
