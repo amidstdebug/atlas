@@ -9,9 +9,10 @@ sleep 10
 echo "Creating the llm model..."
 # Create the model
 # ollama create atlas_llm -f ./ollama_serve/Modelfile_atlas
-# ollama run qwen2.5
-ollama pull llama3.1
-ollama run llama3.1
+ollama pull qwen2.5
+ollama run qwen2.5
+# ollama pull llama3.1
+# ollama run llama3.1
 
 # Wait for background jobs (i.e., ollama serve) to keep the container alive
 wait
