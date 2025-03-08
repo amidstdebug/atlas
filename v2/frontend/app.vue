@@ -2,8 +2,38 @@
     <div class="font-[Inter] text-white bg-stone-950 h-screen w-screen flex flex-row items-center justify-center gap-4">
         <div class="flex flex-row gap-4 relative">
             <div class="flex flex-col gap-4">
-                <div class="flex flex-col items-center justify-center border-2 border-stone-800 bg-black p-6 rounded-2xl">
-                    <AudioLiveRecorder />
+                <div class="flex flex-col items-center justify-center border-2 border-stone-800 bg-black p-6 rounded-2xl min-w-80">
+                    <!-- iOS Style Toggle -->
+                    <div class="relative h-10 w-40 bg-stone-900 rounded-full p-1">
+                        <!-- Moving Pill -->
+                        <div
+                            class="absolute top-1 h-8 bg-stone-800 rounded-full transition-all duration-300 ease-in-out"
+                            :style="{
+                                left: selectedComponent === 'recorder' ? '4px' : '50%',
+                                width: 'calc(50% - 4px)',
+                            }"
+                        ></div>
+                        <!-- Option Buttons -->
+                        <div class="relative flex h-full">
+                            <button
+                                @click="selectedComponent = 'recorder'"
+                                class="flex-1 z-10 text-sm font-medium rounded-full flex items-center justify-center transition-colors duration-300"
+                                :class="selectedComponent === 'recorder' ? 'text-white' : 'text-stone-400'"
+                            >
+                                Live
+                            </button>
+                            <button
+                                @click="selectedComponent = 'upload'"
+                                class="flex-1 z-10 text-sm font-medium rounded-full flex items-center justify-center transition-colors duration-300"
+                                :class="selectedComponent === 'upload' ? 'text-white' : 'text-stone-400'"
+                            >
+                                Upload
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Render component based on selection -->
+                    <AudioLiveRecorder v-if="selectedComponent === 'recorder'" />
+                    <AudioUpload v-if="selectedComponent === 'upload'" />
                 </div>
                 <!-- Transcription/Diarization Area -->
                 <div class="border-2 border-stone-800 bg-black px-6 pt-6 pb-2 rounded-2xl" v-if="segments.length > 0">
@@ -24,13 +54,15 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { useConfig } from "~/composables/useConfig";
 import { useAudioStream } from "~/composables/useAudioStream";
 
 const { baseUrl } = useConfig();
-
 const { segments } = useAudioStream();
+
+// State for selected component
+const selectedComponent = ref("upload"); // Default to upload
 
 // Function to download RTTM file
 const downloadRTTM = () => {

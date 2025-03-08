@@ -1,10 +1,10 @@
 <template>
     <div class="flex flex-col items-center justify-center">
-        <!-- Connection status -->
+        <!-- Debug status -->
         <div v-if="error" class="text-red-500 text-xs">{{ error }}</div>
 
-        <!-- Debug status -->
-        <div class="text-xs text-gray-400">WebSocket: {{ isConnected ? "Connected" : "Disconnected" }}</div>
+        <!-- Connection status -->
+        <!-- <div class="text-xs text-gray-400">WebSocket: {{ isConnected ? "Connected" : "Disconnected" }}</div> -->
 
         <!-- Waveform container -->
         <div class="h-24 flex items-center justify-center gap-1">
@@ -30,7 +30,8 @@
                 @click="toggleRecording"
                 class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
                 :class="{
-                    'bg-red-500 hover:bg-red-600': isRecording,
+                    'bg-emerald-600 hover:bg-green-700': isRecording && isConnected,
+                    'bg-red-500 hover:bg-red-600': isRecording && !isConnected,
                     'bg-white/5 cursor-not-allowed': isProcessingReannote,
                     'bg-white/10 hover:bg-white/20': !isRecording && !isProcessingReannote,
                 }"
@@ -88,6 +89,5 @@ onUnmounted(() => {
     console.log("Component unmounting...");
     stopRecording();
     disconnect();
-    cleanupMinutes();
 });
 </script>
