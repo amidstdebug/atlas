@@ -16,11 +16,13 @@
             ></div>
         </div>
 
-        <div class="flex flex-row justify-center items-center gap-2">
+        <div class="grid grid-cols-5 h-10 gap-2">
+            <div></div>
             <!-- Reset button -->
             <button
                 @click="resetRecording"
                 class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center bg-white/10 hover:bg-white/20"
+                title="Clear recording and transcript"
             >
                 <Icon name="tabler:trash-x-filled" class="h-4 w-4" />
             </button>
@@ -36,6 +38,7 @@
                     'bg-white/10 hover:bg-white/20': !isRecording && !isProcessingReannote,
                 }"
                 :disabled="isProcessingReannote"
+                title="Start/stop recording"
             >
                 <Icon name="tabler:microphone-filled" class="h-4 w-4" />
             </button>
@@ -50,8 +53,17 @@
                     'bg-white/10 hover:bg-white/20': !isRecording && !isProcessingReannote,
                 }"
                 :disabled="isProcessingReannote || isRecording"
+                title="Reannotate & transcribe"
             >
                 <Icon name="tabler:reload" class="h-4 w-4" />
+            </button>
+
+            <!-- Download recording button -->
+            <button
+                class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center bg-white/10 hover:bg-white/20"
+                title="Download recording"
+            >
+                <Icon name="tabler:download" class="h-4 w-4" />
             </button>
         </div>
     </div>

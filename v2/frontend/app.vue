@@ -2,7 +2,7 @@
     <div class="font-[Inter] text-white bg-stone-950 h-screen w-screen flex flex-row items-center justify-center gap-4">
         <div class="flex flex-row gap-4 relative">
             <div class="flex flex-col gap-4">
-                <div class="flex flex-col items-center justify-center border-2 border-stone-800 bg-black p-6 rounded-2xl min-w-80">
+                <div class="flex flex-col items-center justify-center border-2 border-stone-800 bg-black p-4 rounded-2xl min-w-80">
                     <!-- iOS Style Toggle -->
                     <div class="relative h-10 w-40 bg-stone-900 rounded-full p-1">
                         <!-- Moving Pill -->
@@ -36,9 +36,9 @@
                     <AudioUpload v-if="selectedComponent === 'upload'" />
                 </div>
                 <!-- Transcription/Diarization Area -->
-                <div class="border-2 border-stone-800 bg-black px-6 pt-6 pb-2 rounded-2xl" v-if="segments.length > 0">
+                <div class="border-2 border-stone-800 bg-black p-4 rounded-2xl" v-if="segments.length > 0">
                     <TranscriptBox :segments="segments" class="max-h-60 min-w-64 max-w-2xl pe-4" />
-                    <div class="flex flex-row items-center justify-center mt-2">
+                    <div class="flex flex-row items-center justify-center mt-4">
                         <button
                             v-if="segments.length > 5"
                             @click="downloadRTTM"
