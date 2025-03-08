@@ -1,0 +1,93 @@
+<template>
+    <div class="flex flex-col items-center justify-center">
+        <!-- Connection status -->
+        <div v-if="error" class="text-red-500 text-xs">{{ error }}</div>
+
+        <!-- Debug status -->
+        <div class="text-xs text-gray-400">WebSocket: {{ isConnected ? "Connected" : "Disconnected" }}</div>
+
+        <!-- Waveform container -->
+        <div class="h-24 flex items-center justify-center gap-1">
+            <div
+                v-for="(bar, index) in waveformBars"
+                :key="index"
+                class="w-1 bg-white rounded-full transition-all duration-150"
+                :style="{ height: `${bar}px` }"
+            ></div>
+        </div>
+
+        <div class="flex flex-row justify-center items-center gap-2">
+            <!-- Reset button -->
+            <button
+                @click="resetRecording"
+                class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center bg-white/10 hover:bg-white/20"
+            >
+                <Icon name="tabler:trash-x-filled" class="h-4 w-4" />
+            </button>
+
+            <!-- Microphone button -->
+            <button
+                @click="toggleRecording"
+                class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
+                :class="{
+                    'bg-red-500 hover:bg-red-600': isRecording,
+                    'bg-white/5 cursor-not-allowed': isProcessingReannote,
+                    'bg-white/10 hover:bg-white/20': !isRecording && !isProcessingReannote,
+                }"
+                :disabled="isProcessingReannote"
+            >
+                <Icon name="tabler:microphone-filled" class="h-4 w-4" />
+            </button>
+
+            <!-- Redo Annotation button -->
+            <button
+                @click="redoAnnotation"
+                class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center"
+                :class="{
+                    'animate-spin': isProcessingReannote,
+                    'bg-white/5 cursor-not-allowed': isRecording || isProcessingReannote,
+                    'bg-white/10 hover:bg-white/20': !isRecording && !isProcessingReannote,
+                }"
+                :disabled="isProcessingReannote || isRecording"
+            >
+                <Icon name="tabler:reload" class="h-4 w-4" />
+            </button>
+        </div>
+    </div>
+</template>
+
+<script setup>
+import { useAudioStream } from "~/composables/useAudioStream";
+import { useAudioProcessor } from "~/composables/useAudioProcessor";
+import { useRecording } from "~/composables/useRecording";
+
+const { isConnected, segments, error, connect, sendAudioChunk, disconnect } = useAudioStream();
+const { resetRecording, redoAnnotation, isProcessingReannote } = useRecording();
+const { isRecording, waveformBars, startRecording, stopRecording } = useAudioProcessor((chunk) => {
+    if (isConnected.value) {
+        sendAudioChunk(chunk);
+    }
+});
+
+const toggleRecording = async () => {
+    console.log("Toggle recording, current state:", isRecording.value);
+
+    if (!isRecording.value) {
+        console.log("Starting recording flow...");
+        connect();
+        await startRecording();
+    } else {
+        console.log("Stopping recording flow...");
+        stopRecording();
+        disconnect();
+    }
+};
+
+// Clean up
+onUnmounted(() => {
+    console.log("Component unmounting...");
+    stopRecording();
+    disconnect();
+    cleanupMinutes();
+});
+</script>
