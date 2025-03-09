@@ -314,19 +314,98 @@ async def get_segments():
             status_code=500,
             content={"status": "error", "message": f"Failed to get segments: {str(e)}"}
         )
+        def create_audio_file(waveform, sample_rate, filename_prefix, file_description=""):
+            """
+            Helper function to create a temporary audio file from a waveform.
+
+            Parameters:
+            - waveform: Numpy array containing audio data
+            - sample_rate: Sample rate of the audio
+            - filename_prefix: Prefix for the temp filename
+            - file_description: Description for logging
+
+            Returns:
+            - Path to the created temp file
+            - Error message if any
+            """
+            try:
+                # Convert numpy array to torch tensor for torchaudio
+                waveform_tensor = torch.from_numpy(waveform).permute(1, 0)  # Reshape to [channels, samples]
+
+                # Create a temporary file
+                temp_dir = Path("temp_audio")
+                temp_dir.mkdir(exist_ok=True)
+
+                timestamp = int(time.time())
+                temp_filename = f"{filename_prefix}_{speech_parser.session_id}_{timestamp}.wav"
+                temp_path = temp_dir / temp_filename
+
+                # Save the audio to the file
+                torchaudio.save(str(temp_path), waveform_tensor, sample_rate)
+
+                # Log file creation
+                duration = len(waveform) / sample_rate
+                logger.info(f"Created {file_description} audio file at {temp_path} ({duration:.2f}s)")
+
+                return temp_path, None
+            except Exception as e:
+                error_msg = f"Error creating audio file: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                return None, error_msg
+
+def create_audio_file(waveform, sample_rate, filename_prefix, file_description=""):
+    """
+    Helper function to create a temporary audio file from a waveform.
+
+    Parameters:
+    - waveform: Numpy array containing audio data
+    - sample_rate: Sample rate of the audio
+    - filename_prefix: Prefix for the temp filename
+    - file_description: Description for logging
+
+    Returns:
+    - Path to the created temp file
+    - Error message if any
+    """
+    try:
+        # Convert numpy array to torch tensor for torchaudio
+        waveform_tensor = torch.from_numpy(waveform).permute(1, 0)  # Reshape to [channels, samples]
+
+        # Create a temporary file
+        temp_dir = Path("temp_audio")
+        temp_dir.mkdir(exist_ok=True)
+
+        timestamp = int(time.time())
+        temp_filename = f"{filename_prefix}_{speech_parser.session_id}_{timestamp}.wav"
+        temp_path = temp_dir / temp_filename
+
+        # Save the audio to the file
+        torchaudio.save(str(temp_path), waveform_tensor, sample_rate)
+
+        # Log file creation
+        duration = len(waveform) / sample_rate
+        logger.info(f"Created {file_description} audio file at {temp_path} ({duration:.2f}s)")
+
+        return temp_path, None
+    except Exception as e:
+        error_msg = f"Error creating audio file: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return None, error_msg
+
+def cleanup_temp_file(temp_path, delay=2):
+    """Background task to clean up temporary files after they're served."""
+    try:
+        # Add a delay to ensure the file is fully sent before deletion
+        time.sleep(delay)
+        if temp_path.exists():
+            temp_path.unlink()
+            logger.info(f"Cleaned up temporary file: {temp_path}")
+    except Exception as e:
+        logger.error(f"Error cleaning up temp file {temp_path}: {e}")
 
 @app.get("/segments/{segment_id}/audio")
 async def get_segment_audio(segment_id: str, background_tasks: BackgroundTasks):
-    """
-    Return the audio waveform for a specific transcription segment by ID.
-
-    Parameters:
-    - segment_id: The unique identifier of the transcription segment
-    - background_tasks: FastAPI background tasks handler (injected automatically)
-
-    Returns:
-    - Audio file in WAV format
-    """
+    """Return the audio waveform for a specific transcription segment by ID."""
     temp_path = None
     try:
         # Find the segment with the matching ID
@@ -338,6 +417,12 @@ async def get_segment_audio(segment_id: str, background_tasks: BackgroundTasks):
             if transcript.id == segment_id:
                 target_segment = transcript
                 break
+
+        if speech_parser.pipeline.waveform is None or len(speech_parser.pipeline.waveform) == 0:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": "No audio data available"}
+            )
 
         if not target_segment:
             return JSONResponse(
@@ -357,39 +442,22 @@ async def get_segment_audio(segment_id: str, background_tasks: BackgroundTasks):
         # Extract the segment waveform
         segment_waveform = speech_parser.pipeline.waveform[start_idx:end_idx]
 
-        # Convert numpy array to torch tensor for torchaudio
-        segment_tensor = torch.from_numpy(segment_waveform).permute(1, 0)  # Reshape to [channels, samples]
+        # Create the audio file
+        temp_path, error = create_audio_file(
+            segment_waveform,
+            sample_rate,
+            f"segment_{segment_id}",
+            f"segment {segment_id}"
+        )
 
-        # Create a temporary file with a more robust approach
-        temp_dir = Path("temp_audio")
-        temp_dir.mkdir(exist_ok=True)
+        if error:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": error}
+            )
 
-        temp_filename = f"segment_{segment_id}_{int(time.time())}.wav"
-        temp_path = temp_dir / temp_filename
-
-        # Save the audio segment to the file
-        torchaudio.save(str(temp_path), segment_tensor, sample_rate)
-
-        # Ensure the file exists before returning
-        if not temp_path.exists():
-            raise FileNotFoundError(f"Failed to create audio file at {temp_path}")
-
-        # Log file creation
-        logger.info(f"Created audio file for segment {segment_id} at {temp_path}")
-
-        # Define a proper cleanup function for the background task
-        def cleanup_temp_file():
-            try:
-                # Add a slight delay to ensure the file is fully sent before deletion
-                time.sleep(2)
-                if temp_path.exists():
-                    temp_path.unlink()
-                    logger.info(f"Cleaned up temporary file: {temp_path}")
-            except Exception as e:
-                logger.error(f"Error cleaning up temp file {temp_path}: {e}")
-
-        # Add the cleanup function to background tasks
-        background_tasks.add_task(cleanup_temp_file)
+        # Add cleanup task
+        background_tasks.add_task(cleanup_temp_file, temp_path)
 
         # Return the WAV file
         return FileResponse(
@@ -410,6 +478,62 @@ async def get_segment_audio(segment_id: str, background_tasks: BackgroundTasks):
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": f"Failed to extract segment audio: {str(e)}"}
+        )
+
+@app.get("/download/audio")
+async def download_full_audio(background_tasks: BackgroundTasks):
+    """Download the full audio waveform as a WAV file."""
+    temp_path = None
+    try:
+        # Check if we have any audio data
+        if speech_parser.pipeline.waveform is None or len(speech_parser.pipeline.waveform) == 0:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": "No audio data available"}
+            )
+
+        # Get the pipeline sample rate
+        sample_rate = speech_parser.pipeline.get_pipeline().config.sample_rate
+
+        # Get the full waveform
+        full_waveform = speech_parser.pipeline.waveform
+
+        # Create the audio file
+        temp_path, error = create_audio_file(
+            full_waveform,
+            sample_rate,
+            "full_recording",
+            "full recording"
+        )
+
+        if error:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": error}
+            )
+
+        # Add cleanup task with longer delay for potentially larger files
+        background_tasks.add_task(cleanup_temp_file, temp_path, delay=5)
+
+        # Return the WAV file
+        return FileResponse(
+            path=str(temp_path),
+            media_type="audio/wav",
+            filename=f"recording_{speech_parser.session_id}.wav"
+        )
+
+    except Exception as e:
+        logger.error(f"Error creating full audio file: {e}", exc_info=True)
+        # Clean up temp file if it exists
+        if temp_path and Path(temp_path).exists():
+            try:
+                Path(temp_path).unlink()
+            except Exception:
+                pass
+
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to create audio file: {str(e)}"}
         )
 
 if __name__ == "__main__":
