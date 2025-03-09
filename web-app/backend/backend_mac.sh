@@ -16,19 +16,19 @@ kill_process_on_port() {
 echo "Bringing down any running containers (if any)..."
 docker compose -f docker-compose-mac.yml down
 
-echo "Attempting to free ports 5001 and 11434..."
-kill_process_on_port 5001
+echo "Attempting to free ports 5002 and 11434..."
+kill_process_on_port 5002
 kill_process_on_port 11434
 
 echo "Waiting a few seconds for the ports to be released..."
 sleep 3
 
-# Check if port 5001 is still in use (for the new host port)
-if lsof -ti tcp:5001 >/dev/null; then
-    echo "Error: Port 5001 is still in use. Please free it manually and try again."
+# Check if port 5002 is still in use (for the new host port)
+if lsof -ti tcp:5002 >/dev/null; then
+    echo "Error: Port 5002 is still in use. Please free it manually and try again."
     exit 1
 else
-    echo "Port 5001 is free."
+    echo "Port 5002 is free."
 fi
 
 echo "Building Docker images using docker-compose-mac.yml..."

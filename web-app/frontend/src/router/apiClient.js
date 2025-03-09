@@ -4,7 +4,7 @@ import router from './router'; // Assuming you have your router setup
 
 // Create an Axios instance
 const apiClient = axios.create({
-  baseURL: 'http://localhost:5001/', // Your API base URL
+  baseURL: 'http://localhost:5002/', // Your API base URL
 //   baseURL: 'https://jwong.dev/api/'
 });
 
@@ -21,7 +21,7 @@ export async function login(userId, password) {
       apiClient.defaults.headers['Authorization'] = `Bearer ${response.data.token}`;
       return { success: true };
     } else {
-      return { 
+      return {
         success: false, 
         error: 'Invalid response from server' 
       };

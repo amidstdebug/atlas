@@ -26,8 +26,8 @@ COPY server/misc/startup.wav /usr/src/app/misc/
 # Create a directory for downloaded models
 RUN mkdir -p /usr/src/app/models
 
-# Expose port 5001
-EXPOSE 5001
+# Expose port 5002
+EXPOSE 5002
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -38,4 +38,4 @@ ENV JWT_ALGORITHM=HS256
 ENV OLLAMA_MODEL=qwen2.5
 
 # Command to run the FastAPI server
-CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "5001", "--reload"]
+CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "5002", "--reload"]

@@ -8,7 +8,7 @@ services:
       - ./server:/usr/src/app/server  # mount server code for hot reload
       - ./ollama_server:/usr/src/app/ollama_serve  # mount ollama model files
     ports:
-      - "5001:5001"  # Main API and WebSocket port
+      - "5002:5002"  # Main API and WebSocket port
     env_file:
       - .env
     environment:
@@ -16,6 +16,7 @@ services:
     depends_on:
       - audio_server
       - ollama
+    
       
   audio_server:
     platform: linux/amd64
@@ -38,7 +39,6 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
-
   ollama:
     image: ollama/ollama
     container_name: ollama

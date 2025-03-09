@@ -13,27 +13,27 @@
             </template>
 
             <div class="transcription-box" ref="transcriptionBox">
-                <div v-if="parsedSegments.length > 0" class="transcription-content">
-                    <div 
-                    v-for="(segment, index) in parsedSegments" 
-                    :key="index" 
-                    class="segment"
-                    >
-                        <!-- Use the "start" property for the timestamp -->
-                        <span class="segment-timestamp">
-                            {{ formatTimestamp(segment.start) }}
-                        </span>
-                        
-                        <!-- Display the main text -->
-                        <span class="segment-text">
-                            {{ segment.text }}
-                        </span>
-                    </div>
+              <!-- Use parsedSegments to loop over each actual text segment -->
+              <div v-if="parsedSegments.length > 0" class="transcription-content">
+                <div 
+                  v-for="(segment, index) in parsedSegments" 
+                  :key="index" 
+                  class="segment"
+                >
+                  <!-- Timestamp -->
+                  <span class="segment-timestamp">
+                    {{ formatTimestamp(segment.start) }}
+                  </span>
+                  <!-- Text -->
+                  <span class="segment-text">
+                    {{ segment.text }}
+                  </span>
                 </div>
-                <!-- Otherwise, show placeholder text -->
-                <div v-else class="initial-text">
-                    <p>Upload recording or record audio to transcribe.</p>
-                </div>
+              </div>
+              <!-- Otherwise, show placeholder text -->
+              <div v-else class="initial-text">
+                <p>Upload recording or record audio to transcribe.</p>
+              </div>
             </div>
           </el-card>
         </el-col>
@@ -128,6 +128,14 @@
           Generate Summary
         </el-button>
 
+        <!-- Toggle Auto Summary Button -->
+        <el-button
+          class="centered-button same-width-button"
+          @click="toggleAutoSummary"
+        >
+          {{ autoSummaryEnabled ? 'Disable Auto Summary' : 'Enable Auto Summary' }}
+        </el-button>
+
         <!-- Clear Transcript Button -->
         <el-button
           class="centered-button same-width-button"
@@ -148,7 +156,7 @@
     </el-main>
   </el-container>
 </template>
-
+    
 <script>
 import apiClient, { getLoadingStatus } from '@/router/apiClient';
 import {
@@ -235,39 +243,30 @@ export default {
       liveTranscription: {
         segments: []
       },
-      apiStatus: getLoadingStatus()
+      cumulativeOffset: 0, // track audio offset for live recording segments
+      apiStatus: getLoadingStatus(),
+      // New properties for automatic summary generation
+      autoSummaryEnabled: false,
+      autoSummaryInterval: null,
+      previousSummaryLength: 0  
     };
   },
   computed: {
-    parsedSegments() {
-        // If your current data always puts the real JSON in the FIRST segment’s "transcription"
-        const segments = this.transcriptionSegments;
-        if (!segments.length) return [];
-
-        const firstItem = segments[0];
-        if (!firstItem || !firstItem.transcription) return [];
-
-        try {
-        // Attempt to parse the JSON string
-            const parsed = JSON.parse(firstItem.transcription);
-
-            // If "parsed.segments" is the real data, return that array
-            if (parsed.segments && Array.isArray(parsed.segments)) {
-                return parsed.segments;
-            }
-        } catch (err) {
-            console.error("Could not parse JSON in first transcription:", err);
-        }
-
-        // If something fails, return an empty array
-        return [];
-    },
+    /**
+     * Returns whichever segments are in “liveTranscription” or “transcription” prop
+     */
     transcriptionSegments() {
-      if (this.liveTranscription && Array.isArray(this.liveTranscription.segments)) {
+      if (
+        this.liveTranscription &&
+        Array.isArray(this.liveTranscription.segments)
+      ) {
         return this.liveTranscription.segments;
       }
-      // Fallback: if transcription prop is a JSON string/object with segments.
-      if (this.transcription && typeof this.transcription === 'object' && Array.isArray(this.transcription.segments)) {
+      if (
+        this.transcription &&
+        typeof this.transcription === 'object' &&
+        Array.isArray(this.transcription.segments)
+      ) {
         return this.transcription.segments;
       }
       if (typeof this.transcription === 'string') {
@@ -282,17 +281,103 @@ export default {
       }
       return [];
     },
+
+    /**
+     * Parses the actual text segments out of the transcription segments.
+     */
+    parsedSegments() {
+      if (!this.transcriptionSegments.length) return [];
+
+      const allSegments = [];
+      for (const item of this.transcriptionSegments) {
+        if (!item.transcription) continue;
+        try {
+          const parsed = JSON.parse(item.transcription);
+          if (parsed.segments && Array.isArray(parsed.segments)) {
+            allSegments.push(...parsed.segments);
+          }
+        } catch (err) {
+          console.error("Could not parse JSON from transcription item:", err);
+        }
+      }
+      return allSegments;
+    },
+
+    /**
+     * Joins all chunked transcriptions for the “Generate Summary” request.
+     */
     aggregatedTranscription() {
-      return this.transcriptionSegments.map(segment => segment.transcription).join("\n");
+      return this.transcriptionSegments
+        .map(segment => segment.transcription)
+        .join("\n");
     },
   },
   methods: {
-    formatTimestamp(seconds) {
-        if (typeof seconds !== 'number' || isNaN(seconds)) return '';
-        const m = Math.floor(seconds / 60);
-        const s = Math.floor(seconds % 60);
-        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    async startMicRecording() {
+      if (!this.audioRecorder) {
+        this.audioRecorder = new AudioRecorderService({
+          apiUrl: "http://localhost:5002" // adjust as needed
+        });
+
+        // Handle partial transcripts from the server
+        this.audioRecorder.onTranscription = (rawString) => {
+          try {
+            const parsedData = JSON.parse(rawString);
+            let segments = [];
+
+            if (Array.isArray(parsedData)) {
+              segments = parsedData;
+            } else if (parsedData.segments && Array.isArray(parsedData.segments)) {
+              segments = parsedData.segments;
+            } else if (parsedData.text) {
+              segments = [{
+                start: 0,
+                end: 1.5,
+                text: parsedData.text
+              }];
+            } else {
+              console.error("Invalid transcription format:", parsedData);
+              return;
+            }
+
+            segments = segments.map(seg => ({
+              ...seg,
+              start: seg.start + this.cumulativeOffset,
+              end: seg.end + this.cumulativeOffset
+            }));
+
+            if (segments.length > 0) {
+              this.cumulativeOffset = segments[segments.length - 1].end;
+            }
+
+            this.liveTranscription.segments.push({
+              speaker: 0,
+              transcription: JSON.stringify({ segments })
+            });
+          } catch (error) {
+            console.error("Error parsing server transcription chunk:", error);
+          }
+        };
+      }
+      this.isRecording = true;
+      await this.audioRecorder.startRecording();
     },
+
+    async stopMicRecording() {
+      await this.audioRecorder.stopRecording();
+      if (this.audioRecorder.audioStream) {
+        this.audioRecorder.audioStream.getTracks().forEach(track => track.stop());
+      }
+      this.isRecording = false;
+    },
+
+    formatTimestamp(seconds) {
+      if (typeof seconds !== 'number' || isNaN(seconds)) return '';
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    },
+
     handleActiveTabChange(newTab) {
       this.cancelTypingFunctions.forEach(cancelFn => cancelFn());
       this.cancelTypingFunctions = [];
@@ -303,7 +388,7 @@ export default {
           const dataKey = mapping.dataKey;
           this[dataKey] = '';
           return {
-            text: text,
+            text,
             typingSpeed: this.typingSpeed,
             onUpdate: (currentText) => {
               this[dataKey] = currentText;
@@ -316,92 +401,125 @@ export default {
         console.warn(`No configuration found for activeTab: ${newTab}`);
       }
     },
-    // Trigger file upload by clicking the hidden file input.
+
     uploadRecording() {
       this.$refs.audioFileInput.click();
     },
-    // File upload using HTTP POST to /transcribe.
+
     async handleFileUpload(event) {
       const file = event.target.files[0];
-      if (file) {
-        const formData = new FormData();
-        formData.append('file', file);
-        try {
-          const loadingInstance = ElLoading.service({
-            fullscreen: true,
-            text: 'Uploading and transcribing...'
-          });
-          
-          const response = await apiClient.post('transcribe', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data'
-            }
-          });
-          
-          // Assume response.data.transcription contains the transcription details.
-          this.addTranscription(response.data.transcription);
-          ElMessage.success('Transcription completed successfully');
-        } catch (error) {
-          console.error('Error uploading file:', error);
-          ElMessage.error('Failed to transcribe file');
-        } finally {
-          ElLoading.service().close();
-        }
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      let loadingInstance;
+      try {
+        loadingInstance = ElLoading.service({
+          fullscreen: true,
+          text: 'Uploading and transcribing...'
+        });
+        
+        const response = await apiClient.post('transcribe', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        this.addTranscription(response.data.transcription);
+        ElMessage.success('Transcription completed successfully');
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        ElMessage.error('Failed to transcribe file');
+      } finally {
+        if (loadingInstance) loadingInstance.close();
       }
     },
+
+    addTranscription(newText) {
+        // When receiving transcription data (e.g. from a file upload)
+        if (newText && newText.segments) {
+            // Use the segments from the file upload.
+            const segments = newText.segments;
+            // Update the cumulative offset from the last segment's end if it is greater.
+            if (segments.length > 0) {
+            const lastSegment = segments[segments.length - 1];
+            if (typeof lastSegment.end === 'number' && lastSegment.end > this.cumulativeOffset) {
+                this.cumulativeOffset = lastSegment.end;
+            }
+            }
+            // Append the file transcription as a single chunk (JSON-stringified) into liveTranscription.
+            this.liveTranscription.segments.push({
+            speaker: 0,
+            transcription: JSON.stringify({ segments })
+            });
+        } else if (typeof newText === 'string') {
+            try {
+            // Attempt to parse the string
+            const parsed = JSON.parse(newText);
+            if (parsed.segments && parsed.segments.length > 0) {
+                const lastSegment = parsed.segments[parsed.segments.length - 1];
+                if (typeof lastSegment.end === 'number' && lastSegment.end > this.cumulativeOffset) {
+                this.cumulativeOffset = lastSegment.end;
+                }
+            }
+            this.liveTranscription.segments.push({
+                speaker: 0,
+                transcription: newText
+            });
+            } catch (e) {
+            // If the string cannot be parsed, just push it as is.
+            this.liveTranscription.segments.push({
+                speaker: 0,
+                transcription: newText
+            });
+            }
+        }
+    },
+
     clearTranscription() {
       this.$emit('transcription-cleared');
       this.summaries = [];
       this.$refs.audioFileInput.value = '';
       this.isTranscribing = false;
-      // Clear live transcription
       this.liveTranscription.segments = [];
+      this.cumulativeOffset = 0;
     },
-    async stopMicRecording() {
-      await this.audioRecorder.stopRecording();
-      if (this.audioRecorder.audioStream) {
-        this.audioRecorder.audioStream.getTracks().forEach(track => track.stop());
-      }
-      this.isRecording = false;
-    },
-    // Button handler to generate summary via HTTP POST /summary.
+
     async generateSummary() {
       if (!this.aggregatedTranscription.trim()) {
         ElMessage.warning("No transcription to summarize.");
         return;
       }
+
+      let loadingInstance;
       try {
-        const loadingInstance = ElLoading.service({
-          fullscreen: true,
-          text: 'Generating summary...'
-        });
-        
+        // loadingInstance = ElLoading.service({
+        //   fullscreen: true,
+        //   text: 'Generating summary...'
+        // });
+
         const payload = {
           transcription: this.aggregatedTranscription,
           previous_report: "",
-          summary_mode: "minutes"
+          summary_mode: "atc",
         };
-        
         const response = await apiClient.post('summary', payload);
-        
-        // The response message is assumed to be wrapped in markdown code block.
         const apiSummary = response.data.message.content;
+        console.log("API:", apiSummary)
         const summaryObj = this.extractSummary(apiSummary);
+
         if (summaryObj) {
-          // Assume the summary object has a property "meeting_minutes".
           this.addSummary(summaryObj.meeting_minutes || summaryObj);
           ElMessage.success('Summary generated successfully');
         } else {
-          console.error('Failed to extract summary JSON');
           ElMessage.error('Failed to parse summary response');
         }
       } catch (error) {
         console.error('Error generating summary:', error);
         ElMessage.error('Failed to generate summary');
       } finally {
-        ElLoading.service().close();
+        if (loadingInstance) loadingInstance.close();
       }
     },
+
     getSpeakerStyle(speaker) {
       const colors = {
         "0": "#1f8ef1",
@@ -415,22 +533,44 @@ export default {
         marginRight: "8px",
       };
     },
-    addTranscription(newText) {
-      // When receiving transcription data (from file upload), update live transcription.
-      if (newText && newText.segments) {
-        this.liveTranscription.segments.push(...newText.segments);
-      } else if (typeof newText === 'string') {
-        // If simple text, wrap it in a segment.
-        this.liveTranscription.segments.push({ speaker: 0, transcription: newText });
+
+    extractSummary(apiResponse) {
+        try {
+            const end = apiResponse.lastIndexOf('```');
+            if (end === -1) return null;
+            const start = apiResponse.lastIndexOf('```', end - 1);
+            if (start === -1) return null;
+
+            let extracted = apiResponse.substring(start + 3, end).trim();
+            extracted = extracted
+            .replace(/\\n/g, '')
+            .replace(/\\\\/g, '\\')
+            .replace(/\\"/g, '"');
+
+            const repaired = jsonrepair(extracted);
+            return JSON.parse(repaired);
+        } catch (error) {
+            console.error('Error extracting and parsing summary:', error);
+            return null;
+        }
+    },
+
+    addSummary(summaryObj) {
+      const timestamp = new Date().toLocaleString();
+      const formattedContent = this.formatSummary(summaryObj);
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      this.summaries.unshift({
+        id: uniqueId,
+        timestamp,
+        formattedContent,
+        rawContent: summaryObj
+      });
+      if (this.summaries.length > 10) {
+        this.summaries.pop();
       }
     },
-    convertCamelCase(text) {
-      return text.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
-    },
-    capitalizeFirstLetter(text) {
-      if (!text) return '';
-      return text.charAt(0).toUpperCase() + text.slice(1);
-    },
+
     formatSummary(summaryObj) {
       try {
         let htmlContent = '';
@@ -465,53 +605,42 @@ export default {
         return 'Invalid summary format.';
       }
     },
-    extractSummary(apiResponse) {
-      try {
-        const start = apiResponse.indexOf('```');
-        if (start === -1) return null;
-        const end = apiResponse.indexOf('```', start + 3);
-        if (end === -1) return null;
-        let extractedContent = apiResponse.substring(start + 3, end).trim();
-        extractedContent = extractedContent
-          .replace(/\\n/g, '')
-          .replace(/\\\\/g, '\\')
-          .replace(/\\"/g, '"');
-        let repaired = jsonrepair(extractedContent);
-        let jsonObj = JSON.parse(repaired);
-        return jsonObj;
-      } catch (error) {
-        console.error('Error extracting and parsing summary:', error);
-        return null;
-      }
+
+    convertCamelCase(text) {
+      return text.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
     },
-    addSummary(summaryObj) {
-      const timestamp = new Date().toLocaleString();
-      const formattedContent = this.formatSummary(summaryObj);
-      const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      this.summaries.unshift({
-        id: uniqueId,
-        timestamp,
-        formattedContent,
-        rawContent: summaryObj
-      });
-      if (this.summaries.length > 10) {
-        this.summaries.pop();
+
+    capitalizeFirstLetter(text) {
+      if (!text) return '';
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    },
+
+    // New method to toggle automatic summary generation
+    toggleAutoSummary() {
+      this.autoSummaryEnabled = !this.autoSummaryEnabled;
+      if (this.autoSummaryEnabled) {
+        // Start an interval that automatically generates a summary every 15 seconds
+        this.autoSummaryInterval = setInterval(() => {
+          if (this.aggregatedTranscription.trim().length > 50 && this.aggregatedTranscription.trim().length != this.previousSummaryLength) {
+            this.generateSummary();
+            this.previousSummaryLength = this.aggregatedTranscription.trim().length
+          }
+        }, 15000);
+      } else {
+        clearInterval(this.autoSummaryInterval);
+        this.autoSummaryInterval = null;
       }
     },
   },
   watch: {
     transcription(newVal) {
-      // Additional logic for transcription updates if needed.
+      // handle updates if needed
     },
     activeTab(newTab) {
       this.handleActiveTabChange(newTab);
     },
     'apiStatus.loading'(isLoading) {
-      if (isLoading) {
-        this.isTranscribing = true;
-      } else {
-        this.isTranscribing = false;
-      }
+      this.isTranscribing = isLoading;
     }
   },
   mounted() {
@@ -528,7 +657,10 @@ export default {
     }
   },
   beforeUnmount() {
-    this.cancelTypingFunctions.forEach((cancelFn) => cancelFn());
+    this.cancelTypingFunctions.forEach(cancelFn => cancelFn());
+    if (this.autoSummaryInterval) {
+      clearInterval(this.autoSummaryInterval);
+    }
   },
 };
 </script>
@@ -676,19 +808,18 @@ export default {
   opacity: 0.6;
 }
 
+/* Each displayed segment */
 .segment {
   margin-bottom: 10px;
 }
 
+/* Show bold “mm:ss” plus a space before the text */
 .segment-timestamp {
   font-weight: bold;
   margin-right: 8px;
 }
 
-/* 
-  Ensures text wraps instead of scrolling. 
-  'pre-wrap' respects newlines but wraps text as needed.
-*/
+/* Wrap text within the container for long segments */
 .segment-text {
   white-space: pre-wrap;
   word-break: break-word;

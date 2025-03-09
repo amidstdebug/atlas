@@ -23,7 +23,7 @@ os.environ["NEMO_CACHE_DIR"] = "/usr/src/app/audio_server/models"
 
 
 # Import the model loading function from inference.utils module
-from inference.models.chunked_canary_transcriber import ChunkedCanaryTranscriber
+from inference.models.chunked_whisper_transcriber import ChunkedWhisperTranscriber
 
 # Global variables for model
 model = None
@@ -33,8 +33,9 @@ model = None
 async def lifespan(app: FastAPI):
 	# Startup: load model
 	global model
-	model = ChunkedCanaryTranscriber()
-	print("Model loaded successfully")
+	# Use HuggingFace Whisper model instead of Canary
+	model = ChunkedWhisperTranscriber(model_name='jlvdoorn/whisper-medium.en-atco2-asr')
+	print("Whisper model loaded successfully")
 	
 	# Prepare a test file for the model
 	test_file_path = '/usr/src/app/mono_output.wav'
