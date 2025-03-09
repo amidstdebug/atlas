@@ -12,6 +12,6 @@ class TranscribedSegment:
     deprecated: bool = False
 
     @property
-    def id(self):    
-    	unique_str = f"{self.segment.start}_{self.segment.end}_{self.label}_{hash(self.text)}"
-    	return hashlib.md5(unique_str.encode()).hexdigest()
+    def id(self):
+        unique_str = f"{self.segment.start}_{self.segment.end}_{self.label}_{hash(self.text)}"
+        return hashlib.md5(unique_str.encode()).hexdigest()

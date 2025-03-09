@@ -1,4 +1,5 @@
 import os
+import io
 import json
 import time
 import logging
@@ -6,7 +7,7 @@ from datetime import datetime
 from typing import List, Dict, Optional, AsyncGenerator
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, BackgroundTasks, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 
@@ -18,6 +19,7 @@ import uvicorn
 import numpy as np
 import torch
 import torchaudio
+import soundfile as sf
 
 from pipeline import OnlinePipeline, OnlinePipelineConfig
 from pipeline.utils import transcription_to_rttm
@@ -107,7 +109,7 @@ class SpeechManager:
 
         return output_segments
 
-    def process_chunk(self, waveform: np.ndarray) -> Dict:
+    def process_chunk(self, waveform: np.ndarray, transcribe=True, save=False) -> Dict:
         """Process a single chunk of audio and return diarization results."""
         chunk_start_time = time.time()
         logger.info(f"Processing chunk: {len(waveform)} samples")
@@ -121,15 +123,17 @@ class SpeechManager:
             waveform = np.expand_dims(waveform, 1)
             self.pipeline(waveform, self.sample_rate)
 
-            if self.time_since_transcribe > self.transcribe_duration * self.sample_rate:
-                self.pipeline.transcribe()
-                self.time_since_transcribe = 0
+            if transcribe:
+                if self.time_since_transcribe > self.transcribe_duration * self.sample_rate:
+                    self.pipeline.transcribe()
+                    self.time_since_transcribe = 0
 
-            if self.time_since_save > self.save_duration * self.sample_rate:
-                pipeline_sample_rate = self.pipeline.get_pipeline().config.sample_rate
-                pipeline_waveform = torch.from_numpy(self.pipeline.waveform).permute(1, 0)
-                torchaudio.save(f"recorded_audio/save_{time.time()}.wav", pipeline_waveform, pipeline_sample_rate)
-                self.time_since_save = 0
+            if save:
+                if self.time_since_save > self.save_duration * self.sample_rate:
+                    pipeline_sample_rate = self.pipeline.get_pipeline().config.sample_rate
+                    pipeline_waveform = torch.from_numpy(self.pipeline.waveform).permute(1, 0)
+                    torchaudio.save(f"recorded_audio/save_{time.time()}.wav", pipeline_waveform, pipeline_sample_rate)
+                    self.time_since_save = 0
 
             output_segments = self.get_output_segments()
 
@@ -145,6 +149,13 @@ class SpeechManager:
                 "segments": []
             }
 
+    def new_session(self):
+        speech_parser.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        speech_parser.chunk_counter = 0
+        speech_parser.time_since_transcribe = 0
+        speech_parser.time_since_save = 0
+        logger.info(f"New session: {speech_parser.session_id}")
+
 # Create a single instance of the speech manager
 logger.info("Starting speech diarization server")
 speech_parser = SpeechManager()
@@ -157,16 +168,14 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Client audio configuration
     client_config = None
+    session_start_time = time.time()
 
     try:
         # Generate a new session ID for each connection
-        speech_parser.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-        speech_parser.chunk_counter = 0
-        logger.info(f"New session: {speech_parser.session_id}")
+        speech_parser.new_session()
 
         message_count = 0
         chunk_count = 0
-        session_start_time = time.time()
 
         while True:
             # Receive message
@@ -186,7 +195,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         await websocket.send_json({"status": "config_received"})
                         continue
                 except json.JSONDecodeError:
-                    logger.warning(f"Invalid JSON received")
+                    logger.warning("Invalid JSON received")
                     pass
 
             # Handle binary audio data
@@ -226,9 +235,7 @@ async def reset_pipeline():
         speech_parser.pipeline.reset()
 
         # Also reset session-specific information
-        speech_parser.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-        speech_parser.chunk_counter = 0
-        speech_parser.time_since_transcribe = 0
+        speech_parser.new_session()
 
         logger.info(f"Pipeline reset. New session: {speech_parser.session_id}")
 
@@ -249,7 +256,7 @@ async def redo_annotation():
     try:
         speech_parser.pipeline.reannotate()
 
-        logger.info(f"Transcript reannotated.")
+        logger.info("Transcript reannotated.")
 
         return JSONResponse(
             status_code=200,
@@ -534,6 +541,49 @@ async def download_full_audio(background_tasks: BackgroundTasks):
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": f"Failed to create audio file: {str(e)}"}
+        )
+
+@app.post("/upload/audio")
+async def upload_audio(file: UploadFile = File(...)):
+    """
+    Upload an audio file for processing.
+    The endpoint resets the pipeline, then processes the file in chunks.
+    """
+    try:
+        logger.info(f"Receiving uploaded audio file: {file.filename}")
+
+        # Read the file content
+        content = await file.read()
+
+        # Reset the pipeline first
+        speech_parser.pipeline.reset()
+        speech_parser.new_session()
+
+        # Load audio data using soundfile
+        with io.BytesIO(content) as audio_buffer:
+            # Read audio data
+            data, samplerate = sf.read(audio_buffer)
+
+            # Convert to mono if needed
+            if len(data.shape) > 1 and data.shape[1] > 1:
+                data = data.mean(axis=1)
+
+            speech_parser.sample_rate = samplerate
+            speech_parser.process_chunk(data, transcribe=False)
+            speech_parser.pipeline.transcribe()
+
+            return {
+                "status": "success",
+                "message": f"Processed audio file: {file.filename}",
+                "session_id": speech_parser.session_id,
+                "duration": len(data) / speech_parser.sample_rate
+            }
+
+    except Exception as e:
+        logger.error(f"Error processing uploaded file: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process audio file: {str(e)}"
         )
 
 if __name__ == "__main__":

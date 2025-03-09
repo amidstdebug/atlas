@@ -37,9 +37,9 @@ class OnlinePipelineConfig:
     segmentation_model_name: str = "pyannote/segmentation-3.0"
     embedding_model_name: str = "speechbrain/spkrec-ecapa-voxceleb"
     whisper_type: str = "faster-whisper"  # one of ['faster-whisper']
-    whisper_model: str = "large-v3" # "aether-raid/WLV3t-SG-LN-NoAugs-ct2" # "large-v3"  # Model size (tiny, base, small, medium, large, large-v3, distil-large-v3)
+    whisper_model: str = "distil-large-v3" # "aether-raid/WLV3t-SG-LN-NoAugs-ct2" # "large-v3"  # Model size (tiny, base, small, medium, large, large-v3, distil-large-v3)
     hf_token: Optional[str] = None
-    
+
     whisper: FasterWhisperTranscribeConfig = field(default_factory=lambda: FasterWhisperTranscribeConfig())
     audio_preprocess: AudioPreprocessingConfig = field(default_factory=lambda: AudioPreprocessingConfig())
     audio_postprocess: AudioPostprocessingConfig = field(default_factory=lambda: AudioPostprocessingConfig())

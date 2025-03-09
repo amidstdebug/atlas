@@ -38,9 +38,8 @@
                 <!-- Transcription/Diarization Area -->
                 <div class="border-2 border-stone-800 bg-black p-4 rounded-2xl" v-if="segments.length > 0">
                     <TranscriptBox :segments="segments" class="max-h-60 min-w-64 max-w-2xl pe-4" />
-                    <div class="flex flex-row items-center justify-center mt-4">
+                    <div v-if="segments.length > 5" class="flex flex-row items-center justify-center mt-4">
                         <button
-                            v-if="segments.length > 5"
                             @click="downloadRTTM"
                             class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center bg-white/10 hover:bg-white/20"
                         >
@@ -59,7 +58,9 @@ import { useConfig } from "~/composables/useConfig";
 import { useAudioStream } from "~/composables/useAudioStream";
 
 const { baseUrl } = useConfig();
-const { segments } = useAudioStream();
+const { segments, getSegments } = useAudioStream();
+
+getSegments();
 
 const selectedComponent = ref("recorder");
 
