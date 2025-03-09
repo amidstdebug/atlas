@@ -6,12 +6,33 @@ import numpy as np
 import torch
 
 from faster_whisper import WhisperModel
-from faster_whisper.utils import _MODELS
+# from faster_whisper.utils import _MODELS
 
 import huggingface_hub
 
 from .config import FasterWhisperTranscribeConfig, DEFAULT_FASTER_WHISPER_TRANSCRIBE_CONFIG
 from .segments import TranscribedSegment
+
+_MODELS = {
+    "tiny.en": "Systran/faster-whisper-tiny.en",
+    "tiny": "Systran/faster-whisper-tiny",
+    "base.en": "Systran/faster-whisper-base.en",
+    "base": "Systran/faster-whisper-base",
+    "small.en": "Systran/faster-whisper-small.en",
+    "small": "Systran/faster-whisper-small",
+    "medium.en": "Systran/faster-whisper-medium.en",
+    "medium": "Systran/faster-whisper-medium",
+    "large-v1": "Systran/faster-whisper-large-v1",
+    "large-v2": "Systran/faster-whisper-large-v2",
+    "large-v3": "Systran/faster-whisper-large-v3",
+    "large": "Systran/faster-whisper-large-v3",
+    "distil-large-v2": "Systran/faster-distil-whisper-large-v2",
+    "distil-medium.en": "Systran/faster-distil-whisper-medium.en",
+    "distil-small.en": "Systran/faster-distil-whisper-small.en",
+    "distil-large-v3": "Systran/faster-distil-whisper-large-v3",
+    "large-v3-turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
+    "turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
+}
 
 def download_model(
     size_or_id: str,
@@ -40,7 +61,7 @@ def download_model(
     """
     # Setup logger
     logger = logging.getLogger(__name__)
-    
+
     # Define disabled_tqdm for progress display
     try:
         from tqdm.auto import tqdm as disabled_tqdm
@@ -54,7 +75,7 @@ def download_model(
                 return self
             def __exit__(self, *args, **kwargs):
                 pass
-    
+
     # Determine repo ID from model size or direct input
     if re.match(r".*/.*", size_or_id):
         repo_id = size_or_id
@@ -65,7 +86,7 @@ def download_model(
                 "Invalid model size '%s', expected one of: %s"
                 % (size_or_id, ", ".join(_MODELS.keys()))
             )
-    
+
     # Files to look for
     allow_patterns = [
         "config.json",
@@ -74,13 +95,13 @@ def download_model(
         "tokenizer.json",
         "vocabulary.*",
     ]
-    
+
     # Prepare download arguments
     kwargs = {
         "allow_patterns": allow_patterns,
         "tqdm_class": disabled_tqdm,
     }
-    
+
     if output_dir is not None:
         kwargs["local_dir"] = output_dir
         kwargs["local_dir_use_symlinks"] = False
@@ -88,13 +109,13 @@ def download_model(
         kwargs["cache_dir"] = cache_dir
     if token is not None:
         kwargs["token"] = token
-    
+
     # First check if model is in cache
     try:
         # Try to load the model with local_files_only=True
         logger.info(f"Checking if model {repo_id} is in cache")
         model_path = huggingface_hub.snapshot_download(
-            repo_id, 
+            repo_id,
             local_files_only=True,
             **kwargs
         )
@@ -103,7 +124,7 @@ def download_model(
     except Exception as e:
         # Model not in cache
         logger.info(f"Model {repo_id} not found in cache: {e}")
-        
+
         if local_files_only:
             # If local_files_only is True, we raise an error
             err_msg = f"Model {repo_id} not found in cache and local_files_only=True"
@@ -114,7 +135,7 @@ def download_model(
             logger.info(f"Downloading model {repo_id}")
             try:
                 model_path = huggingface_hub.snapshot_download(
-                    repo_id, 
+                    repo_id,
                     local_files_only=False,
                     **kwargs
                 )
@@ -134,20 +155,20 @@ def initialize_whisper_model(
 ) -> WhisperModel:
     """
     Initialize a faster-whisper model with appropriate settings.
-    
+
     Args:
         model_name: Size of the Whisper model (tiny, base, small, medium, large)
         cache_dir: Path to the folder where cached models are stored
         token: Hugging Face token for downloading models
         output_dir: Directory where the model should be saved
         local_files_only: If True, only use local files
-        
+
     Returns:
         WhisperModel instance
     """
     device = "cuda" if torch.cuda.is_available() else "cpu"
     compute_type = "float16" if device == "cuda" else "float32"
-    
+
     # Get model path (from cache or download)
     try:
         model_path = download_model(
@@ -157,11 +178,11 @@ def initialize_whisper_model(
             cache_dir=cache_dir,
             token=token
         )
-        
+
         # Initialize and return the model
         return WhisperModel(
-            model_path, 
-            device=device, 
+            model_path,
+            device=device,
             compute_type=compute_type,
         )
     except ValueError as e:
@@ -187,12 +208,12 @@ def transcribe_audio_segment(
 ) -> str:
     """
     Transcribe an audio segment using faster-whisper.
-    
+
     Args:
         whisper_model: Initialized WhisperModel
         audio: Audio data as numpy array
         sample_rate: Sample rate of the audio
-        
+
     Returns:
         Transcribed text
     """
@@ -203,7 +224,7 @@ def transcribe_audio_segment(
                 audio = audio.mean(axis=1)
             else:  # Single channel in 2D format
                 audio = audio.flatten()
-        
+
         # Transcribe using faster-whisper
         segments, _ = whisper_model.transcribe(
             audio,
@@ -212,20 +233,20 @@ def transcribe_audio_segment(
             condition_on_previous_text=whisper_config.condition_on_previous_text,
             language=whisper_config.language
         )
-        
+
         # Collect all segments' text
         texts = [seg.text for seg in segments]
         transcription = " ".join(texts) if texts else ""
-        
+
         # Clean up transcription
         return transcription.strip()
-    
+
     except Exception as e:
         print(f"Error transcribing audio segment: {e}")
         return ""
 
 def transcription_to_rttm(
-    transcription: Sequence[TranscribedSegment], 
+    transcription: Sequence[TranscribedSegment],
     file_id='file_0'
 ):
     lines = []
@@ -233,12 +254,12 @@ def transcription_to_rttm(
         # RTTM format:
         # Type file_id channel_id start_time duration ortho speaker_type speaker_name conf
         # SPEAKER file_0 1 0.01 1.09 <NA> <NA> speaker_0 <NA>
-        
+
         start = seg.segment.start
         duration = seg.segment.end - seg.segment.start
         speaker = seg.label
-        
+
         line = f'SPEAKER {file_id} 1 {start:.3f} {duration:.3f} "{seg.text}" <NA> {speaker} <NA>'
         lines.append(line)
-    
+
     return "\n".join(lines)
