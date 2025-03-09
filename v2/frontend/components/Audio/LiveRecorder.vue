@@ -60,6 +60,8 @@
 
             <!-- Download recording button -->
             <button
+                v-if="segments.length > 0"
+                @click="downloadAudio"
                 class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center bg-white/10 hover:bg-white/20"
                 title="Download recording"
             >
@@ -70,10 +72,12 @@
 </template>
 
 <script setup>
+import { useConfig } from "~/composables/useConfig";
 import { useAudioStream } from "~/composables/useAudioStream";
 import { useAudioProcessor } from "~/composables/useAudioProcessor";
 import { useRecording } from "~/composables/useRecording";
 
+const { baseUrl } = useConfig();
 const { isConnected, segments, error, connect, sendAudioChunk, disconnect } = useAudioStream();
 const { resetRecording, redoAnnotation, isProcessingReannote } = useRecording();
 const { isRecording, waveformBars, startRecording, stopRecording } = useAudioProcessor((chunk) => {
@@ -94,6 +98,22 @@ const toggleRecording = async () => {
         stopRecording();
         disconnect();
     }
+};
+
+const downloadAudio = () => {
+    const downloadUrl = `http://${baseUrl.value}/download/audio`;
+
+    // Create a temporary anchor element
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = "audio.wav"; // Suggested filename for the download
+
+    // Append to body, click, and remove
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    console.log("Downloading Audio file from:", downloadUrl);
 };
 
 // Clean up
