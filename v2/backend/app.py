@@ -4,10 +4,10 @@ import json
 import time
 import logging
 from datetime import datetime
-from typing import List, Dict, Optional, AsyncGenerator
+from typing import Dict
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, BackgroundTasks, UploadFile, File, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 
@@ -166,8 +166,6 @@ async def websocket_endpoint(websocket: WebSocket):
     client_id = id(websocket)
     logger.info(f"Client connected: {client_id}")
 
-    # Client audio configuration
-    client_config = None
     session_start_time = time.time()
 
     try:
@@ -188,7 +186,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     data = json.loads(message["text"])
                     # Configuration message
                     if "type" in data and data["type"] == "config":
-                        client_config = data
                         # Update sample rate from client config
                         speech_parser.sample_rate = data.get("sampleRate", 44100)
                         logger.info(f"Config received: sample rate={speech_parser.sample_rate}Hz")

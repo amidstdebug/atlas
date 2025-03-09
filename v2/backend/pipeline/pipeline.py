@@ -1,8 +1,6 @@
 import os
 from dotenv import load_dotenv
-import hashlib
-from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple, List, Union
+from typing import Optional, Sequence, Union
 import warnings
 
 import torch
@@ -172,6 +170,7 @@ class OnlinePipeline:
         """Reset the pipeline state to its initial condition."""
         self.waveform = None
         self.last_processed_start_time = 0
+        self._pipeline.reset()
         self._annotation = Annotation()
         self._transcription = []
 

@@ -1,13 +1,12 @@
-from typing import Sequence, Optional, List, Iterable, Tuple
+from typing import Sequence, Optional, List, Iterable, Tuple, Dict
 
 import numpy as np
 import torch
 
-from pyannote.core import Annotation, SlidingWindowFeature, SlidingWindow, Segment
+from pyannote.core import Annotation, SlidingWindowFeature
 
 from diart import SpeakerDiarization, SpeakerDiarizationConfig
 from diart.mapping import SpeakerMap, SpeakerMapBuilder
-from diart.blocks.clustering import OnlineSpeakerClustering
 
 from .clustering import NMESCConfig, MAX_SPECTRAL_CLUSTERING_SAMPLES, get_clusters, random_resample, window_overcluster_resample
 
@@ -49,14 +48,14 @@ class ModOnlineSpeakerClustering:
         self.max_speakers = max_speakers
         # self.centers: Optional[np.ndarray] = None
         self.embeddings: Sequence[np.ndarray] = []
-        self.clusters: Optional[Dict[int, Sequence[np.ndarray]]] = None 
+        self.clusters: Optional[Dict[int, List[np.ndarray]]] = None
         self.dimension: Optional[int] = None
         self.active_centers = set()
         self.blocked_centers = set()
 
         self.max_cluster_embs = max_cluster_embs
-        self.downsample_method = downsample_method 
-        
+        self.downsample_method = downsample_method
+
         self.cluster_config = NMESCConfig(
             multiscale_weights = torch.tensor([1], dtype=torch.float32),
             oracle_num_speakers = -1,
@@ -146,11 +145,14 @@ class ModOnlineSpeakerClustering:
         return center
 
     def get_centers(self) -> np.ndarray:
+        assert self.dimension is not None
+        assert self.clusters is not None
+
         centers = np.zeros((self.max_speakers, self.dimension))
         for spk_idx, embeddings in self.clusters.items():
             centers[spk_idx] = np.mean(embeddings, axis=0)
         return centers
-        
+
     def identify(
         self, segmentation: SlidingWindowFeature, embeddings: torch.Tensor
     ) -> SpeakerMap:
@@ -199,14 +201,10 @@ class ModOnlineSpeakerClustering:
             [spk for spk in range(num_local_speakers) if spk not in active_speakers]
         )
         dist_map = dist_map.unmap_speakers(inactive_speakers, self.inactive_centers)
-        
-        try:
-            # Keep assignments under the distance threshold
-            valid_map = dist_map.unmap_threshold(self.delta_new)
-        except ValueError as e:
-            # print(dist_map.mapping_matrix)
-            dist_map.mapping_matrix = np.nan_to_num(dist_map.mapping_matrix, nan=1e+10)
-            valid_map = dist_map.unmap_threshold(self.delta_new)
+
+        # Keep assignments under the distance threshold
+        dist_map.mapping_matrix = np.nan_to_num(dist_map.mapping_matrix, nan=1e+10)
+        valid_map = dist_map.unmap_threshold(self.delta_new)
 
         # Some speakers might be unidentified
         missed_speakers = [
@@ -228,12 +226,9 @@ class ModOnlineSpeakerClustering:
                     g_spk for g_spk in preferences if g_spk in self.active_centers
                 ]
                 # Get the free global speakers among the preferences
-                try:
-                    _, g_assigned = valid_map.valid_assignments()
-                except ValueError as e:
-                    valid_map.mapping_matrix = np.nan_to_num(valid_map.mapping_matrix, nan=1e+10)
-                    _, g_assigned = valid_map.valid_assignments()
-                    
+                valid_map.mapping_matrix = np.nan_to_num(valid_map.mapping_matrix, nan=1e+10)
+                _, g_assigned = valid_map.valid_assignments()
+
                 free = [g_spk for g_spk in preferences if g_spk not in g_assigned]
                 if free:
                     # The best global speaker is the closest free one
@@ -262,27 +257,29 @@ class ModOnlineSpeakerClustering:
             embeddings = torch.from_numpy(np.stack(self.embeddings))
             embeddings = embeddings.unsqueeze(1)
             total_samples = embeddings.shape[0]
-            
+
             # Resample if exceeding maximum limit
             if total_samples > self.max_cluster_embs:
                 if self.downsample_method == "random":
                     embeddings = random_resample(embeddings, self.max_cluster_embs)
                 elif self.downsample_method == "window_overcluster":
                     embeddings = window_overcluster_resample(
-                        input_tensor=embeddings, 
+                        input_tensor=embeddings,
                         target_count=self.max_cluster_embs
                     )
-            
+
             # Perform fresh clustering
             labels = get_clusters(embeddings, self.cluster_config)
-    
+
+            assert self.clusters is not None
+
             self.clusters.clear()
-    
+
             embeddings = embeddings.squeeze(1)
-    
+
             for label in labels.unique():
                 self.clusters[int(label)] = [embedding for embedding in embeddings[labels == label].detach().cpu().numpy()]
-        
+
     def __call__(
         self, segmentation: SlidingWindowFeature, embeddings: torch.Tensor
     ) -> SlidingWindowFeature:
@@ -297,7 +294,7 @@ class ModSpeakerDiarization(SpeakerDiarization):
 
         self.windows = []
         self.batch_size = 1
-        
+
     def reset(self):
         self.set_timestamp_shift(0)
         self.clustering = ModOnlineSpeakerClustering(
@@ -307,7 +304,7 @@ class ModSpeakerDiarization(SpeakerDiarization):
             "cosine",
             self.config.max_speakers,
         )
-        self.chunk_buffer, self.pred_buffer = [], []
+        self.chunk_buffer, self.pred_buffer, self.windows = [], [], []
 
     def __call__(
         self, waveforms: Sequence[SlidingWindowFeature]
@@ -315,11 +312,11 @@ class ModSpeakerDiarization(SpeakerDiarization):
         self.windows.extend(waveforms)
 
         return super().__call__(waveforms)
-        
+
     def redo(self) -> Sequence[tuple[Annotation, SlidingWindowFeature]]:
         self.clustering.redo()
         self.online = False
-        
+
         start_idx = 0
 
         outputs = []
@@ -328,10 +325,10 @@ class ModSpeakerDiarization(SpeakerDiarization):
 
             batch = self.windows[start_idx:end_idx]
             start_idx = end_idx
-            
+
             if len(batch) >= 1:
                 outputs.extend(super().__call__(batch))
-            
+
         self.online = True
 
         return outputs
