@@ -61,19 +61,15 @@ import { useAudioStream } from "~/composables/useAudioStream";
 const { baseUrl } = useConfig();
 const { segments } = useAudioStream();
 
-// State for selected component
-const selectedComponent = ref("upload"); // Default to upload
+const selectedComponent = ref("recorder");
 
-// Function to download RTTM file
 const downloadRTTM = () => {
     const downloadUrl = `http://${baseUrl.value}/download/rttm`;
 
-    // Create a temporary anchor element
     const link = document.createElement("a");
     link.href = downloadUrl;
-    link.download = "diarization.rttm"; // Suggested filename for the download
+    link.download = "diarization.rttm";
 
-    // Append to body, click, and remove
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

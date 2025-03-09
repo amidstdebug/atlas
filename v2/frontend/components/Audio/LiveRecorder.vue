@@ -103,12 +103,10 @@ const toggleRecording = async () => {
 const downloadAudio = () => {
     const downloadUrl = `http://${baseUrl.value}/download/audio`;
 
-    // Create a temporary anchor element
     const link = document.createElement("a");
     link.href = downloadUrl;
-    link.download = "audio.wav"; // Suggested filename for the download
+    link.download = "audio.wav";
 
-    // Append to body, click, and remove
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -116,7 +114,6 @@ const downloadAudio = () => {
     console.log("Downloading Audio file from:", downloadUrl);
 };
 
-// Clean up
 onUnmounted(() => {
     console.log("Component unmounting...");
     stopRecording();
