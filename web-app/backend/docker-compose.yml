@@ -25,7 +25,7 @@ services:
       dockerfile: audio_server/Dockerfile
     volumes:
       - ./audio_server:/usr/src/app  # mount audio server code for hot reload
-      - ./server/misc:/usr/src/app/models  # share startup.wav
+      - ./audio_server/models:/usr/src/app/models  # share startup.wav
     ports:
       - "8000:8000"  # FastAPI port
     env_file:

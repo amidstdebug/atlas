@@ -10,8 +10,8 @@ echo "Creating the llm model..."
 # Create the model
 ollama pull qwen2.5
 ollama run qwen2.5
-# ollama pull llama3.1
-# ollama run llama3.1
+# ollama pull llama3.1:7b
+# ollama run llama3.1:7b
 
 # Wait for background jobs (i.e., ollama serve) to keep the container alive
 wait

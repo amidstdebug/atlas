@@ -736,12 +736,15 @@ async generateSummary() {
 	toggleAutoSummary() {
 		this.autoSummaryEnabled = !this.autoSummaryEnabled;
 		if (this.autoSummaryEnabled) {
+			// Periodically check if we've added at least 50 characters since the last summary.
 			this.autoSummaryInterval = setInterval(() => {
+			console.log("Looking for significant change")
 			const aggregated = this.aggregatedTranscription.trim();
 			const lengthDelta = aggregated.length - (this.previousTranscriptionLength || 0);
 
 			// Only call summary if we have at least 30 new characters.
-			if (lengthDelta >= 30) {
+			if (lengthDelta >= 20) {
+				console.log("Change found")
 				const payload = {
 				transcription: aggregated,
 				previous_report: this.previousSummary || "",
@@ -964,5 +967,3 @@ async generateSummary() {
   word-break: break-word;
 }
 </style>
-
-
