@@ -1,6 +1,5 @@
 import os
 from dotenv import load_dotenv
-
 from typing import List
 
 from ollama import chat
@@ -13,20 +12,20 @@ from .prompts import examples, prompt
 def format_transcript(segments: List) -> str:
     """
     Format the transcribed segments into the required format for the prompt.
-    
+
     Example format:
     speaker0 (10.508, 39.008): If it's not working, it's the back-end...
     """
     formatted_lines = []
-    
+
     for segment in segments:
         if segment.deprecated:
             continue
-            
+
         # Format the line as: speaker{label} (start, end): text
         formatted_line = f"{segment.label} ({segment.segment.start:.3f}, {segment.segment.end:.3f}): {segment.text}"
         formatted_lines.append(formatted_line)
-    
+
     return "\n".join(formatted_lines)
 
 def get_meeting_minutes(
@@ -47,8 +46,8 @@ def get_meeting_minutes(
         Generated meeting minutes as a string
     """
     transcript = format_transcript(segments)
-    formatted_examples = f"<examples>\n{'\n'.join([f'<example>\n<transcript>{example['transcript']}</transcript>\n<ideal_output>\n{example['ideal_output']}\n</ideal_output>\n</example>' for example in examples])}\n</examples>"
-    formatted_prompt = prompt.format(transcript=transcript)
+    formatted_examples = '\n'.join([f'<example>\n<transcript>{example['transcript']}</transcript>\n<ideal_output>\n{example['ideal_output']}\n</ideal_output>\n</example>' for example in examples])
+    formatted_prompt = prompt.format(transcript=transcript, examples=formatted_examples)
     
     if use_anthropic:
         load_dotenv()
@@ -59,30 +58,30 @@ def get_meeting_minutes(
         
         client = anthropic.Anthropic(api_key=anthropic_api_key)
         
-        response = client.messages.create(
+        response = client.beta.messages.create(
             model=anthropic_model,
-            max_tokens=32_000,
+            max_tokens=20_000,
             thinking={
                 "type": "enabled",
-                "budget_tokens": 4000
+                "budget_tokens": 16_000
             },
             messages=[
                 {"role": "user", "content": [
-                    {
-                        "type": "text",
-                        "text": formatted_examples
-                    },
+                    # {
+                    #     "type": "text",
+                    #     "text": formatted_examples
+                    # },
                     {
                         "type": "text",
                         "text": formatted_prompt
                     },
                 ]}
-            ]
+            ],
+            betas=["output-128k-2025-02-19"]
         )
-
         print(response.content)
         
-        return response.content[-1].text
+        content = response.content[-1].text
     else:
         response: ChatResponse = chat(
             model=ollama_model, 
@@ -97,4 +96,8 @@ def get_meeting_minutes(
                 }
             ]
         )
-        return response.message.content
+        content = response.message.content
+    if "<meeting_minutes>" in content and "</meeting_minutes>" in content:
+        content = content.split("<meeting_minutes>")[1].split("</meeting_minutes>")[0].strip()
+    
+    return content
