@@ -733,44 +733,43 @@ async generateSummary() {
     },
 
     // New method to toggle automatic summary generation
-toggleAutoSummary() {
-  this.autoSummaryEnabled = !this.autoSummaryEnabled;
-  if (this.autoSummaryEnabled) {
-    // Periodically check if we've added at least 50 characters since the last summary.
-    this.autoSummaryInterval = setInterval(() => {
-      const aggregated = this.aggregatedTranscription.trim();
-      const lengthDelta = aggregated.length - (this.previousTranscriptionLength || 0);
+	toggleAutoSummary() {
+		this.autoSummaryEnabled = !this.autoSummaryEnabled;
+		if (this.autoSummaryEnabled) {
+			this.autoSummaryInterval = setInterval(() => {
+			const aggregated = this.aggregatedTranscription.trim();
+			const lengthDelta = aggregated.length - (this.previousTranscriptionLength || 0);
 
-      // Only call summary if we have at least 50 new characters.
-      if (lengthDelta >= 10) {
-        const payload = {
-          transcription: aggregated,
-          previous_report: this.previousSummary || "",
-          summary_mode: "atc",
-        };
-        apiClient.post('summary', payload)
-          .then(response => {
-            const summaryObj = this.extractSummary(response.data.message.content);
-            if (summaryObj) {
-              this.previousSummary = summaryObj.meeting_minutes
-                ? JSON.stringify(summaryObj.meeting_minutes)
-                : JSON.stringify(summaryObj);
-              this.addSummary(summaryObj.meeting_minutes || summaryObj);
-            }
-          })
-          .catch(error => {
-            console.error('Error generating summary:', error);
-          });
+			// Only call summary if we have at least 30 new characters.
+			if (lengthDelta >= 30) {
+				const payload = {
+				transcription: aggregated,
+				previous_report: this.previousSummary || "",
+				summary_mode: "atc",
+				};
+				apiClient.post('summary', payload)
+				.then(response => {
+					const summaryObj = this.extractSummary(response.data.message.content);
+					if (summaryObj) {
+					this.previousSummary = summaryObj.meeting_minutes
+						? JSON.stringify(summaryObj.meeting_minutes)
+						: JSON.stringify(summaryObj);
+					this.addSummary(summaryObj.meeting_minutes || summaryObj);
+					}
+				})
+				.catch(error => {
+					console.error('Error generating summary:', error);
+				});
 
-        // Update the stored transcription length to the new length
-        this.previousTranscriptionLength = aggregated.length;
-      }
-    }, 2000); 
-  } else {
-    clearInterval(this.autoSummaryInterval);
-    this.autoSummaryInterval = null;
-  }
-},
+				// Update the stored transcription length to the new length
+				this.previousTranscriptionLength = aggregated.length;
+			}
+			}, 2000); 
+		} else {
+			clearInterval(this.autoSummaryInterval);
+			this.autoSummaryInterval = null;
+		}
+	},
   },
   watch: {
     transcription(newVal) {
