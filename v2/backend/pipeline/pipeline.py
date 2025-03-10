@@ -73,6 +73,7 @@ class OnlinePipeline:
 
         # Apply resampling if needed
         if sample_rate != self._pipeline.config.sample_rate:
+            print(f'resampling from {sample_rate} to {self._pipeline.config.sample_rate}')
             # Apply resampling
             waveform = F.resample(
                 waveform,

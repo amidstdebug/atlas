@@ -56,7 +56,7 @@ class SpeechManager:
         self.pipeline = OnlinePipeline(config)
 
         # Audio storage settings
-        self.sample_rate = 44100  # Default sample rate
+        self.sample_rate = 48000  # Default sample rate
 
         self.transcribe_duration = 2
         self.time_since_transcribe = 0
@@ -318,78 +318,32 @@ async def get_segments():
             status_code=500,
             content={"status": "error", "message": f"Failed to get segments: {str(e)}"}
         )
-        def create_audio_file(waveform, sample_rate, filename_prefix, file_description=""):
-            """
-            Helper function to create a temporary audio file from a waveform.
-
-            Parameters:
-            - waveform: Numpy array containing audio data
-            - sample_rate: Sample rate of the audio
-            - filename_prefix: Prefix for the temp filename
-            - file_description: Description for logging
-
-            Returns:
-            - Path to the created temp file
-            - Error message if any
-            """
-            try:
-                # Convert numpy array to torch tensor for torchaudio
-                waveform_tensor = torch.from_numpy(waveform).permute(1, 0)  # Reshape to [channels, samples]
-
-                # Create a temporary file
-                temp_dir = Path("temp_audio")
-                temp_dir.mkdir(exist_ok=True)
-
-                timestamp = int(time.time())
-                temp_filename = f"{filename_prefix}_{speech_parser.session_id}_{timestamp}.wav"
-                temp_path = temp_dir / temp_filename
-
-                # Save the audio to the file
-                torchaudio.save(str(temp_path), waveform_tensor, sample_rate)
-
-                # Log file creation
-                duration = len(waveform) / sample_rate
-                logger.info(f"Created {file_description} audio file at {temp_path} ({duration:.2f}s)")
-
-                return temp_path, None
-            except Exception as e:
-                error_msg = f"Error creating audio file: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-                return None, error_msg
 
 def create_audio_file(waveform, sample_rate, filename_prefix, file_description=""):
-    """
-    Helper function to create a temporary audio file from a waveform.
-
-    Parameters:
-    - waveform: Numpy array containing audio data
-    - sample_rate: Sample rate of the audio
-    - filename_prefix: Prefix for the temp filename
-    - file_description: Description for logging
-
-    Returns:
-    - Path to the created temp file
-    - Error message if any
-    """
     try:
-        # Convert numpy array to torch tensor for torchaudio
-        waveform_tensor = torch.from_numpy(waveform).permute(1, 0)  # Reshape to [channels, samples]
-
+        # Check if the waveform is mono or has a channel dimension
+        if len(waveform.shape) == 1:
+            # Add a channel dimension for mono audio
+            waveform_tensor = torch.from_numpy(waveform).unsqueeze(0)
+        else:
+            # Convert from (length, channel) to (channel, length)
+            waveform_tensor = torch.from_numpy(waveform).transpose(0, 1)
+            
         # Create a temporary file
         temp_dir = Path("temp_audio")
         temp_dir.mkdir(exist_ok=True)
-
+        
         timestamp = int(time.time())
         temp_filename = f"{filename_prefix}_{speech_parser.session_id}_{timestamp}.wav"
         temp_path = temp_dir / temp_filename
-
+        
         # Save the audio to the file
         torchaudio.save(str(temp_path), waveform_tensor, sample_rate)
-
+        
         # Log file creation
         duration = len(waveform) / sample_rate
         logger.info(f"Created {file_description} audio file at {temp_path} ({duration:.2f}s)")
-
+        
         return temp_path, None
     except Exception as e:
         error_msg = f"Error creating audio file: {str(e)}"
@@ -560,6 +514,9 @@ async def upload_audio(file: UploadFile = File(...)):
         with io.BytesIO(content) as audio_buffer:
             # Read audio data
             data, samplerate = sf.read(audio_buffer)
+            data = data.astype(np.float32)
+
+            logger.info(f"Processing with sample rate: {samplerate}")
 
             # Convert to mono if needed
             if len(data.shape) > 1 and data.shape[1] > 1:

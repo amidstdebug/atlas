@@ -15,10 +15,11 @@ class FasterWhisperTranscribeConfig:
     best_of: int = 10
     condition_on_previous_text: bool = False
     language: str = "en"
+    hotwords: str = ""
 
 @dataclass
 class AudioPreprocessingConfig:
-    audio_gain: float = 10.0
+    audio_gain: float = 5.0
     audio_gain_mode: str = "db" # one of ["amplitude", "db"]
     normalize_audio: bool = False  # Whether to normalize audio (center and scale)
     high_pass_filter: bool = True  # Whether to apply high-pass filter to remove low-frequency noise
@@ -37,7 +38,7 @@ class OnlinePipelineConfig:
     segmentation_model_name: str = "pyannote/segmentation-3.0"
     embedding_model_name: str = "speechbrain/spkrec-ecapa-voxceleb"
     whisper_type: str = "faster-whisper"  # one of ['faster-whisper']
-    whisper_model: str = "distil-large-v3" # "aether-raid/WLV3t-SG-LN-NoAugs-ct2" # "large-v3"  # Model size (tiny, base, small, medium, large, large-v3, distil-large-v3)
+    whisper_model: str = "large-v3" # "aether-raid/WLV3t-SG-LN-NoAugs-ct2" # "large-v3"  # Model size (tiny, base, small, medium, large, large-v3, distil-large-v3)
     hf_token: Optional[str] = None
 
     whisper: FasterWhisperTranscribeConfig = field(default_factory=lambda: FasterWhisperTranscribeConfig())
