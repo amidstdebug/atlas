@@ -20,8 +20,8 @@ import sys
 import os
 os.environ['HF_HOME'] = '/usr/src/app/models'
 os.environ["NEMO_CACHE_DIR"] = "/usr/src/app/models"
-MODEL_NAME = 'aether-raid/WS-nrSG-HLBT'
-# MODEL_NAME = 'jlvdoorn/whisper-medium.en-atco2-asr'
+# MODEL_NAME = 'aether-raid/WS-nrSG-HLBT'
+MODEL_NAME = 'jlvdoorn/whisper-medium.en-atco2-asr'
 
 
 # Import the model loading function from inference.utils module

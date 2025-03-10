@@ -502,8 +502,6 @@ export default {
       }
     },
 
-
-
     /**
      * Converts ArrayBuffer to Base64
      */
@@ -534,7 +532,6 @@ export default {
       }
       return new Blob(byteArrays, {type: contentType});
     },
-
 
     addTranscription(newText) {
       // 1) If newText is an object that directly has `.segments`:
@@ -600,7 +597,6 @@ export default {
       }
     },
 
-
     clearTranscription() {
       this.$emit('transcription-cleared');
       this.summaries = [];
@@ -651,7 +647,6 @@ export default {
       }
     },
 
-
     getSpeakerStyle(speaker) {
       const colors = {
         "0": "#1f8ef1",
@@ -688,6 +683,11 @@ export default {
     },
 
     addSummary(summaryObj) {
+      // If the summary object has a key "1", use its value for display.
+      if (summaryObj && typeof summaryObj === 'object' && Object.prototype.hasOwnProperty.call(summaryObj, "1")) {
+        summaryObj = summaryObj["1"];
+      }
+
       const timestamp = new Date().toLocaleString();
       const formattedContent = this.formatSummary(summaryObj);
       const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -748,36 +748,36 @@ export default {
     },
 
     // New method to toggle automatic summary generation
-	toggleAutoSummary() {
-		this.autoSummaryEnabled = !this.autoSummaryEnabled;
-		if (this.autoSummaryEnabled) {
-			// Periodically check if we've added at least 50 characters since the last summary.
-			this.autoSummaryInterval = setInterval(() => {
-			console.log("Looking for significant change")
-			const aggregated = this.aggregatedTranscription.trim();
-			const lengthDelta = aggregated.length - (this.previousTranscriptionLength || 0);
+    toggleAutoSummary() {
+      this.autoSummaryEnabled = !this.autoSummaryEnabled;
+      if (this.autoSummaryEnabled) {
+        // Periodically check if we've added at least 300 characters since the last summary.
+        this.autoSummaryInterval = setInterval(() => {
+          console.log("Looking for significant change")
+          const aggregated = this.aggregatedTranscription.trim();
+          const lengthDelta = aggregated.length - (this.previousTranscriptionLength || 0);
 
-			// Only call summary if we have at least 30 new characters.
-			if (lengthDelta >= 30) {
-				console.log("Change found")
-				const payload = {
-				transcription: aggregated,
-				previous_report: this.previousSummary || "",
-				summary_mode: "atc",
-				};
-				apiClient.post('summary', payload)
-				.then(response => {
-					const summaryObj = this.extractSummary(response.data.message.content);
-					if (summaryObj) {
-					this.previousSummary = summaryObj.meeting_minutes
-						? JSON.stringify(summaryObj.meeting_minutes)
-						: JSON.stringify(summaryObj);
-					this.addSummary(summaryObj.meeting_minutes || summaryObj);
-					}
-				})
-				.catch(error => {
-					console.error('Error generating summary:', error);
-				});
+          // Only call summary if we have at least 300 new characters.
+          if (lengthDelta >= 300) {
+            console.log("Change found")
+            const payload = {
+              transcription: aggregated,
+              previous_report: this.previousSummary || "",
+              summary_mode: "atc",
+            };
+            apiClient.post('summary', payload)
+                .then(response => {
+                  const summaryObj = this.extractSummary(response.data.message.content);
+                  if (summaryObj) {
+                    this.previousSummary = summaryObj.meeting_minutes
+                        ? JSON.stringify(summaryObj.meeting_minutes)
+                        : JSON.stringify(summaryObj);
+                    this.addSummary(summaryObj.meeting_minutes || summaryObj);
+                  }
+                })
+                .catch(error => {
+                  console.error('Error generating summary:', error);
+                });
 
             // Update the stored transcription length to the new length
             this.previousTranscriptionLength = aggregated.length;
