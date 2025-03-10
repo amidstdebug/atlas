@@ -86,7 +86,7 @@
       </el-row>
 
       <!-- Merged Button Group -->
-      <div class="button-group merged">
+      <div ref="buttonGroup" class="button-group merged">
         <!-- File Upload Button -->
         <el-button
           :disabled="isTranscribing"
@@ -177,10 +177,12 @@ import { Microphone, Upload } from '@element-plus/icons-vue';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism.css';
 import { typeWriterMultiple } from '@/methods/utils/typeWriter';
+import { encodeWAV } from '@/methods/utils/audioUtils';
 import { tabConfigurations } from '@/config/columnConfig';
 import { AudioRecorderService } from '@/services/audioRecorderService';
 import { jsonrepair } from 'jsonrepair';
 import Cookies from 'js-cookie';
+import axios from 'axios';
 
 const typingMappings = [
   { configPath: ['headers', 'leftBoxHeader'], dataKey: 'leftBoxHeader' },
@@ -248,7 +250,8 @@ export default {
       // New properties for automatic summary generation
       autoSummaryEnabled: false,
       autoSummaryInterval: null,
-      previousSummaryLength: 0  
+      previousSummaryLength: 0,
+      previousSummary: ""
     };
   },
   computed: {
@@ -316,7 +319,7 @@ export default {
     async startMicRecording() {
       if (!this.audioRecorder) {
         this.audioRecorder = new AudioRecorderService({
-          apiUrl: "http://localhost:5002" // adjust as needed
+          apiUrl: "http://localhost:5001" // adjust as needed
         });
 
         // Handle partial transcripts from the server
@@ -406,73 +409,182 @@ export default {
       this.$refs.audioFileInput.click();
     },
 
+    // In your component’s methods:
     async handleFileUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const formData = new FormData();
-      formData.append('file', file);
-
-      let loadingInstance;
-      try {
-        loadingInstance = ElLoading.service({
-          fullscreen: true,
-          text: 'Uploading and transcribing...'
-        });
-        
-        const response = await apiClient.post('transcribe', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        this.addTranscription(response.data.transcription);
-        ElMessage.success('Transcription completed successfully');
-      } catch (error) {
-        console.error('Error uploading file:', error);
-        ElMessage.error('Failed to transcribe file');
-      } finally {
-        if (loadingInstance) loadingInstance.close();
-      }
+    const file = event.target.files[0];
+    if (file) {
+        // Start transcription process and set a cancel token if needed.
+        this.isTranscribing = true;
+        this.cancelTokenSource = axios.CancelToken.source();
+        await this.processAudioFile(file);
+    }
     },
 
-    addTranscription(newText) {
-        // When receiving transcription data (e.g. from a file upload)
-        if (newText && newText.segments) {
-            // Use the segments from the file upload.
-            const segments = newText.segments;
-            // Update the cumulative offset from the last segment's end if it is greater.
-            if (segments.length > 0) {
-            const lastSegment = segments[segments.length - 1];
-            if (typeof lastSegment.end === 'number' && lastSegment.end > this.cumulativeOffset) {
-                this.cumulativeOffset = lastSegment.end;
-            }
-            }
-            // Append the file transcription as a single chunk (JSON-stringified) into liveTranscription.
-            this.liveTranscription.segments.push({
-            speaker: 0,
-            transcription: JSON.stringify({ segments })
-            });
-        } else if (typeof newText === 'string') {
-            try {
-            // Attempt to parse the string
-            const parsed = JSON.parse(newText);
-            if (parsed.segments && parsed.segments.length > 0) {
-                const lastSegment = parsed.segments[parsed.segments.length - 1];
-                if (typeof lastSegment.end === 'number' && lastSegment.end > this.cumulativeOffset) {
-                this.cumulativeOffset = lastSegment.end;
-                }
-            }
-            this.liveTranscription.segments.push({
-                speaker: 0,
-                transcription: newText
-            });
-            } catch (e) {
-            // If the string cannot be parsed, just push it as is.
-            this.liveTranscription.segments.push({
-                speaker: 0,
-                transcription: newText
-            });
-            }
+    async processAudioFile(file) {
+    // Read the file into an ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    // Create an AudioContext (or reuse an existing one)
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    // Decode the audio data
+    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+    this.sampleRate = audioBuffer.sampleRate;
+    // Assume mono audio – get the first channel's data
+    this.recordedSamples = Array.from(audioBuffer.getChannelData(0));
+    // Set the chunk size to 30 seconds worth of samples
+    this.chunkSize = Math.floor(this.sampleRate * 30);
+    // Process each chunk sequentially
+    await this.chunkAndSendAudio();
+    // After processing, reset the transcription state.
+    this.isTranscribing = false;
+    this.cancelTokenSource = null;
+    },
+
+    async chunkAndSendAudio() {
+    // Loop through the recorded samples by chunkSize
+    for (let offset = 0; offset < this.recordedSamples.length && this.isTranscribing; offset += this.chunkSize) {
+        const chunk = this.recordedSamples.slice(offset, offset + this.chunkSize);
+        // Optionally flag that this is the last chunk
+        if (offset + this.chunkSize >= this.recordedSamples.length) {
+        this.lastSent = true;
         }
+        await this.sendChunk(chunk);
+    }
     },
+
+    async sendChunk(chunk) {
+    try {
+        // Encode the chunk into WAV format (assumes you have an encodeWAV function)
+        const wavBlob = encodeWAV(chunk, this.sampleRate);
+        // Create FormData for the POST request
+        const formData = new FormData();
+        formData.append('file', wavBlob, 'audio_chunk.wav');
+        // POST the chunk to your transcription API
+        const response = await apiClient.post(
+        'transcribe', // e.g. 'transcribe'
+        formData,
+        {
+            headers: {
+            'Content-Type': 'multipart/form-data',
+            },
+            cancelToken: this.cancelTokenSource.token,
+        }
+        );
+        // If the response is successful, update the transcription display
+        if (response.status === 200 && response.data.transcription) {
+        const transcription = response.data.transcription;
+        console.log("Transcription reply:", transcription);
+        this.addTranscription(transcription);
+        } else {
+        console.error('Error in transcription response:', response);
+        }
+    } catch (error) {
+        if (axios.isCancel(error)) {
+            console.log('Transcription request canceled:', error.message);
+        } else {
+            console.error('Error sending audio chunk:', error);
+        }
+    }
+    },
+
+
+
+
+    /**
+     * Converts ArrayBuffer to Base64
+     */
+    arrayBufferToBase64(buffer) {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
+    },
+
+    /**
+     * Converts a base64 string to a Blob with a given contentType
+     */
+    b64toBlob(b64Data, contentType = 'audio/wav') {
+        const byteCharacters = atob(b64Data);
+        const byteArrays = [];
+        for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+            const slice = byteCharacters.slice(offset, offset + 512);
+            const byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) {
+            byteNumbers[i] = slice.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+        }
+        return new Blob(byteArrays, { type: contentType });
+    },
+
+
+addTranscription(newText) {
+  // 1) If newText is an object that directly has `.segments`:
+  if (newText && newText.segments) {
+    // Apply the cumulative offset to each segment
+    const offsetSegments = newText.segments.map(seg => ({
+      ...seg,
+      start: seg.start + this.cumulativeOffset,
+      end:   seg.end   + this.cumulativeOffset,
+    }));
+
+    // Update our running offset to the last segment’s end
+    if (offsetSegments.length > 0) {
+      const lastSegment = offsetSegments[offsetSegments.length - 1];
+      this.cumulativeOffset = lastSegment.end;
+    }
+
+    // Push the offset-adjusted segments into liveTranscription
+    this.liveTranscription.segments.push({
+      speaker: 0,
+      transcription: JSON.stringify({ segments: offsetSegments }),
+    });
+  }
+
+  // 2) If newText is just a string that may contain segments in JSON:
+  else if (typeof newText === 'string') {
+    try {
+      // Try parsing the JSON
+      const parsed = JSON.parse(newText);
+      if (parsed.segments && Array.isArray(parsed.segments)) {
+        // Apply the offset
+        const offsetSegments = parsed.segments.map(seg => ({
+          ...seg,
+          start: seg.start + this.cumulativeOffset,
+          end:   seg.end   + this.cumulativeOffset,
+        }));
+
+        // Update offset
+        if (offsetSegments.length > 0) {
+          const lastSegment = offsetSegments[offsetSegments.length - 1];
+          this.cumulativeOffset = lastSegment.end;
+        }
+
+        // Store the new offset segments
+        this.liveTranscription.segments.push({
+          speaker: 0,
+          transcription: JSON.stringify({ segments: offsetSegments }),
+        });
+      } else {
+        // If there are no segments or it’s missing “segments,” just store as-is
+        this.liveTranscription.segments.push({
+          speaker: 0,
+          transcription: newText,
+        });
+      }
+    } catch (e) {
+      // If it’s not parseable JSON, just store it directly
+      this.liveTranscription.segments.push({
+        speaker: 0,
+        transcription: newText,
+      });
+    }
+  }
+},
+
 
     clearTranscription() {
       this.$emit('transcription-cleared');
@@ -483,42 +595,47 @@ export default {
       this.cumulativeOffset = 0;
     },
 
-    async generateSummary() {
-      if (!this.aggregatedTranscription.trim()) {
-        ElMessage.warning("No transcription to summarize.");
-        return;
-      }
+async generateSummary() {
+  if (!this.aggregatedTranscription.trim()) {
+    ElMessage.warning("No transcription to summarize.");
+    return;
+  }
+  let loadingInstance;
+  try {
+    loadingInstance = ElLoading.service({
+      fullscreen: true,
+      text: 'Generating summary...'
+    });
+    
+    // Include the previous summary (or empty string) in the payload
+    const payload = {
+      transcription: this.aggregatedTranscription,
+      previous_report: this.previousSummary || "",
+      summary_mode: "atc"
+    };
+    
+    const response = await apiClient.post('summary', payload);
+    const apiSummary = response.data.message.content;
+    const summaryObj = this.extractSummary(apiSummary);
 
-      let loadingInstance;
-      try {
-        // loadingInstance = ElLoading.service({
-        //   fullscreen: true,
-        //   text: 'Generating summary...'
-        // });
+    if (summaryObj) {
+      // Update your summary display and track this as the latest summary
+      this.addSummary(summaryObj.meeting_minutes || summaryObj);
+      this.previousSummary = summaryObj.meeting_minutes
+        ? JSON.stringify(summaryObj.meeting_minutes)
+        : JSON.stringify(summaryObj);
+      ElMessage.success('Summary generated successfully');
+    } else {
+      ElMessage.error('Failed to parse summary response');
+    }
+  } catch (error) {
+    console.error('Error generating summary:', error);
+    ElMessage.error('Failed to generate summary');
+  } finally {
+    if (loadingInstance) loadingInstance.close();
+  }
+},
 
-        const payload = {
-          transcription: this.aggregatedTranscription,
-          previous_report: "",
-          summary_mode: "atc",
-        };
-        const response = await apiClient.post('summary', payload);
-        const apiSummary = response.data.message.content;
-        console.log("API:", apiSummary)
-        const summaryObj = this.extractSummary(apiSummary);
-
-        if (summaryObj) {
-          this.addSummary(summaryObj.meeting_minutes || summaryObj);
-          ElMessage.success('Summary generated successfully');
-        } else {
-          ElMessage.error('Failed to parse summary response');
-        }
-      } catch (error) {
-        console.error('Error generating summary:', error);
-        ElMessage.error('Failed to generate summary');
-      } finally {
-        if (loadingInstance) loadingInstance.close();
-      }
-    },
 
     getSpeakerStyle(speaker) {
       const colors = {
@@ -535,24 +652,24 @@ export default {
     },
 
     extractSummary(apiResponse) {
-        try {
-            const end = apiResponse.lastIndexOf('```');
-            if (end === -1) return null;
-            const start = apiResponse.lastIndexOf('```', end - 1);
-            if (start === -1) return null;
+      try {
+        const start = apiResponse.indexOf('```');
+        if (start === -1) return null;
+        const end = apiResponse.indexOf('```', start + 3);
+        if (end === -1) return null;
 
-            let extracted = apiResponse.substring(start + 3, end).trim();
-            extracted = extracted
-            .replace(/\\n/g, '')
-            .replace(/\\\\/g, '\\')
-            .replace(/\\"/g, '"');
-
-            const repaired = jsonrepair(extracted);
-            return JSON.parse(repaired);
-        } catch (error) {
-            console.error('Error extracting and parsing summary:', error);
-            return null;
-        }
+        let extracted = apiResponse.substring(start + 3, end).trim();
+        extracted = extracted
+          .replace(/\\n/g, '')
+          .replace(/\\\\/g, '\\')
+          .replace(/\\"/g, '"');
+        
+        const repaired = jsonrepair(extracted);
+        return JSON.parse(repaired);
+      } catch (error) {
+        console.error('Error extracting and parsing summary:', error);
+        return null;
+      }
     },
 
     addSummary(summaryObj) {
@@ -616,21 +733,44 @@ export default {
     },
 
     // New method to toggle automatic summary generation
-    toggleAutoSummary() {
-      this.autoSummaryEnabled = !this.autoSummaryEnabled;
-      if (this.autoSummaryEnabled) {
-        // Start an interval that automatically generates a summary every 15 seconds
-        this.autoSummaryInterval = setInterval(() => {
-          if (this.aggregatedTranscription.trim().length > 50 && this.aggregatedTranscription.trim().length != this.previousSummaryLength) {
-            this.generateSummary();
-            this.previousSummaryLength = this.aggregatedTranscription.trim().length
-          }
-        }, 15000);
-      } else {
-        clearInterval(this.autoSummaryInterval);
-        this.autoSummaryInterval = null;
+toggleAutoSummary() {
+  this.autoSummaryEnabled = !this.autoSummaryEnabled;
+  if (this.autoSummaryEnabled) {
+    // Periodically check if we've added at least 50 characters since the last summary.
+    this.autoSummaryInterval = setInterval(() => {
+      const aggregated = this.aggregatedTranscription.trim();
+      const lengthDelta = aggregated.length - (this.previousTranscriptionLength || 0);
+
+      // Only call summary if we have at least 50 new characters.
+      if (lengthDelta >= 10) {
+        const payload = {
+          transcription: aggregated,
+          previous_report: this.previousSummary || "",
+          summary_mode: "atc",
+        };
+        apiClient.post('summary', payload)
+          .then(response => {
+            const summaryObj = this.extractSummary(response.data.message.content);
+            if (summaryObj) {
+              this.previousSummary = summaryObj.meeting_minutes
+                ? JSON.stringify(summaryObj.meeting_minutes)
+                : JSON.stringify(summaryObj);
+              this.addSummary(summaryObj.meeting_minutes || summaryObj);
+            }
+          })
+          .catch(error => {
+            console.error('Error generating summary:', error);
+          });
+
+        // Update the stored transcription length to the new length
+        this.previousTranscriptionLength = aggregated.length;
       }
-    },
+    }, 2000); 
+  } else {
+    clearInterval(this.autoSummaryInterval);
+    this.autoSummaryInterval = null;
+  }
+},
   },
   watch: {
     transcription(newVal) {
@@ -825,3 +965,5 @@ export default {
   word-break: break-word;
 }
 </style>
+
+

@@ -29,8 +29,10 @@ def load_whisper_model(model_path):
 			
 			# Fallback to a default model if neither exists
 			if not os.path.exists(model_path):
+				# logger.warning(f"Local model not found. Using jlvdoorn/whisper-large-v3-atco2-asr as fallback")
+				# model_path = "jlvdoorn/whisper-large-v3-atco2-asr"
 				logger.warning(f"Local model not found. Using jlvdoorn/whisper-medium.en-atco2-asr as fallback")
-				model_path = "jlvdoorn/whisper-large-v3-atco2-asr"
+				model_path = "jlvdoorn/whisper-medium.en-atco2-asr"
 		
 		# Load the processor and model
 		processor = WhisperProcessor.from_pretrained(model_path)

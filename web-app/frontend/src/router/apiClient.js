@@ -55,7 +55,7 @@ apiClient.interceptors.request.use(config => {
   const token = Cookies.get('auth_token');
 
   // Check if the request URL is not for the /login endpoint
-  if (token && !config.url.includes('/login')) {
+  if (token && (!config.url || !config.url.includes('/login'))) {
     config.headers['Authorization'] = `Bearer ${token}`;
   }
 

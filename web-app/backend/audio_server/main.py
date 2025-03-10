@@ -98,13 +98,6 @@ async def transcribe_file(file: UploadFile = File(...)):
 		if wav_io.getbuffer().nbytes == 0:
 			raise HTTPException(status_code=400, detail="No file data received")
 
-		# Check if the file is empty
-		# Save the received file with a timestamped filename
-		timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-		filename = f"./{timestamp}.wav"
-		with open(filename, "wb") as audio_file:
-			audio_file.write(contents)
-		
 		# Process the audio and transcribe
 		transcription = await process_audio(wav_io)
 		
