@@ -458,19 +458,19 @@ export default {
         const wavBlob = encodeWAV(chunk, this.sampleRate);
 
         // Create a blob URL and a temporary download link for local inspection
-        const url = URL.createObjectURL(wavBlob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `audio_chunk_${Date.now()}.wav`;
-        document.body.appendChild(a);
-        a.click();
+        // const url = URL.createObjectURL(wavBlob);
+        // const a = document.createElement('a');
+        // a.style.display = 'none';
+        // a.href = url;
+        // a.download = `audio_chunk_${Date.now()}.wav`;
+        // document.body.appendChild(a);
+        // a.click();
         // Cleanup the link and revoke the object URL after a short delay
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }, 1000);
-        console.log('downloading wav file')
+        // setTimeout(() => {
+        //   document.body.removeChild(a);
+        //   URL.revokeObjectURL(url);
+        // }, 1000);
+        // console.log('downloading wav file')
         // Create FormData for the POST request
         const formData = new FormData();
         formData.append('file', wavBlob, 'audio_chunk.wav');
