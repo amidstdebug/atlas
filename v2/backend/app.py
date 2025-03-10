@@ -24,6 +24,8 @@ import soundfile as sf
 from pipeline import OnlinePipeline, OnlinePipelineConfig
 from pipeline.utils import transcription_to_rttm
 
+from minutes.minutes import get_meeting_minutes
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -73,6 +75,8 @@ class SpeechManager:
         # Counters for unique filenames
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.chunk_counter = 0
+
+        self.minutes: Optional[str] = None
 
         # Flags
         self.save_audio = True  # Whether to save audio chunks
@@ -155,6 +159,9 @@ class SpeechManager:
         speech_parser.time_since_transcribe = 0
         speech_parser.time_since_save = 0
         logger.info(f"New session: {speech_parser.session_id}")
+
+    def create_minutes(self):
+        self.minutes = get_meeting_minutes(self.pipeline.get_transcription())
 
 # Create a single instance of the speech manager
 logger.info("Starting speech diarization server")
@@ -538,6 +545,80 @@ async def upload_audio(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to process audio file: {str(e)}"
+        )
+
+@app.post("/minutes")
+async def create_minutes():
+    """
+    Generate meeting minutes from the current transcription.
+    """
+    try:
+        # Get the current transcription
+        transcripts = speech_parser.pipeline.get_transcription()
+
+        if not transcripts:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": "No transcription data available for minutes generation"}
+            )
+
+        # Generate minutes using the get_meeting_minutes function
+        speech_parser.create_minutes()
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success", 
+                "message": "Meeting minutes created successfully"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error generating meeting minutes: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to generate meeting minutes: {str(e)}"}
+        )
+
+@app.get("/download/minutes")
+async def download_minutes(background_tasks: BackgroundTasks):
+    """
+    Download the generated meeting minutes as a markdown file.
+    """
+    try:
+        if not speech_parser.minutes:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": "No meeting minutes are available. Please create minutes first."}
+            )
+
+        # Create a temporary file to serve
+        temp_dir = Path("temp_minutes")
+        temp_dir.mkdir(exist_ok=True)
+        
+        timestamp = int(time.time())
+        filename = f"minutes_{speech_parser.session_id}_{timestamp}.md"
+        temp_path = temp_dir / filename
+        
+        # Write the minutes to the file
+        with open(temp_path, "w", encoding="utf-8") as f:
+            f.write(speech_parser.minutes)
+        
+        logger.info(f"Created meeting minutes file at {temp_path}")
+        
+        # Add cleanup task
+        background_tasks.add_task(cleanup_temp_file, temp_path, delay=5)
+        
+        # Return the markdown file
+        return FileResponse(
+            path=str(temp_path),
+            media_type="text/markdown",
+            filename=f"minutes_{speech_parser.session_id}.md"
+        )
+    except Exception as e:
+        logger.error(f"Error serving meeting minutes: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to serve meeting minutes: {str(e)}"}
         )
 
 if __name__ == "__main__":
