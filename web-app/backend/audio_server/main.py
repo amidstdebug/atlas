@@ -18,8 +18,8 @@ from pydub import AudioSegment
 
 import sys
 import os
-os.environ['HF_HOME'] = '/usr/src/app/audio_server/models'
-os.environ["NEMO_CACHE_DIR"] = "/usr/src/app/audio_server/models"
+os.environ['HF_HOME'] = '/usr/src/app/models'
+os.environ["NEMO_CACHE_DIR"] = "/usr/src/app/models"
 
 
 # Import the model loading function from inference.utils module

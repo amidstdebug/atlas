@@ -22,7 +22,7 @@ RUN pip install https://github.com/Dao-AILab/flash-attention/releases/download/v
 # RUN pip install -U transformers[torch]
 
 # Copy the audio_server directory
-COPY ./ /usr/src/app/
+COPY ./audio_server/* /usr/src/app/
 
 # Create models directory
 RUN mkdir -p /usr/src/app/models
