@@ -27,7 +27,7 @@ OLLAMA_SERVER_URL = os.environ.get('OLLAMA_SERVER_URL', 'http://ollama:11434')
 LLM_URI = f"{OLLAMA_SERVER_URL}/api/chat"
 JWT_SECRET = os.environ.get('JWT_SECRET', 'meeting_minutes_transcription_2024_secure_key')
 JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
-OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'qwen2.5')
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'hf.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:IQ4_XS')
 
 # Define lifespan context manager using asynccontextmanager
 import httpx

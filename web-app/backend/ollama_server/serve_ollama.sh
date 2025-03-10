@@ -12,6 +12,10 @@ ollama pull qwen2.5
 ollama run qwen2.5
 # ollama pull llama3.1:7b
 # ollama run llama3.1:7b
+#ollama pull deepseek-r1:7b
+#ollama run deepseek-r1:7b
+# ollama pull hf.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:IQ4_XS
+# ollama run hf.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:IQ4_XS
 
 # Wait for background jobs (i.e., ollama serve) to keep the container alive
 wait

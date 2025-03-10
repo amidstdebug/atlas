@@ -20,6 +20,8 @@ import sys
 import os
 os.environ['HF_HOME'] = '/usr/src/app/models'
 os.environ["NEMO_CACHE_DIR"] = "/usr/src/app/models"
+MODEL_NAME = 'aether-raid/WS-nrSG-HLBT'
+# MODEL_NAME = 'jlvdoorn/whisper-medium.en-atco2-asr'
 
 
 # Import the model loading function from inference.utils module
@@ -34,7 +36,7 @@ async def lifespan(app: FastAPI):
 	# Startup: load model
 	global model
 	# Use HuggingFace Whisper model instead of Canary
-	model = ChunkedWhisperTranscriber(model_name='jlvdoorn/whisper-medium.en-atco2-asr')
+	model = ChunkedWhisperTranscriber(model_name=MODEL_NAME)
 	print("Whisper model loaded successfully")
 	
 	# Prepare a test file for the model
@@ -156,6 +158,9 @@ async def process_audio(wav_io=None, original_sample_rate=None):
 			
 		audio_data, original_sample_rate = sf.read(wav_io)
 
+		print(
+			'here'
+		)
 		# Convert to mono if necessary
 		if audio_data.ndim > 1:
 			audio_mono = librosa.to_mono(audio_data.T)

@@ -35,7 +35,7 @@ ENV AUDIO_SERVER_URL=http://audio_server:8000
 ENV OLLAMA_SERVER_URL=http://ollama:11434
 ENV JWT_SECRET=meeting_minutes_transcription_2024_secure_key
 ENV JWT_ALGORITHM=HS256
-ENV OLLAMA_MODEL=qwen2.5
+ENV OLLAMA_MODEL=hf.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:IQ4_XS
 
 # Command to run the FastAPI server
 CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "5002", "--reload"]
