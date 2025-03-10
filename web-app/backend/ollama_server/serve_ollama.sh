@@ -8,7 +8,6 @@ sleep 10
 
 echo "Creating the llm model..."
 # Create the model
-# ollama create atlas_llm -f ./ollama_serve/Modelfile_atlas
 ollama pull qwen2.5
 ollama run qwen2.5
 # ollama pull llama3.1

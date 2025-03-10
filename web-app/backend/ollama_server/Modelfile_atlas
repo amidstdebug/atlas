@@ -1,2 +1,0 @@
-FROM ./qwen2.5:3b-instruct-q2_K
-
