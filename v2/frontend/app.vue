@@ -38,12 +38,22 @@
                 <!-- Transcription/Diarization Area -->
                 <div class="border-2 border-stone-800 bg-black p-4 rounded-2xl" v-if="segments.length > 0">
                     <TranscriptBox :segments="segments" class="max-h-60 min-w-64 max-w-2xl pe-4" />
-                    <div v-if="segments.length > 5" class="flex flex-row items-center justify-center mt-4">
+                    <div v-if="segments.length > 5" class="flex flex-row items-center justify-center mt-4 gap-2">
                         <button
                             @click="downloadRTTM"
                             class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center bg-white/10 hover:bg-white/20"
                         >
                             <Icon name="tabler:download" class="h-4 w-4" />
+                        </button>
+
+                        <button
+                            @click="createAndDownloadMinutes"
+                            class="p-3 rounded-full transition-all duration-300 aspect-square flex items-center justify-center bg-white/10 hover:bg-white/20"
+                            :class="{ 'bg-white/5 cursor-not-allowed': isGeneratingMinutes }"
+                            :disabled="isGeneratingMinutes"
+                        >
+                            <Icon v-if="!isGeneratingMinutes" name="tabler:file-pencil" class="h-4 w-4" />
+                            <Icon v-else name="tabler:loader" class="h-4 w-4 animate-spin" />
                         </button>
                     </div>
                 </div>
@@ -56,9 +66,11 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import { useConfig } from "~/composables/useConfig";
 import { useAudioStream } from "~/composables/useAudioStream";
+import { useMinutes } from "~/composables/useMinutes";
 
 const { baseUrl } = useConfig();
 const { segments, getSegments } = useAudioStream();
+const { isGeneratingMinutes, createAndDownloadMinutes } = useMinutes();
 
 getSegments();
 
