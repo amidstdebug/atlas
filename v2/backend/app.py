@@ -259,6 +259,7 @@ async def redo_annotation():
     """Reset the diarization pipeline to its initial state."""
     try:
         speech_parser.pipeline.reannotate()
+        speech_parser.pipeline.transcribe()
 
         logger.info("Transcript reannotated.")
 
