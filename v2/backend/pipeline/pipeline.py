@@ -38,7 +38,7 @@ class OnlinePipeline:
             # latency=2,
             # tau_active=0.555,
             # rho_update=0.422,
-            delta_new=1.2
+            delta_new=1.0
         )
 
         self._pipeline = SpeakerDiarization(speaker_diarization_config)
@@ -134,7 +134,7 @@ class OnlinePipeline:
         for annotation, _ in outputs:
             self._annotation.update(annotation)
 
-        self.transcribe()
+        # self.transcribe()
 
     def __call__(self, waveform: Union[torch.Tensor, np.ndarray], sample_rate: int = 16_000):
         """

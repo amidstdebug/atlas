@@ -38,67 +38,192 @@ speaker1 (273.075, 275.508): I would try.
 speaker0 (278.508, 285.508): Thank you very much.
         """,
         "ideal_output": """
+<meeting_analysis>
+1. List all speakers and their roles (if mentioned):
+   - Speaker0: Appears to be a project lead or manager
+   - Speaker1: Team member or colleague
+
+2. Create a timeline of the meeting, noting topic changes:
+   - 00:00 - 01:00: Backend integration discussion
+   - 01:00 - 01:40: Simulation status update
+   - 01:40 - 03:05: Mapping interfaces discussion
+   - 03:05 - 04:15: Drone control integration
+   - 04:15 - 04:45: Camera equipment discussion
+
+3. List the main topics identified in the transcript:
+   - Backend integration
+   - Simulation progress
+   - Mapping interfaces
+   - Drone control integration
+   - Camera equipment
+
+4. For each topic, note the relevant timestamps, speakers, and key points:
+   Backend integration (00:00 - 01:00):
+   - Speaker0 mentions backend needs to be "glued up" before CAF visit
+   - Two-day deadline for completion
+   - Team to visit AFTC
+
+   Simulation progress (01:00 - 01:40):
+   - Speaker0 inquires about simulation side update
+   - Cesium side mentioned, but no issues reported
+   - Camp Level completed
+
+   Mapping interfaces (01:40 - 03:05):
+   - Discussion about lack of mapping interfaces
+   - Mention of "two-row" system
+   - Found mapping server, but unsure if it works
+   - Various data formats discussed (REST, JSON)
+
+   Drone control integration (03:05 - 04:15):
+   - Discussion about control interacting with drones
+   - Rapid protocol mentioned for plug and play functionality
+   - Push vs pull data debate
+
+   Camera equipment (04:15 - 04:45):
+   - Discussion about specific camera and antennas
+   - Mention of connecting remote to PC for flying
+
+5. Identify all action items and their responsible entities:
+   - Glue up the back-end (development team)
+   - Visit AFTC (all team members)
+   - Get mapping server working (Speaker0)
+   - Push documentation to Speaker0 (Speaker1)
+   - Figure out integration details from documentation (Speaker0)
+
+6. Identify potential transcription errors and list corrections made using the common_terms list:
+   - "cat visit" corrected to "CAF visit" (likely referring to AFTC - Air Force Training Command)
+   - "red" corrected to "RAiD" (RSAF Agile Innovation Digital)
+   - "AFDC" corrected to "AFTC" (Air Force Training Command)
+   - "Colossal" corrected to "Colosseum" (likely referring to a simulation environment)
+   - "ASIC" left as is, but could potentially be "AirSim" if context suggests a simulation environment
+</meeting_analysis>
+
 <meeting_minutes>
-Item 1: Backend Integration Deadline (10.508 - 39.008)
+<h2>Item 1: Backend Integration Deadline (00:00 - 01:00)</h2>
 
-Speaker0: If it's not working, it's the back-end. The back-end is not glued up together. So I want to <b>glue up the back-end</b> <sup>development team</sup> using this time available before the CAF visit. So we've got two days to do it, so let's try our best. For those who don't know, when I say we are going down to AFTC, when I sign out the clearance for you all already, when I say <b>please go down to AFTC</b> <sup>all team members</sup>, go there and have a feel of what is the meeting itself. Everyone from RAiD will be there. 100 plus for all.
+<p>Speaker0: If it's not working, it's the back-end. The back-end is not glued up together. So I want to <b>glue up the back-end</b><sup>[development team]</sup> using this time available before the CAF visit. So we've got two days to do it, so let's try our best. For those who don't know, when I say we are going down to AFTC, when I sign out the clearance for you all already, when I say <b>please go down to AFTC</b><sup>[all team members]</sup>, go there and have a feel of what is the meeting itself. Everyone from RAiD will be there. 100 plus for all.</p>
 
-Item 2: Simulation Status Update (40.525 - 67.508)
+<h2>Item 2: Simulation Status Update (01:00 - 01:40)</h2>
 
-Speaker0: Do you guys have an update for the simulation side? Cesium side got some issue, is it? No. Pretty much done. That's me personally. Pretty much done. We're done with Camp Level.
+<p>Speaker0: Do you guys have an update for the simulation side? Cesium side got some issue, is it? No. Pretty much done. That's me personally. Pretty much done. We're done with Camp Level.</p>
 
-Speaker1: Thank you for your time.
+<p>Speaker1: Thank you for your time.</p>
 
-Item 3: Mapping Interfaces Discussion (86.008 - 142.008)
+<h2>Item 3: Mapping Interfaces Discussion (01:40 - 03:05)</h2>
 
-Speaker0: So there's no mapping interfaces at all.
+<p>Speaker0: So there's no mapping interfaces at all.</p>
 
-Speaker1: No, you can't. You'll even need two-row. But I don't need two-row. Two-row interacts with the. Essentially what we're thinking is that the kind of C3 system which you guys are building would replace two-row. Correct.
+<p>Speaker1: No, you can't. You'll even need two-row. But I don't need two-row. Two-row interacts with the. Essentially what we're thinking is that the kind of C3 system which you guys are building would replace two-row. Correct.</p>
 
-Speaker0: Okay, so I found methane, but I'm not sure whether it works. That means we found the mapping server but I'm not very sure whether I can get it working. But I hope I can <b>get it working</b> <sup>Speaker0</sup> because I can push out any data formats for a while. It can be REST, it can be JSON, it doesn't matter. I think the interfaces doesn't matter but you all need to come up. Krithikh, how about your side? Still cannot get it working on physical to mapping? I can connect to it, I just cannot...
+<p>Speaker0: Okay, so I found methane, but I'm not sure whether it works. That means we found the mapping server but I'm not very sure whether I can get it working. But I hope I can <b>get it working</b><sup>[Speaker0]</sup> because I can push out any data formats for a while. It can be REST, it can be JSON, it doesn't matter. I think the interfaces doesn't matter but you all need to come up. Krithikh, how about your side? Still cannot get it working on physical to mapping? I can connect to it, I just cannot...</p>
 
-Speaker1: Can I come under here? Yes.
+<p>Speaker1: Can I come under here? Yes.</p>
 
-Item 4: Drone Control Integration (147.008 - 204.425)
+<h2>Item 4: Drone Control Integration (03:05 - 04:15)</h2>
 
-Speaker1: Control can interact with our drones, but it can also use control view drones. So our perception of the problem is that, as long as you can get it talking in a rapid protocol, it should be the same when you just plug and play for both the simulations and the view drones. So you don't need to create two separate ADRs.
+<p>Speaker1: Control can interact with our drones, but it can also use control view drones. So our perception of the problem is that, as long as you can get it talking in a rapid protocol, it should be the same when you just plug and play for both the simulations and the view drones. So you don't need to create two separate ADRs.</p>
 
-Speaker0: Either you can push or you can pull data, if your push data is easy, but if you need us to pull data, then we will need to do some work. What do you mean by push data? Because if Colloseum or AirSim is able to push mapping data out, then it doesn't need to collect on it, that's it. But you say to send back the master... We need to interface with SEM of tourism in order to get information.
+<p>Speaker0: Either you can push or you can pull data, if your push data is easy, but if you need us to pull data, then we will need to do some work. What do you mean by push data? Because if Colosseum or AirSim is able to push mapping data out, then it doesn't need to collect on it, that's it. But you say to send back the master... We need to interface with SEM of tourism in order to get information.</p>
 
-Speaker1: But if I go, unfortunately, just whether you listen or you follow. Correct. You can't discern. OK, listen.
+<p>Speaker1: But if I go, unfortunately, just whether you listen or you follow. Correct. You can't discern. OK, listen.</p>
 
-Speaker0: Ok, then you will probably <b>push some documentation to me</b> <sup>Speaker1</sup> and I will <b>try to figure things out</b> <sup>Speaker0</sup>. If not, we try to do this as much as we can.
+<p>Speaker0: Ok, then you will probably <b>push some documentation to me</b><sup>[Speaker1]</sup> and I will <b>try to figure things out</b><sup>[Speaker0]</sup>. If not, we try to do this as much as we can.</p>
 
-Item 5: Camera Equipment Discussion (228.008 - 272.541)
+<h2>Item 5: Camera Equipment Discussion (04:15 - 04:45)</h2>
 
-Speaker1: I'm not flying. Which one are we talking to for the camera? Probably that one. Just that one, right? Just that one. Yeah, that's the one. We only have, that's the only bad link. We'll do eight after that. That's the only bad link. Do we have any other antennas? Like the transmitter? Yeah. The transmitter? I don't think so. No, you don't have. Because that one is device specific.
+<p>Speaker1: I'm not flying. Which one are we talking to for the camera? Probably that one. Just that one, right? Just that one. Yeah, that's the one. We only have, that's the only bad link. We'll do eight after that. That's the only bad link. Do we have any other antennas? Like the transmitter? Yeah. The transmitter? I don't think so. No, you don't have. Because that one is device specific.</p>
 
-Speaker1: No, as in you just need the same calculator to see one. It doesn't matter what. I think there is.
+<p>Speaker1: No, as in you just need the same calculator to see one. It doesn't matter what. I think there is.</p>
 
-Speaker0: You can connect the remote up to the PC and then fly it in the air.
+<p>Speaker0: You can connect the remote up to the PC and then fly it in the air.</p>
 
-Speaker1: Oh, I get what you mean, yeah. I would try.
+<p>Speaker1: Oh, I get what you mean, yeah. I would try.</p>
 
-Summary of Actions:
-1. Glue up the back-end (development team)
-2. Please go down to AFTC (all team members)
-3. Get mapping server working (Speaker0)
-4. Push documentation to Speaker0 (Speaker1)
-5. Figure out integration details from documentation (Speaker0)
+<p>
+    Summary of Actions:
+    <ol>
+        <li>Glue up the back-end (development team)</li>
+        <li>Please go down to AFTC (all team members)</li>
+        <li>Get mapping server working (Speaker0)</li>
+        <li>Push documentation to Speaker0 (Speaker1)</li>
+        <li>Figure out integration details from documentation (Speaker0)</li>
+    </ol>
+</p>
 </meeting_minutes>
         """
     }
 ]
 
+# prompt = """
+# You are tasked with summarizing meeting minutes from a meeting transcript. The transcript will be provided in the following format:
+
+# [speaker] ([start], [end]): [transcript]
+# [speaker] ([start], [end]): [transcript]
+
+# <transcript>
+# {transcript}
+# </transcript>
+
+# <common_terms>
+# * AFTC (Air Force Training Command)
+# * SUTD (Singapore University of Technology and Design)
+# * SMU (Singapore Management University)
+# * RAiD (RSAF Agile Innovation Digital)
+# * RSAF (Republic of Singapore Air Force)
+# * AETHER (Air Emerging Technologies High Speed Experimentation and Research)
+# </common_terms>
+
+# Your goal is to create concise and organized meeting minutes based on this transcript. Follow these guidelines:
+
+# 1. Format: 
+#    - Divide the minutes into numbered items (e.g., "Item 1:", "Item 2:", etc.)
+#    - Under each item, include relevant speaker contributions
+#    - Include the start and end timestamps for the discussion of that action item
+#    - Use the format:
+#      Item X: [Brief description of the topic] (Start time - End time)
+
+#      [speaker]: [transcript]
+#      [speaker]: [transcript]
+
+# 2. Speaker labels and transcript accuracy:
+#    - The transcript is produced by machine ASR and may contain inaccuracies
+#    - Use context to correct obvious errors in speaker labels or transcript content, but avoid major deviations from the original text
+#    - Include the full conversation within the time period inside the [transcript]
+#    - Rectify spelling of certain words based on context and homophonic similarity to the <common_terms>
+#    - Speaker labels are determined by automatic diarization and may not be entirely accurate
+
+# 3. Action items:
+#    - Within each [transcript], identify any actions that need to be taken
+#    - Bold the action item text with <b></b>
+#    - Follow the action item with <sup>[entity]</sup>, where [entity] is the person or group responsible for the action
+
+# 4. Summary of actions:
+#    - At the end of the minutes, create a section titled "Summary of Actions"
+#    - List all action items with their responsible entities
+
+# 5. Final output:
+#    Provide your summarized meeting minutes in the following format:
+   
+#    **Meeting Minutes**
+#    [Your meeting minutes, formatted as instructed]
+
+#    **Summary of Actions**
+#    [List of action items with responsible entities]
+
+# Remember to focus on the key points discussed in the meeting, summarize speaker contributions concisely, and clearly highlight action items. Your final output should only include the content within the <meeting_minutes> tags.
+# """
+
 prompt = """
-You are tasked with summarizing meeting minutes from a meeting transcript. The transcript will be provided in the following format:
 
-[speaker] ([start], [end]): [transcript]
-[speaker] ([start], [end]): [transcript]
+Here are examples of ideal inputs/outputs:
 
-<transcript>
-{transcript}
-</transcript>
+<examples>
+{examples}
+</examples>
+
+You are an AI assistant tasked with creating concise and organized meeting minutes from a meeting transcript. Your goal is to summarize the key points discussed, identify action items, and present the information in a clear, structured format.
+
+Before we begin, here is a list of common terms that may appear in the transcript. Use this list to correct potential transcription errors based on context and phonetic similarity:
 
 <common_terms>
 * AFTC (Air Force Training Command)
@@ -109,44 +234,77 @@ You are tasked with summarizing meeting minutes from a meeting transcript. The t
 * AETHER (Air Emerging Technologies High Speed Experimentation and Research)
 </common_terms>
 
-Your goal is to create concise and organized meeting minutes based on this transcript. Follow these guidelines:
+Instructions:
 
-1. Format: 
-   - Divide the minutes into numbered items (e.g., "Item 1:", "Item 2:", etc.)
-   - Under each item, include relevant speaker contributions
-   - Include the start and end timestamps for the discussion of that action item
-   - Use the format:
-     Item X: [Brief description of the topic] (Start time - End time)
+1. Carefully read through the transcript and identify the main topics discussed.
 
-     [speaker]: [transcript]
-     [speaker]: [transcript]
+2. Organize the minutes into numbered items, each representing a distinct topic or discussion point.
 
-2. Speaker labels and transcript accuracy:
-   - The transcript is produced by machine ASR and may contain inaccuracies
-   - Use context to correct obvious errors in speaker labels or transcript content, but avoid major deviations from the original text
-   - Rectify spelling of certain words based on context and homophonic similarity to the <common_terms>
-       - Common terms format:
-           - [term] ([meaning])
-   - Speaker labels are determined by automatic diarization and may not be entirely accurate
+3. For each item:
+   - Provide a brief description of the topic
+   - Include the start and end timestamps for the discussion, based on when the speakers start talking
+   - Extract relevant speaker contributions, correcting any obvious transcription errors using the common_terms list
+   - Identify any action items within the discussion
 
-3. Action items:
-   - Within each [transcript], identify any actions that need to be taken
-   - Bold the action item text with <b></b>
+4. Format action items as follows:
+   - Bold the action item text with <b></b> tags
    - Follow the action item with <sup>[entity]</sup>, where [entity] is the person or group responsible for the action
 
-4. Summary of actions:
-   - At the end of the minutes, create a section titled "Summary of Actions"
-   - List all action items with their responsible entities
+5. After organizing all items, create a "Summary of Actions" section listing all identified action items with their responsible entities.
 
-5. Final output:
-   Provide your summarized meeting minutes in the following format:
+6. Present your final output in the following format:
 
-   <meeting_minutes>
-   [Your meeting minutes, formatted as instructed]
+<meeting_minutes>
+<h2>Item 1: [Brief description of the topic] ([Start time] - [End time])</h2>
 
-   Summary of Actions:
-   [List of action items with responsible entities]
-   </meeting_minutes>
+<p>[speaker]: [Relevant transcript, with action items formatted as instructed]</p>
+[more speaker: transcripts as needed]
 
-Remember to focus on the key points discussed in the meeting, summarize speaker contributions concisely, and clearly highlight action items. Your final output should only include the content within the <meeting_minutes> tags.
+<h2>Item 2: [Brief description of the topic] ([Start time] - [End time])</h2>
+
+<p>[speaker]: [Relevant transcript, with action items formatted as instructed]</p>
+[more speaker: transcripts as needed]
+
+[Continue with additional items as needed]
+
+<p>Summary of Actions:
+<ol>
+<li>[Action item 1] ([Responsible entity])</li>
+<li>[Action item 2] ([Responsible entity])</li>
+</ol>
+[Continue with additional action items as needed]
+</p>
+</meeting_minutes>
+
+Before producing the final output, conduct your analysis inside <meeting_analysis> tags in your thinking block:
+
+<meeting_analysis>
+1. List all speakers and their roles (if mentioned):
+   [List speakers and roles here]
+
+2. Create a timeline of the meeting, noting topic changes:
+   [Create timeline here]
+
+3. List the main topics identified in the transcript:
+   [List topics here]
+
+4. For each topic, note the relevant timestamps, speakers, and key points:
+   [Organize information for each topic]
+
+5. Identify all action items and their responsible entities:
+   [List action items and responsible entities]
+
+6. Identify potential transcription errors and list corrections made using the common_terms list:
+   [List any corrections made]
+</meeting_analysis>
+
+It's OK for this section to be quite long. After completing the analysis, use the information to create the final meeting minutes following the specified format.
+
+Your final output should consist only of the formatted meeting minutes and should not duplicate or rehash any of the work you did in the meeting analysis section.
+
+Here is the transcript of the meeting:
+
+<transcript>
+{transcript}
+</transcript>
 """

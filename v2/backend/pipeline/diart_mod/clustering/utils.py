@@ -73,7 +73,6 @@ def get_clusters(
             f"{ms_emb_t} of shape {ms_emb_t.shape} exceeds maximum allowed size of {MAX_SPECTRAL_CLUSTERING_SAMPLES}. "
             "This may cause errors with Torch's Intel MKL implementation."
         )
-    print(ms_emb_t.shape)
         
     affinity_matrix = get_affinity_matrix(ms_emb_t, config.multiscale_weights)
     affinity_matrix = affinity_matrix.to(device=config.device)
@@ -140,6 +139,8 @@ def window_overcluster_resample(
     samples = []
     while end_idx < (input_len + window_size):
         curr_window = input_tensor[start_idx:end_idx]
+        if curr_window.shape[0] <= clusters_per_window:
+            break
 
         labels = get_clusters(curr_window, cluster_config)
         unique_labels = labels.unique()
