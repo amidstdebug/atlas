@@ -18,17 +18,18 @@ from pydub import AudioSegment
 
 import sys
 import os
+
 os.environ['HF_HOME'] = '/usr/src/app/models'
 os.environ["NEMO_CACHE_DIR"] = "/usr/src/app/models"
 # MODEL_NAME = 'aether-raid/WS-nrSG-HLBT'
 MODEL_NAME = 'jlvdoorn/whisper-medium.en-atco2-asr'
-
 
 # Import the model loading function from inference.utils module
 from inference.models.chunked_whisper_transcriber import ChunkedWhisperTranscriber
 
 # Global variables for model
 model = None
+
 
 # Define lifespan context manager
 @asynccontextmanager
@@ -38,21 +39,22 @@ async def lifespan(app: FastAPI):
 	# Use HuggingFace Whisper model instead of Canary
 	model = ChunkedWhisperTranscriber(model_name=MODEL_NAME)
 	print("Whisper model loaded successfully")
-	
+
 	# Prepare a test file for the model
 	test_file_path = '/usr/src/app/mono_output.wav'
-	
+
 	try:
 		print("Running test transcription...")
 		transcription = model.transcribe(test_file_path)
 		print("Test transcription completed successfully")
 	except Exception as e:
 		print(f"Error during test transcription: {str(e)}")
-	
+
 	yield  # This yields control back to FastAPI
-	
+
 	# Shutdown: cleanup resources
 	print("Shutting down and releasing resources")
+
 
 # Create FastAPI app with lifespan
 app = FastAPI(
@@ -71,17 +73,21 @@ app.add_middleware(
 	allow_headers=["*"],
 )
 
+
 # Define request and response models
 class AudioRequest(BaseModel):
 	audio: str  # Base64 encoded audio
 	chunk_id: Optional[int] = None
 	sample_rate: int = 16000
 
+
 class TranscriptionResponse(BaseModel):
 	transcription: str
 	chunk_id: Optional[int] = None
 
+
 import datetime
+
 
 @app.post("/transcribe/file", response_model=TranscriptionResponse)
 async def transcribe_file(file: UploadFile = File(...)):
@@ -91,22 +97,23 @@ async def transcribe_file(file: UploadFile = File(...)):
 	try:
 		if not model:
 			raise HTTPException(status_code=500, detail="Model not loaded")
-		
+
 		# Read the file
 		contents = await file.read()
 		wav_io = io.BytesIO(contents)
-		
+
 		# Check if the file is empty
 		if wav_io.getbuffer().nbytes == 0:
 			raise HTTPException(status_code=400, detail="No file data received")
 
 		# Process the audio and transcribe
 		transcription = await process_audio(wav_io)
-		
+
 		return {"transcription": json.dumps(transcription)}
-	
+
 	except Exception as e:
 		raise HTTPException(status_code=500, detail=f"Error during transcription: {str(e)}")
+
 
 @app.post("/transcribe/base64", response_model=TranscriptionResponse)
 async def transcribe_base64(request: AudioRequest):
@@ -116,26 +123,27 @@ async def transcribe_base64(request: AudioRequest):
 	try:
 		if not model:
 			raise HTTPException(status_code=500, detail="Model not loaded")
-		
+
 		# Decode base64 string
 		try:
 			audio_bytes = base64.b64decode(request.audio)
 		except Exception as e:
 			raise HTTPException(status_code=400, detail=f"Invalid base64 encoding: {str(e)}")
-		
+
 		wav_io = io.BytesIO(audio_bytes)
-		
+
 		# Check if the data is empty
 		if wav_io.getbuffer().nbytes == 0:
 			raise HTTPException(status_code=400, detail="No audio data received")
-		
+
 		# Process the audio and transcribe
 		transcription = await process_audio(wav_io, request.sample_rate)
-		
+
 		return {"transcription": transcription, "chunk_id": request.chunk_id}
-	
+
 	except Exception as e:
 		raise HTTPException(status_code=500, detail=f"Error during transcription: {str(e)}")
+
 
 async def process_audio(wav_io=None, original_sample_rate=None):
 	"""
@@ -150,12 +158,12 @@ async def process_audio(wav_io=None, original_sample_rate=None):
 	8. Passing that file path to model.transcribe
 	"""
 	temp_file_path = None
-	
+
 	try:
 		# If no wav_io provided, this is probably a test call
 		if wav_io is None:
 			return "Test transcription"
-			
+
 		audio_data, original_sample_rate = sf.read(wav_io)
 
 		print(
@@ -190,16 +198,15 @@ async def process_audio(wav_io=None, original_sample_rate=None):
 
 		# Resample to target sample rate
 		audio_resampled = resample_poly(audio_mono, up=target_sample_rate, down=original_sample_rate)
-		
+
 		with NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
 			print(f"Writing temporary file: {tmp.name}")
 			sf.write(tmp.name, audio_resampled, target_sample_rate, subtype='PCM_16')
 			temp_file_path = tmp.name
-		
+
 		# ChunkedCanaryTranscriber expects a mono file
 		print(f"Transcribing file: {temp_file_path}")
-		transcription = model.transcribe(temp_file_path, chunk_duration_sec = 30)
-
+		transcription = model.transcribe(temp_file_path, chunk_duration_sec=30)
 
 		transcription_str = json.dumps(transcription)  # returns a JSON string
 
@@ -214,9 +221,9 @@ async def process_audio(wav_io=None, original_sample_rate=None):
 				os.remove(temp_file_path)
 			except OSError as e:
 				print(f"Warning: Could not remove temp file: {str(e)}")
-		
+
 		return transcription
-	
+
 	except Exception as e:
 		print(f"Error processing audio: {str(e)}")
 		if temp_file_path and os.path.exists(temp_file_path):
@@ -225,6 +232,7 @@ async def process_audio(wav_io=None, original_sample_rate=None):
 			except:
 				pass
 		raise
+
 
 @app.get("/health")
 async def health_check():
@@ -235,6 +243,8 @@ async def health_check():
 		return {"status": "model not loaded"}
 	return {"status": "healthy"}
 
+
 if __name__ == "__main__":
 	import uvicorn
+
 	uvicorn.run(app, host="0.0.0.0", port=8000)
