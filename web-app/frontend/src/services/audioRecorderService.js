@@ -26,10 +26,16 @@ export class AudioRecorderService {
         this.longSilence = false;
 
         // Recording/reactivation settings
-        this.thresholdPercentage = 0.1;
+        this.thresholdPercentage = 0.05;
         this.sensitivity = {activity: 0.5, reduced: 0.5};
         this.delayDuration = 250; // ms (not used in this implementation)
-        this.forceSendDuration = 60000; // 60 seconds fallback
+
+        // How long the silence delay is before we consider sending (in ms)
+        this.silence_duration = 2000;
+
+        this.forceSendDuration = 30000; // 30 seconds fallback
+
+
         this.fps = 60;
         this.inactiveTimer = null;
         this.delayTimer = null;
@@ -38,8 +44,6 @@ export class AudioRecorderService {
         this.chunkBeepDuration = 250; // ms
         this.chunkSent = false;
 
-        // How long the silence delay is before we consider sending (in ms)
-        this.silence_duration = 500;
 
         // For reactivation detection using the analyser
         this.analyser = null;
@@ -54,6 +58,9 @@ export class AudioRecorderService {
         // Callback for incoming transcription responses and status updates
         this.onTranscription = null;
         this.onStatusChange = null;
+
+        // Throttle logging to every 500ms
+        this.lastLogTime = 0;
     }
 
     async setupAudio() {
@@ -83,8 +90,16 @@ export class AudioRecorderService {
             this.preBuffer = new Float32Array(this.preBufferSize);
             this.preBufferIndex = 0;
 
-            // Create a MediaStream source and directly connect it to the AudioWorklet
+            // Create a MediaStream source
             const source = this.audioContext.createMediaStreamSource(this.audioStream);
+
+            // Initialize the analyser for silence detection
+            this.analyser = this.audioContext.createAnalyser();
+            this.bufferLength = this.analyser.frequencyBinCount;
+            this.dataArray = new Uint8Array(this.bufferLength);
+
+            // Connect the source to both the analyser and the AudioWorklet
+            source.connect(this.analyser);
 
             // Load the processor module (ensure this processor doesn't perform extra processing)
             await this.audioContext.audioWorklet.addModule('/atlas/audio/processor.js')
@@ -95,10 +110,10 @@ export class AudioRecorderService {
 
             // Create the worklet node to capture raw audio data
             this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
+            // Connect the source also to the worklet node
             source.connect(this.audioWorkletNode);
 
-            // Capture audio data. Even if you're not using the preBuffer actively,
-            // we store data until recording begins.
+            // Capture audio data.
             this.audioWorkletNode.port.onmessage = (event) => {
                 const audioData = event.data;
                 if (audioData.length > 0) {
@@ -112,10 +127,6 @@ export class AudioRecorderService {
                     }
                 }
             };
-
-            // Optionally, you might want to initialize your analyser here if needed.
-            // e.g., this.analyser = this.audioContext.createAnalyser();
-            // and set up this.bufferLength and this.dataArray accordingly.
 
             console.log("Audio setup complete with sample rate:", this.sampleRate);
         } catch (error) {
@@ -238,11 +249,7 @@ export class AudioRecorderService {
     }
 
     startReactivationLoop() {
-        // If you're using the analyser for silence detection, ensure it is initialized.
-        // For example, you might need to initialize:
-        // this.analyser = this.audioContext.createAnalyser();
-        // this.bufferLength = this.analyser.frequencyBinCount;
-        // this.dataArray = new Uint8Array(this.bufferLength);
+        // This loop uses the analyser to check for silence and reactivation.
         const loop = () => {
             if (this.isRecording) {
                 if (this.analyser && this.dataArray) {
@@ -256,7 +263,8 @@ export class AudioRecorderService {
     }
 
     checkThresholdCondition() {
-        // This example uses simple silence detection.
+        // Throttle logging to every 500ms
+        const now = Date.now();
         const center = 128;
         const centerThreshold = center * this.thresholdPercentage;
         const reducedThreshold = centerThreshold * this.sensitivity.reduced;
@@ -266,8 +274,12 @@ export class AudioRecorderService {
             Math.abs(minVal - center) < reducedThreshold);
 
         if (isSilent) {
+            if (now - this.lastLogTime >= 500) {
+                console.log("Silence detected");
+                this.lastLogTime = now;
+            }
             if (this.silenceStartTime === null) {
-                this.silenceStartTime = Date.now();
+                this.silenceStartTime = now;
             }
             if (this.hasSpoken) {
                 if (!this.silenceTimer) {
@@ -278,7 +290,7 @@ export class AudioRecorderService {
                             this.longSilence = true;
                         }
                         if (duration >= this.minChunkDuration) {
-                            console.log("Silence detected and chunk duration (" + duration.toFixed(2) + "s) meets minimum, sending audio chunk");
+                            console.log("Silence maintained for", silenceElapsed, "ms and duration (" + duration.toFixed(2) + "s) meets minimum, sending audio chunk");
                             this.sendRecordedAudio();
                             this.hasSpoken = false;
                         } else {
@@ -290,6 +302,10 @@ export class AudioRecorderService {
                 }
             }
         } else {
+            if (!this.hasSpoken && now - this.lastLogTime >= 500) {
+                console.log("Speech detected");
+                this.lastLogTime = now;
+            }
             this.hasSpoken = true;
             this.silenceStartTime = null;
             this.longSilence = false;
