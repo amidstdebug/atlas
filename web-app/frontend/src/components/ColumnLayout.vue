@@ -753,7 +753,7 @@ export default {
       if (this.autoSummaryEnabled) {
         // Periodically check if we've added at least 300 characters since the last summary.
         this.autoSummaryInterval = setInterval(() => {
-          console.log("Looking for significant change")
+          // console.log("Looking for significant change")
           const aggregated = this.aggregatedTranscription.trim();
           const lengthDelta = aggregated.length - (this.previousTranscriptionLength || 0);
 
@@ -812,6 +812,8 @@ export default {
     if (this.activeTab) {
       this.handleActiveTabChange(this.activeTab);
     }
+    // Enable auto summary from the start by toggling it on
+    this.toggleAutoSummary();
   },
   beforeUnmount() {
     this.cancelTypingFunctions.forEach(cancelFn => cancelFn());

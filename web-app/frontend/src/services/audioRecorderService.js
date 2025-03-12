@@ -26,12 +26,12 @@ export class AudioRecorderService {
         this.longSilence = false;
 
         // Recording/reactivation settings
-        this.thresholdPercentage = 0.05;
+        this.thresholdPercentage = 0.02;
         this.sensitivity = {activity: 0.5, reduced: 0.5};
         this.delayDuration = 250; // ms (not used in this implementation)
 
         // How long the silence delay is before we consider sending (in ms)
-        this.silence_duration = 2000;
+        this.silence_duration = 1200;
 
         this.forceSendDuration = 30000; // 30 seconds fallback
 
