@@ -155,7 +155,7 @@ async def summarize_text(transcription: str, previous_report: Optional[str] = No
 		# Define the payload to send to the LLM service
 		payload = {
 			"model": OLLAMA_MODEL,
-			"options": {"temperature": 0.1},
+			"options": {"temperature": 0.2},
 			"messages": [
 				{"role": "system", "content": system_prompt},
 				{"role": "user", "content": content}
@@ -225,34 +225,35 @@ async def refresh_token(authorization: str = Header(None)):
 	except (jwt.InvalidTokenError, IndexError):
 		raise HTTPException(status_code=401, detail="Invalid token")
 
+
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...), token_data: TokenData = Depends(get_token_data)):
 	try:
 		# Read file content
 		file_content = await file.read()
-		
+
 		print('received')
 		# Forward the file to the audio_server
 		files = {'file': (file.filename, file_content, file.content_type)}
 		response = requests.post(f"{AUDIO_SERVER_URL}/transcribe/file", files=files)
-		
+
 		if response.status_code != 200:
-			raise HTTPException(status_code=response.status_code, 
-								detail=f"Audio server error: {response.text}")
-			
+			raise HTTPException(status_code=response.status_code,
+			                    detail=f"Audio server error: {response.text}")
+
 		# Get the transcription from audio_server
 		result = response.json()
 		transcription = result.get('transcription', '')
 
 		transcription = apply_custom_fixes(transcription)
-		
+
 		# Store the transcription in history for this user
 		user_id = token_data.user_id
 		if user_id not in transcription_history:
 			transcription_history[user_id] = []
-		
+
 		transcription_history[user_id].append(transcription)
-		
+
 		return {"transcription": transcription}
 
 	except HTTPException:
@@ -260,6 +261,53 @@ async def transcribe_audio(file: UploadFile = File(...), token_data: TokenData =
 	except Exception as e:
 		logger.error(f"Error transcribing audio: {str(e)}")
 		raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+
+# @app.post("/transcribe")
+# async def transcribe_audio(file: UploadFile = File(...), token_data: TokenData = Depends(get_token_data)):
+# 	try:
+# 		# # Read file content
+# 		# file_content = await file.read()
+# 		#
+# 		# # Save the file locally to the backend's file server for evaluation
+# 		# upload_dir = "./"
+# 		# if not os.path.exists(upload_dir):
+# 		# 	os.makedirs(upload_dir)
+# 		# timestamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+# 		# local_filename = f"{timestamp}_{file.filename}"
+# 		# local_filepath = os.path.join(upload_dir, local_filename)
+# 		# with open(local_filepath, "wb") as f:
+# 		# 	f.write(file_content)
+# 		# logger.info(f"Saved audio file locally at {local_filepath}")
+#
+# 		# Forward the file to the audio_server
+# 		files = {'file': (file.filename, file_content, file.content_type)}
+# 		response = requests.post(f"{AUDIO_SERVER_URL}/transcribe/file", files=files)
+#
+# 		if response.status_code != 200:
+# 			raise HTTPException(status_code=response.status_code,
+# 			                    detail=f"Audio server error: {response.text}")
+#
+# 		# Get the transcription from audio_server
+# 		result = response.json()
+# 		transcription = result.get('transcription', '')
+#
+# 		transcription = apply_custom_fixes(transcription)
+#
+# 		# Store the transcription in history for this user
+# 		user_id = token_data.user_id
+# 		if user_id not in transcription_history:
+# 			transcription_history[user_id] = []
+# 		transcription_history[user_id].append(transcription)
+#
+# 		return {"transcription": transcription}
+#
+# 	except HTTPException:
+# 		raise
+# 	except Exception as e:
+# 		logger.error(f"Error transcribing audio: {str(e)}")
+# 		raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
 
 @app.post("/summary")
 async def get_summary(request: TranscriptionRequest, token_data: TokenData = Depends(get_token_data)):

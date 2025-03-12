@@ -32,10 +32,12 @@ EXPOSE 5002
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV AUDIO_SERVER_URL=http://audio_server:8000
-ENV OLLAMA_SERVER_URL=http://ollama:11434
+#TODO: MOVE BACK TO LOCAL DEPLOYMENT. THIS IS USING KENNETH'S PC
+#ENV OLLAMA_SERVER_URL=http://ollama:11434
+ENV OLLAMA_SERVER_URL=https://temp.jwong.dev
 ENV JWT_SECRET=meeting_minutes_transcription_2024_secure_key
 ENV JWT_ALGORITHM=HS256
-ENV OLLAMA_MODEL=llama3.1:8b-instruct-q4_K_S
+ENV OLLAMA_MODEL=hf.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:IQ4_XS
 
 # Command to run the FastAPI server
 CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "5002", "--reload"]

@@ -15,7 +15,7 @@ services:
       PYTHONUNBUFFERED: 1
     depends_on:
       - audio_server
-      - ollama
+#      - ollama
     
       
   audio_server:
@@ -39,28 +39,28 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
-  ollama:
-    image: ollama/ollama
-    container_name: ollama
-    runtime: nvidia  # To use GPUs
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all  # Ensures the container can see all GPUs
-      - OLLAMA_KEEP_ALIVE=-1
-    volumes:
-      - ollama:/root/.ollama
-      - ./ollama_server:/root/ollama_serve  # Mount local ollama_serve directory to the container
-    ports:
-      - "11434:11434"  # Expose the Ollama service on port 11434
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
-    restart: "no"
-    entrypoint: ["bash", "/root/ollama_serve/serve_ollama.sh"]  # Run the custom script to create and serve the model
+#  ollama:
+#    image: ollama/ollama
+#    container_name: ollama
+#    runtime: nvidia  # To use GPUs
+#    environment:
+#      - NVIDIA_VISIBLE_DEVICES=all  # Ensures the container can see all GPUs
+#      - OLLAMA_KEEP_ALIVE=-1
+#    volumes:
+#      - ollama:/root/.ollama
+#      - ./ollama_server:/root/ollama_serve  # Mount local ollama_serve directory to the container
+#    ports:
+#      - "11434:11434"  # Expose the Ollama service on port 11434
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: 1
+#              capabilities: [ gpu ]
+#    restart: "no"
+#    entrypoint: ["bash", "/root/ollama_serve/serve_ollama.sh"]  # Run the custom script to create and serve the model
 
-volumes:
-  ollama:
-    driver: local  # Persistent volume for Ollama
+#volumes:
+#  ollama:
+#    driver: local  # Persistent volume for Ollama

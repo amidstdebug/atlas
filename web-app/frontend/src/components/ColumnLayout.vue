@@ -16,9 +16,9 @@
               <!-- Use parsedSegments to loop over each actual text segment -->
               <div v-if="parsedSegments.length > 0" class="transcription-content">
                 <div
-                    v-for="(segment, index) in parsedSegments"
-                    :key="index"
-                    class="segment"
+                  v-for="(segment, index) in parsedSegments"
+                  :key="index"
+                  class="segment"
                 >
                   <!-- Timestamp -->
                   <span class="segment-timestamp">
@@ -48,12 +48,12 @@
             </template>
             <div class="content-box">
               <el-carousel
-                  :interval="0"
-                  arrow="never"
-                  indicator-position="outside"
-                  height="600px"
-                  :loop="false"
-                  :trigger="'click'"
+                :interval="0"
+                arrow="never"
+                indicator-position="outside"
+                height="600px"
+                :loop="false"
+                :trigger="'click'"
               >
                 <template v-if="summaries.length === 0">
                   <el-carousel-item>
@@ -64,17 +64,17 @@
                 </template>
                 <template v-else>
                   <el-carousel-item
-                      v-for="summary in summaries"
-                      :key="summary.id"
-                      class="summary-item"
+                    v-for="summary in summaries"
+                    :key="summary.id"
+                    class="summary-item"
                   >
                     <div class="summary-content" ref="summaryContent">
                       <el-tag type="info" size="small" class="timestamp-tag">
                         {{ summary.timestamp }}
                       </el-tag>
                       <div
-                          v-html="summary.formattedContent"
-                          class="formatted-summary"
+                        v-html="summary.formattedContent"
+                        class="formatted-summary"
                       ></div>
                     </div>
                   </el-carousel-item>
@@ -89,10 +89,10 @@
       <div ref="buttonGroup" class="button-group merged">
         <!-- File Upload Button -->
         <el-button
-            :disabled="isTranscribing"
-            :style="{ color: uploadColor }"
-            class="centered-button same-width-button"
-            @click="uploadRecording"
+          :disabled="isTranscribing"
+          :style="{ color: uploadColor }"
+          class="centered-button same-width-button"
+          @click="uploadRecording"
         >
           <el-icon class="icon-group">
             <UploadIcon/>
@@ -102,10 +102,10 @@
 
         <!-- Live Recording (Mic) Button -->
         <el-button
-            v-if="!isRecording"
-            :style="{ color: liveRecordColor }"
-            class="centered-button same-width-button"
-            @click="startMicRecording"
+          v-if="!isRecording"
+          :style="{ color: liveRecordColor }"
+          class="centered-button same-width-button"
+          @click="startMicRecording"
         >
           <el-icon class="icon-group">
             <MicrophoneIcon/>
@@ -113,33 +113,33 @@
           Start Recording
         </el-button>
         <el-button
-            v-if="isRecording"
-            class="centered-button same-width-button"
-            @click="stopMicRecording"
+          v-if="isRecording"
+          class="centered-button same-width-button"
+          @click="stopMicRecording"
         >
           Stop Recording
         </el-button>
 
         <!-- Generate Summary Button -->
         <el-button
-            class="centered-button same-width-button"
-            @click="generateSummary"
+          class="centered-button same-width-button"
+          @click="generateSummary"
         >
           Generate Summary
         </el-button>
 
         <!-- Toggle Auto Summary Button -->
         <el-button
-            class="centered-button same-width-button"
-            @click="toggleAutoSummary"
+          class="centered-button same-width-button"
+          @click="toggleAutoSummary"
         >
-          {{ autoSummaryEnabled ? 'Disable Auto Summary' : 'Enable Auto Summary' }}
+          {{ autoSummaryInterval ? 'Disable Auto Summary' : 'Enable Auto Summary' }}
         </el-button>
 
         <!-- Clear Transcript Button -->
         <el-button
-            class="centered-button same-width-button"
-            @click="clearTranscription"
+          class="centered-button same-width-button"
+          @click="clearTranscription"
         >
           {{ isTranscribing ? 'Stop Transcribing' : 'Clear Transcript' }}
         </el-button>
@@ -147,11 +147,11 @@
 
       <!-- Hidden File Input for Upload -->
       <input
-          ref="audioFileInput"
-          type="file"
-          accept="audio/*"
-          style="display: none;"
-          @change="handleFileUpload"
+        ref="audioFileInput"
+        type="file"
+        accept="audio/*"
+        style="display: none;"
+        @change="handleFileUpload"
       />
     </el-main>
   </el-container>
@@ -248,7 +248,7 @@ export default {
       cumulativeOffset: 0, // track audio offset for live recording segments
       apiStatus: getLoadingStatus(),
       // New properties for automatic summary generation
-      autoSummaryEnabled: false,
+      autoSummaryEnabled: true,
       autoSummaryInterval: null,
       previousSummaryLength: 0,
       previousSummary: ""
@@ -260,15 +260,15 @@ export default {
      */
     transcriptionSegments() {
       if (
-          this.liveTranscription &&
-          Array.isArray(this.liveTranscription.segments)
+        this.liveTranscription &&
+        Array.isArray(this.liveTranscription.segments)
       ) {
         return this.liveTranscription.segments;
       }
       if (
-          this.transcription &&
-          typeof this.transcription === 'object' &&
-          Array.isArray(this.transcription.segments)
+        this.transcription &&
+        typeof this.transcription === 'object' &&
+        Array.isArray(this.transcription.segments)
       ) {
         return this.transcription.segments;
       }
@@ -307,12 +307,13 @@ export default {
     },
 
     /**
-     * Joins all chunked transcriptions for the “Generate Summary” request.
+     * Joins all the actual text segments for the “Generate Summary” request.
      */
     aggregatedTranscription() {
-      return this.transcriptionSegments
-          .map(segment => segment.transcription)
-          .join("\n");
+      return this.parsedSegments
+        .filter(segment => segment.text)
+        .map(segment => segment.text)
+        .join(" ");
     },
   },
   methods: {
@@ -356,6 +357,13 @@ export default {
             this.liveTranscription.segments.push({
               speaker: 0,
               transcription: JSON.stringify({segments})
+            });
+            // Auto-scroll after adding new transcription
+            this.$nextTick(() => {
+              const box = this.$refs.transcriptionBox;
+              if (box) {
+                box.scrollTop = box.scrollHeight;
+              }
             });
           } catch (error) {
             console.error("Error parsing server transcription chunk:", error);
@@ -457,20 +465,6 @@ export default {
         // Encode the chunk into WAV format (assumes you have an encodeWAV function)
         const wavBlob = encodeWAV(chunk, this.sampleRate);
 
-        // Create a blob URL and a temporary download link for local inspection
-        const url = URL.createObjectURL(wavBlob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `audio_chunk_${Date.now()}.wav`;
-        document.body.appendChild(a);
-        a.click();
-        // Cleanup the link and revoke the object URL after a short delay
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }, 1000);
-        console.log('downloading wav file')
         // Create FormData for the POST request
         const formData = new FormData();
         formData.append('file', wavBlob, 'audio_chunk.wav');
@@ -555,7 +549,6 @@ export default {
           transcription: JSON.stringify({segments: offsetSegments}),
         });
       }
-
       // 2) If newText is just a string that may contain segments in JSON:
       else if (typeof newText === 'string') {
         try {
@@ -595,6 +588,13 @@ export default {
           });
         }
       }
+      // Auto-scroll the transcription box after adding a new entry
+      this.$nextTick(() => {
+        const transcriptionBox = this.$refs.transcriptionBox;
+        if (transcriptionBox) {
+          transcriptionBox.scrollTop = transcriptionBox.scrollHeight;
+        }
+      });
     },
 
     clearTranscription() {
@@ -747,45 +747,50 @@ export default {
       return text.charAt(0).toUpperCase() + text.slice(1);
     },
 
-    // New method to toggle automatic summary generation
+    // New method to start automatic summary generation
+    startAutoSummary() {
+      this.autoSummaryInterval = setInterval(() => {
+        // console.log("Looking for significant change");
+        const aggregated = this.aggregatedTranscription.trim();
+        const lengthDelta = aggregated.length - (this.previousTranscriptionLength || 0);
+
+        // Only call summary if we have at least 300 new characters.
+        if (lengthDelta >= 300) {
+          console.log("Change found. Sending summary now.");
+          const payload = {
+            transcription: aggregated,
+            previous_report: this.previousSummary || "",
+            summary_mode: "atc",
+          };
+          apiClient.post('summary', payload)
+              .then(response => {
+                const summaryObj = this.extractSummary(response.data.message.content);
+                if (summaryObj) {
+                  this.previousSummary = summaryObj.meeting_minutes
+                      ? JSON.stringify(summaryObj.meeting_minutes)
+                      : JSON.stringify(summaryObj);
+                  this.addSummary(summaryObj.meeting_minutes || summaryObj);
+                }
+              })
+              .catch(error => {
+                console.error('Error generating summary:', error);
+              });
+
+          // Update the stored transcription length to the new length
+          this.previousTranscriptionLength = aggregated.length;
+        }
+      }, 2000);
+    },
+
+    // Modified toggle method to enable/disable auto summary generation
     toggleAutoSummary() {
-      this.autoSummaryEnabled = !this.autoSummaryEnabled;
-      if (this.autoSummaryEnabled) {
-        // Periodically check if we've added at least 300 characters since the last summary.
-        this.autoSummaryInterval = setInterval(() => {
-          console.log("Looking for significant change")
-          const aggregated = this.aggregatedTranscription.trim();
-          const lengthDelta = aggregated.length - (this.previousTranscriptionLength || 0);
-
-          // Only call summary if we have at least 300 new characters.
-          if (lengthDelta >= 300) {
-            console.log("Change found")
-            const payload = {
-              transcription: aggregated,
-              previous_report: this.previousSummary || "",
-              summary_mode: "atc",
-            };
-            apiClient.post('summary', payload)
-                .then(response => {
-                  const summaryObj = this.extractSummary(response.data.message.content);
-                  if (summaryObj) {
-                    this.previousSummary = summaryObj.meeting_minutes
-                        ? JSON.stringify(summaryObj.meeting_minutes)
-                        : JSON.stringify(summaryObj);
-                    this.addSummary(summaryObj.meeting_minutes || summaryObj);
-                  }
-                })
-                .catch(error => {
-                  console.error('Error generating summary:', error);
-                });
-
-            // Update the stored transcription length to the new length
-            this.previousTranscriptionLength = aggregated.length;
-          }
-        }, 2000);
-      } else {
+      if (this.autoSummaryInterval) {
         clearInterval(this.autoSummaryInterval);
         this.autoSummaryInterval = null;
+        this.autoSummaryEnabled = false;
+      } else {
+        this.startAutoSummary();
+        this.autoSummaryEnabled = true;
       }
     },
   },
@@ -811,6 +816,10 @@ export default {
     );
     if (this.activeTab) {
       this.handleActiveTabChange(this.activeTab);
+    }
+    // Automatically start auto summary if enabled
+    if (this.autoSummaryEnabled && !this.autoSummaryInterval) {
+      this.startAutoSummary();
     }
   },
   beforeUnmount() {
