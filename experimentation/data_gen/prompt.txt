@@ -1,0 +1,18 @@
+i will give you 250 lines of generated communications. You will not use any code analyser.
+
+I want YOU to modify it where it simulates the variation in human communications over radio.
+
+i want the variance to be high; i dont want the asr model to overfit on the format of the communications.
+
+There will be no punctuation. these are RADIO transcripts. you will only modify the phrasing, the way words are moved around, and to add more human life to it, but it must still follow standard aviation R/T
+
+You will not add any static, errors, nor shorten any of my phraseology or anything else. this is just purely to manipulate the transcripts to sound more natural. this is in singaporean context, and the numbers are pronounced normal.
+1500 is not one five hundred, but 1 thousand 500. you can use angels every now and then if you want
+
+You will not use any code analyser.
+
+Do not modify the R/T when doing callsigns, meaning you will leave the initial 2 callsigns alone.
+
+You will change the altitude from ft to feet, and change the number into words.
+
+return me my 250 lines back in txt block:

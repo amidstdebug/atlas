@@ -1,0 +1,250 @@
+Milo1 Hulk you are cleared for transition to Coral Approach then proceed over Ammo Point at 5000ft
+Ricoh3 Tiger expect chop east of Sam Hill, steer clear of ridge near Waypoint 8, keep at 7000ft
+Tiger Milo3 clear track for Raspberry Creek and maintain 8000ft
+Pedal4 Lobster turbulence zone near Torilla, bypass via Waypoint 1, altitude restriction 1500ft
+Starling2 Niro reports of severe icing above 6000ft by Akens Island, avoid zone via Waypoint 1
+Pedal Cobra2 low vis in Harp sector, reroute from IP Sierra, maintain 8000ft
+Ricoh Python3 track Waypoint 6 then continue over Raspberry Creek at 2000ft
+Niro3 Vodka icing hazard over Glen, climb below 4000ft or reroute via Waypoint 9
+Aston4 Cobra proceed via Waypoint 2 then over Brisbane Centre at 2500ft
+Hulk Pedal2 severe wx near Sam Hill, divert path inland along Brisbane Centre, hold altitude 4000ft
+Vodka4 Pistol clear track for The Peninsula and maintain 1500ft
+Vodka Piston2 maintain track for Rocky then fly via IP Sierra over Akens Island at 8000ft
+Cola4 Hulk confirm clear operation in UOLF report over IP Sierra at 1500ft
+Python2 Cobra update position IP Echo then verify Mount Hummock at 5000ft
+Aston Robin2 clear track for Freshwater Bay and maintain 5000ft
+Starling Tiger1 track IP Whiskey then continue over Glen at 4000ft
+Salmon Hulk1 track Waypoint 5 then continue over Torilla at 5000ft
+Pedal Robin3 you are cleared for transition to Brisbane Centre then proceed over Kapyong ROZ at 10000ft
+Cola Rayban2 shift to Waypoint 2 then report over The Peninsula at 7000ft
+Tiger4 Rayban maintain track for Shoalwater Bay Training Area then fly via IP Whiskey over Glen at 5000ft
+Pistol1 Niro proceed via Waypoint 8 then over Coral Approach at 1000ft
+Python Milo2 shift to Waypoint 5 then report over Mount Lion at 9000ft
+Niro Piston2 continue on Brisbane Centre then switch to Waypoint 6 over UOTF at 7000ft
+Kasper2 Robin heavy turbulence eastward of Mount Hummock, reroute away from IP Whiskey, fly at 8000ft
+Pedal3 Piston turbulence zone near Raspberry Creek, bypass via Waypoint 10, altitude restriction 6000ft
+Python Tiger1 continue on Shoalwater Bay Training Area then switch to Waypoint 3 over ACA at 5000ft
+Cola3 Tiger icing reported above 4000ft near Canal Creek, route via IP Sierra to avoid
+Salmon1 Pistol reports of severe icing above 500ft by Mount Hummock, avoid zone via Waypoint 3
+Ricoh1 Whiskey storm activity near Plains coastline, divert inland via Shoalwater Bay Expanded Area and hold 9000ft
+Ricoh Niro4 update position Waypoint 9 then verify The Peninsula at 10000ft
+Hulk2 Piston maintain track for Shoalwater Bay Training Area then fly via IP November over Sam Hill at 3000ft
+Cobra1 Cola heavy turbulence eastward of Plains, reroute away from Waypoint 6, fly at 1500ft
+Robin3 Ricoh clear track for The Peninsula and maintain 7000ft
+Piston4 Milo clear track for Freshwater Bay and maintain 500ft
+Hulk Vodka3 update position Waypoint 10 then verify Byfield at 2000ft
+Hulk3 Pedal maintain track for Shoalwater Bay Training Area then fly via Waypoint 1 over Cape Clinton at 6000ft
+Salmon Starling3 maintain track for Coral Approach then fly via IP Sierra over Townshend Island at 4000ft
+Starling3 Pistol operate in Spike ROZ and surface to 10000ft
+Pistol Tiger3 icing reported above 8000ft near Cape Clinton, route via Waypoint 5 to avoid
+all aircraft BSSZ active keep clear and hold 10000ft
+Starling4 Hulk operate in UOLF and surface to 2500ft
+Pedal Rayban2 limited visibility in ACA, delay entry via Waypoint 5, keep at 1000ft
+Aston4 Hulk icing observed around The Peninsula, shift path to Waypoint 1, stay under 1000ft
+Python Piston1 you are cleared for transition to Shoalwater Bay Expanded Area then proceed over Kapyong ROZ at 7000ft
+Cobra Lobster4 shift to Waypoint 7 then report over Williamson at 10000ft
+all aircraft UOTF active keep clear and hold 2500ft
+Vodka Rayban3 track IP November then continue over Williamson at 1000ft
+Python2 Cola you are cleared for transition to Brisbane Centre then proceed over Harp at 1500ft
+Python Niro3 copy track Waypoint 5 then fly over Rockhampton at 1000ft
+Cobra1 Hulk expect chop east of Akens Island, steer clear of ridge near Waypoint 8, keep at 6000ft
+Salmon1 Ricoh limited visibility in UOLF, delay entry via IP Sierra, keep at 3000ft
+Rayban Piston2 update position Waypoint 6 then verify Freshwater Bay at 6000ft
+Niro2 Pedal clear track for Sam Hill and maintain 500ft
+Piston1 Robin proceed via IP Echo then over Rockhampton at 1000ft
+Kasper Cola2 copy track IP November then fly over Rockhampton at 1500ft
+Rayban Starling3 shift to Waypoint 4 then report over Camp Tilpal at 6000ft
+Python Ricoh4 proceed via IP Whiskey then over Shoalwater Bay Training Area at 10000ft
+Tiger2 Pistol ice layer detected above 7000ft, use Waypoint 10 to bypass Akens Island
+Aston Niro4 track IP Echo then continue over Mount Lion at 500ft
+Piston Tiger3 heavy turbulence eastward of Tilpal, reroute away from Waypoint 1, fly at 5000ft
+Pedal1 Cola continue on Brisbane Centre then switch to IP Sierra over Spike ROZ at 7000ft
+Aston Pistol4 copy track Waypoint 10 then fly over Brisbane Centre at 8000ft
+Kasper Cola2 dense fog in Harp, ingress via Waypoint 10 suspended, altitude 2000ft
+Milo Lobster4 update position Waypoint 10 then verify Williamson at 1500ft
+Kasper Tiger3 clear track for Plains and maintain 9000ft
+Hulk4 Batman confirm clear operation in LST Control Zone De report over Waypoint 4 at 2500ft
+Cobra2 Kasper heavy turbulence eastward of Akens Island, reroute away from Waypoint 9, fly at 5000ft
+Starling1 Piston continue on Shoalwater Bay Training Area then switch to Waypoint 1 over UOLF at 500ft
+Cobra Tiger1 shift to Waypoint 5 then report over Raspberry Creek at 8000ft
+Aston4 Vodka shift to IP Sierra then report over Sam Hill at 7000ft
+Cola3 Pedal shift to IP Echo then report over Mount Hummock at 10000ft
+Hulk3 Ricoh turbulence zone near Williamson, bypass via Waypoint 8, altitude restriction 2000ft
+Tiger Starling1 track IP Sierra then continue over Akens Island at 2000ft
+all aircraft UOLF active keep clear and hold 3000ft
+Starling Tiger3 copy track Waypoint 4 then fly over Shoalwater Bay Expanded Area at 6000ft
+Cobra Kasper1 operate in Kingfisher and surface to 2000ft
+Pistol4 Milo copy track Waypoint 1 then fly over Coral Approach at 500ft
+Whiskey Batman4 maintain track for Shoalwater Bay Training Area then fly via IP November over Sam Hill at 2000ft
+Tiger Milo4 copy track IP Whiskey then fly over Shoalwater Bay Training Area at 7000ft
+Starling Lobster1 shift to Waypoint 9 then report over Akens Island at 2000ft
+Robin2 Piston convective weather over Sam Hill, transition via Shoalwater Bay Expanded Area, hold 1000ft
+Aston4 Niro heavy turbulence eastward of Byfield, reroute away from Waypoint 2, fly at 8000ft
+Rayban4 Ricoh visual contact lost in UOLF valley, use IP Whiskey only when clear, altitude hold 6000ft
+Lobster Piston3 continue on Shoalwater Bay Training Area then switch to Waypoint 4 over ACA at 6000ft
+Cobra4 Pedal copy track Waypoint 5 then fly over Rocky at 500ft
+Hulk1 Tiger proceed via IP Echo then over Rockhampton at 2500ft
+Salmon2 Whiskey shift to Waypoint 6 then report over Mount Lion at 10000ft
+Milo4 Niro confirm clear operation in Ammo Point report over Waypoint 7 at 5000ft
+Pistol Tiger4 confirm clear operation in BSSZ report over IP Sierra at 5000ft
+Aston Tiger2 maintain track for Shoalwater Bay Expanded Area then fly via Waypoint 4 over Torilla at 8000ft
+Lobster1 Milo track Waypoint 9 then continue over Sam Hill at 3000ft
+Ricoh4 Robin confirm clear operation in LST Control Zone De report over IP Sierra at 500ft
+Lobster2 Vodka shift to Waypoint 6 then report over The Peninsula at 1000ft
+Starling4 Whiskey copy track Waypoint 5 then fly over Shoalwater Bay Training Area at 10000ft
+Tiger1 Robin low vis in ACA sector, reroute from Waypoint 6, maintain 2500ft
+all aircraft Spike ROZ active keep clear and hold 3000ft
+Batman4 Hulk you are cleared for transition to Rocky then proceed over LST Control Zone De at 10000ft
+Vodka2 Lobster clear track for The Peninsula and maintain 4000ft
+Kasper Aston4 proceed via IP Whiskey then over Shoalwater Bay Expanded Area at 9000ft
+Milo4 Cobra copy track Waypoint 5 then fly over Brisbane Centre at 3000ft
+Piston Kasper1 update position Waypoint 2 then verify Byfield at 2000ft
+Batman3 Starling you are cleared for transition to Shoalwater Bay Training Area then proceed over Kapyong ROZ at 6000ft
+Cobra4 Niro confirm clear operation in LST Control Zone De report over Waypoint 9 at 1500ft
+Starling2 Niro update position Waypoint 4 then verify Pointer at 2000ft
+Cola1 Batman clear track for Tilpal and maintain 1000ft
+Tiger3 Ricoh continue on Rocky then switch to IP Whiskey over UOLF at 8000ft
+Kasper4 Salmon continue on Coral Approach then switch to Waypoint 6 over BSSZ at 5000ft
+Hulk3 Tiger update position Waypoint 6 then verify Glen at 7000ft
+Cobra Niro2 track Waypoint 2 then continue over Akens Island at 5000ft
+Niro Cobra3 icing observed around The Peninsula, shift path to IP Sierra, stay under 5000ft
+Batman Starling4 low vis in Kapyong ROZ sector, reroute from Waypoint 4, maintain 3000ft
+Salmon3 Pistol operate in UOTF and surface to 1000ft
+Kasper Robin4 you are cleared for transition to Shoalwater Bay Training Area then proceed over BSSZ at 5000ft
+Whiskey1 Robin clear track for Torilla and maintain 7000ft
+Whiskey Hulk1 copy track Waypoint 6 then fly over Shoalwater Bay Expanded Area at 6000ft
+Piston Batman1 ice layer detected above 500ft, use IP Sierra to bypass Cape Manifold
+Cola2 Vodka track Waypoint 6 then continue over Pointer at 1500ft
+Salmon1 Tiger clear track for Tilpal and maintain 4000ft
+Whiskey2 Vodka reports of severe icing above 1000ft by The Peninsula, avoid zone via Waypoint 3
+Whiskey1 Batman shift to Waypoint 3 then report over Raspberry Creek at 2500ft
+Hulk Whiskey2 low vis in Kapyong ROZ sector, reroute from Waypoint 4, maintain 500ft
+Cola Batman2 icing observed around Camp Tilpal, shift path to Waypoint 9, stay under 7000ft
+Starling2 Vodka continue on Coral Approach then switch to Waypoint 5 over Kingfisher at 3000ft
+Lobster Whiskey1 clear track for Freshwater Bay and maintain 2500ft
+all aircraft UOTF active keep clear and hold 500ft
+Kasper4 Lobster operate in ACA and surface to 10000ft
+Whiskey Vodka3 maintain track for Brisbane Centre then fly via Waypoint 3 over Camp Tilpal at 6000ft
+Salmon Cobra3 confirm clear operation in UOTF report over Waypoint 1 at 5000ft
+Python2 Salmon severe wx near Tilpal, divert path inland along Coral Approach, hold altitude 2500ft
+Cobra Python2 update position Waypoint 10 then verify Pointer at 5000ft
+Aston2 Robin proceed via Waypoint 10 then over Rockhampton at 8000ft
+Aston Piston1 storm activity near Pointer coastline, divert inland via Shoalwater Bay Expanded Area and hold 10000ft
+Robin3 Rayban continue on Shoalwater Bay Expanded Area then switch to Waypoint 3 over BSSZ at 1500ft
+Robin4 Niro you are cleared for transition to Coral Approach then proceed over Kapyong ROZ at 3000ft
+Starling1 Python proceed via Waypoint 8 then over Shoalwater Bay Expanded Area at 4000ft
+Cobra Batman2 maintain track for Shoalwater Bay Training Area then fly via Waypoint 10 over Torilla at 7000ft
+Whiskey3 Milo maintain track for Shoalwater Bay Training Area then fly via Waypoint 7 over Akens Island at 7000ft
+Tiger Rayban3 continue on Shoalwater Bay Expanded Area then switch to Waypoint 4 over Kingfisher at 8000ft
+Kasper3 Milo proceed via Waypoint 2 then over Rockhampton at 2500ft
+Robin1 Cobra copy track Waypoint 6 then fly over Rockhampton at 3000ft
+Python1 Milo confirm clear operation in UOTF report over Waypoint 8 at 5000ft
+Cobra Ricoh4 clear track for Akens Island and maintain 7000ft
+Ricoh3 Robin copy track Waypoint 1 then fly over Rocky at 7000ft
+Cobra Lobster3 confirm clear operation in LST Control Zone De report over Waypoint 1 at 10000ft
+all aircraft Kingfisher active keep clear and hold 7000ft
+Whiskey Rayban4 update position IP Sierra then verify Tilpal at 1000ft
+Python Milo4 continue on Shoalwater Bay Training Area then switch to IP Sierra over UOLF at 5000ft
+all aircraft Spike ROZ active keep clear and hold 1500ft
+Milo Kasper2 icing observed around Camp Tilpal, shift path to Waypoint 5, stay under 7000ft
+Cola Robin1 expect chop east of Canal Creek, steer clear of ridge near Waypoint 10, keep at 8000ft
+Cola2 Piston track Waypoint 8 then continue over Pointer at 5000ft
+Cobra Kasper3 clear track for Torilla and maintain 9000ft
+Rayban4 Cobra confirm clear operation in ACA report over Waypoint 10 at 3000ft
+Robin Aston1 confirm clear operation in LST Control Zone De report over IP November at 1000ft
+Starling Milo3 operate in Harp and surface to 9000ft
+Ricoh Niro1 confirm clear operation in Ammo Point report over IP Echo at 7000ft
+Robin4 Pistol copy track Waypoint 7 then fly over Brisbane Centre at 1500ft
+Pedal Whiskey3 clear track for Williamson and maintain 5000ft
+Whiskey4 Pistol confirm clear operation in Harp report over IP Echo at 10000ft
+Aston1 Vodka turbulence zone near Sam Hill, bypass via Waypoint 1, altitude restriction 1000ft
+Python Vodka2 clear track for Williamson and maintain 1500ft
+Cola Milo2 expect chop east of Byfield, steer clear of ridge near IP November, keep at 10000ft
+Ricoh Starling1 confirm clear operation in LST Control Zone De report over Waypoint 10 at 500ft
+Rayban2 Salmon limited visibility in Kapyong ROZ, delay entry via Waypoint 6, keep at 2000ft
+Lobster1 Salmon copy track Waypoint 7 then fly over Rockhampton at 9000ft
+Tiger Milo4 operate in BSSZ and surface to 7000ft
+Batman2 Pedal copy track IP Echo then fly over Rockhampton at 6000ft
+Salmon Lobster1 expect chop east of Mount Lion, steer clear of ridge near Waypoint 1, keep at 3000ft
+all aircraft UOTF active keep clear and hold 10000ft
+Starling Cola1 track Waypoint 7 then continue over Sam Hill at 2000ft
+Starling1 Tiger shift to Waypoint 5 then report over Sam Hill at 10000ft
+Whiskey2 Cobra proceed via Waypoint 1 then over Rockhampton at 500ft
+Pedal1 Lobster you are cleared for transition to Rocky then proceed over BSSZ at 6000ft
+Cola2 Tiger maintain track for Coral Approach then fly via Waypoint 6 over Torilla at 8000ft
+Pedal2 Cobra update position IP Echo then verify Williamson at 5000ft
+Aston Whiskey4 visual contact lost in Spike ROZ valley, use Waypoint 5 only when clear, altitude hold 5000ft
+Starling4 Cola track Waypoint 4 then continue over Plains at 2000ft
+Pistol1 Python continue on Rocky then switch to Waypoint 1 over UOTF at 2500ft
+Batman2 Milo shift to Waypoint 1 then report over Mount Lion at 2500ft
+Robin Whiskey4 maintain track for Rockhampton then fly via IP Whiskey over Pointer at 500ft
+Niro2 Starling clear track for The Peninsula and maintain 4000ft
+Tiger2 Cola copy track Waypoint 4 then fly over Shoalwater Bay Expanded Area at 2500ft
+Rayban2 Piston copy track Waypoint 5 then fly over Shoalwater Bay Training Area at 5000ft
+Vodka2 Cobra track Waypoint 4 then continue over Canal Creek at 9000ft
+Milo1 Whiskey severe wx near Mount Lion, divert path inland along Brisbane Centre, hold altitude 10000ft
+Tiger Hulk3 continue on Shoalwater Bay Training Area then switch to Waypoint 5 over ACA at 1500ft
+Tiger Piston3 continue on Shoalwater Bay Training Area then switch to Waypoint 5 over Ammo Point at 3000ft
+Ricoh Tiger3 convective weather over Tilpal, transition via Rockhampton, hold 1000ft
+Starling4 Lobster shift to Waypoint 9 then report over Camp Tilpal at 6000ft
+all aircraft UOLF active keep clear and hold 8000ft
+Pedal Piston4 track Waypoint 3 then continue over Akens Island at 5000ft
+Milo4 Python shift to Waypoint 9 then report over Byfield at 5000ft
+Cobra Whiskey1 track Waypoint 1 then continue over Raspberry Creek at 1000ft
+Piston4 Milo track IP Whiskey then continue over Torilla at 9000ft
+Rayban Robin1 you are cleared for transition to Shoalwater Bay Expanded Area then proceed over UOLF at 9000ft
+Cobra Tiger3 maintain track for Shoalwater Bay Expanded Area then fly via Waypoint 6 over Camp Tilpal at 8000ft
+Python1 Vodka confirm clear operation in ACA report over IP Sierra at 10000ft
+Batman3 Pedal dense fog in LST Control Zone De, ingress via Waypoint 10 suspended, altitude 5000ft
+Cobra Pistol3 shift to Waypoint 9 then report over Mount Hummock at 5000ft
+Cobra4 Whiskey operate in UOTF and surface to 8000ft
+Niro Salmon4 continue on Rocky then switch to IP Echo over UOTF at 500ft
+Niro2 Milo you are cleared for transition to Shoalwater Bay Training Area then proceed over ACA at 1500ft
+all aircraft Ammo Point active keep clear and hold 9000ft
+Whiskey3 Python operate in UOTF and surface to 6000ft
+Cola Ricoh3 convective weather over The Peninsula, transition via Rockhampton, hold 3000ft
+Pistol1 Rayban severe wx near Camp Tilpal, divert path inland along Shoalwater Bay Training Area, hold altitude 9000ft
+Cola4 Batman storm activity near Canal Creek coastline, divert inland via Shoalwater Bay Expanded Area and hold 7000ft
+all aircraft Kapyong ROZ active keep clear and hold 9000ft
+Ricoh2 Aston low vis in UOTF sector, reroute from Waypoint 5, maintain 4000ft
+Milo Batman3 expect chop east of Townshend Island, steer clear of ridge near Waypoint 10, keep at 3000ft
+Python2 Kasper update position Waypoint 2 then verify Raspberry Creek at 10000ft
+Starling1 Pedal dense fog in Ammo Point, ingress via Waypoint 6 suspended, altitude 1000ft
+Tiger1 Cobra track Waypoint 9 then continue over Sam Hill at 4000ft
+Hulk Piston2 track IP November then continue over Torilla at 1000ft
+Whiskey4 Niro thunderstorm cells along Akens Island coast, reroute using Shoalwater Bay Expanded Area, stay at 3000ft
+Batman1 Piston proceed via IP Whiskey then over Shoalwater Bay Expanded Area at 3000ft
+all aircraft Ammo Point active keep clear and hold 8000ft
+Rayban1 Cobra track Waypoint 5 then continue over Byfield at 1500ft
+Whiskey Python1 you are cleared for transition to Shoalwater Bay Training Area then proceed over Kapyong ROZ at 7000ft
+Salmon Pedal2 operate in BSSZ and surface to 6000ft
+Tiger Cobra3 operate in Ammo Point and surface to 8000ft
+Ricoh Aston3 copy track Waypoint 3 then fly over Brisbane Centre at 5000ft
+Kasper3 Vodka moderate turbulence reported east of Akens Island, avoid ridge near Waypoint 4, maintain low-level 2000ft
+Aston Pistol2 continue on Rockhampton then switch to Waypoint 7 over ACA at 7000ft
+Rayban Batman3 track Waypoint 7 then continue over Camp Tilpal at 10000ft
+Salmon Batman4 proceed via IP Echo then over Shoalwater Bay Expanded Area at 4000ft
+Niro Milo4 proceed via IP Sierra then over Rockhampton at 2500ft
+Starling Kasper4 copy track Waypoint 5 then fly over Rockhampton at 4000ft
+Cola4 Tiger shift to IP November then report over Torilla at 500ft
+Rayban Vodka2 reports of severe icing above 6000ft by Townshend Island, avoid zone via Waypoint 7
+Salmon Whiskey2 low vis in BSSZ sector, reroute from Waypoint 7, maintain 1000ft
+Milo Ricoh4 update position Waypoint 7 then verify Tilpal at 3000ft
+Piston4 Python limited visibility in Ammo Point, delay entry via Waypoint 2, keep at 7000ft
+all aircraft Kapyong ROZ active keep clear and hold 4000ft
+Pistol2 Salmon heavy turbulence eastward of Glen, reroute away from Waypoint 9, fly at 500ft
+Milo Whiskey2 you are cleared for transition to Rocky then proceed over Spike ROZ at 500ft
+Ricoh Pedal3 proceed via Waypoint 9 then over Rockhampton at 2000ft
+Vodka Python4 convective weather over Cape Clinton, transition via Shoalwater Bay Training Area, hold 6000ft
+Cola Batman4 low vis in ACA sector, reroute from IP Whiskey, maintain 5000ft
+Whiskey4 Kasper maintain track for Rockhampton then fly via IP Sierra over The Peninsula at 500ft
+all aircraft Kingfisher active keep clear and hold 8000ft
+Pedal4 Hulk maintain track for Shoalwater Bay Training Area then fly via IP November over Williamson at 8000ft
+Batman Tiger1 you are cleared for transition to Rockhampton then proceed over ACA at 4000ft
+Whiskey1 Niro track IP Whiskey then continue over Pointer at 7000ft
+Python Pistol3 moderate turbulence reported east of Cape Manifold, avoid ridge near IP Whiskey, maintain low-level 4000ft
+Starling3 Pistol you are cleared for transition to Rocky then proceed over BSSZ at 5000ft
+Ricoh2 Pistol confirm clear operation in BSSZ report over Waypoint 8 at 2500ft
+Cobra4 Aston storm activity near Camp Tilpal coastline, divert inland via Shoalwater Bay Expanded Area and hold 500ft
+Aston Starling2 track Waypoint 5 then continue over Mount Lion at 9000ft
+Rayban2 Batman track IP Whiskey then continue over Williamson at 9000ft
