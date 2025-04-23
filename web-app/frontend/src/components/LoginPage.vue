@@ -34,8 +34,8 @@
 
 <script>
 import { User, Lock } from '@element-plus/icons-vue';
-import apiClient from '../router/apiClient'; // Import the apiClient
-import Cookies from 'js-cookie';
+import { login } from '../router/apiClient'; // Import the login helper
+import { ElMessage, ElLoading } from 'element-plus';
 
 export default {
   name: 'LoginPage',
@@ -57,15 +57,32 @@ export default {
   },
   methods: {
     async onSubmit() {
+      if (!this.loginForm.user_id || !this.loginForm.password) {
+        ElMessage.warning('Please enter both username and password');
+        return;
+      }
+      
+      const loading = ElLoading.service({
+        lock: true,
+        text: 'Logging in...',
+        background: 'rgba(0, 0, 0, 0.7)'
+      });
+      
       try {
-        // Use apiClient to make the login request
-        const response = await apiClient.post('/auth/login', this.loginForm);
-        const token = response.data.token;
-        Cookies.set('auth_token', token); // Store the token in cookies
-        this.$router.push('/'); // Redirect to the main app
+        // Use the login helper function
+        const result = await login(this.loginForm.user_id, this.loginForm.password);
+        
+        if (result.success) {
+          ElMessage.success('Login successful');
+          this.$router.push('/'); // Redirect to the main app
+        } else {
+          ElMessage.error(result.error || 'Login failed. Please try again.');
+        }
       } catch (error) {
         console.error('Login failed:', error);
-        this.$message.error('Login failed, please try again.');
+        ElMessage.error('An unexpected error occurred. Please try again.');
+      } finally {
+        loading.close();
       }
     },
   },

@@ -1,122 +1,207 @@
-# app.py
 import os
-from collections import defaultdict
-import torch
-
-print('CUDA:', torch.cuda.is_available())
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 import io
+import base64
+import json
+from typing import Dict, List, Optional
 import numpy as np
-import soundfile as sf
-import librosa
-from scipy.signal import resample_poly
-from funcs.model import load_model
-from funcs.transcription import apply_custom_fixes
-from funcs.lists import collated_list_string
+import requests
+import logging
 import jwt
 import datetime
-from functools import wraps
-import requests
+from fastapi import FastAPI, File, UploadFile, HTTPException, Header, WebSocket, Depends, BackgroundTasks, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 
-# import sox
-# Initialize the Flask application
-app = Flask(__name__)
-CORS(app)
+from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
-# Load model and processor
-model_name_or_path = './models/atco2_medium'
-# model_name_or_path = ''
-processor, model, device = load_model(model_name_or_path)
-transcription_history = defaultdict(int)
-pattern_history = defaultdict(lambda: {'count': 0, 'correct_format': ''})
+from server.funcs.transcription import apply_custom_fixes
 
-# uri for local llm model
-LLM_URI = "http://ollama:11434/api/chat"
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# TODO : PUT THIS INTO AN ENV FILE
-# Secret key for JWT encoding/decoding
-JWT_SECRET = '***'
-JWT_ALGORITHM = 'HS256'  # Recommended for JWT signing
+# Environment variables
+AUDIO_SERVER_URL = os.environ.get('AUDIO_SERVER_URL', 'http://audio_server:8000')
+OLLAMA_SERVER_URL = os.environ.get('OLLAMA_SERVER_URL', 'http://ollama:11434')
+LLM_URI = f"{OLLAMA_SERVER_URL}/api/chat"
+JWT_SECRET = os.environ.get('JWT_SECRET', 'meeting_minutes_transcription_2024_secure_key')
+JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'hf.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:IQ4_XS')
 
-OLLAMA_MODEL = "llama3.1"
+# Define lifespan context manager using asynccontextmanager
+import httpx
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting transcription server...")
+    
+    async with httpx.AsyncClient() as client:
+        # Check audio server health asynchronously
+        try:
+            audio_response = await client.get(f"{AUDIO_SERVER_URL}/health", timeout=5)
+            if audio_response.status_code == 200:
+                logger.info("Audio server is available")
+            else:
+                logger.warning(f"Audio server may not be ready. Status: {audio_response.status_code}")
+        except Exception as e:
+            logger.warning(f"Could not connect to audio server: {str(e)}. Proceeding with startup.")
+        
+        # Check Ollama server health asynchronously
+        try:
+            payload = {
+                "model": OLLAMA_MODEL,
+                "messages": [{"role": "system", "content": "Test connection"}],
+                "stream": False
+            }
+            ollama_response = await client.post(LLM_URI, json=payload, timeout=5)
+            if ollama_response.status_code == 200:
+                logger.info(f"Ollama server is available with model: {OLLAMA_MODEL}")
+            else:
+                logger.warning(f"Ollama server returned status {ollama_response.status_code}")
+        except Exception as e:
+            logger.warning(f"Could not connect to Ollama server: {str(e)}. Proceeding with startup.")
+    
+    yield  # Yield control back to FastAPI
+    
+    logger.info("Shutting down transcription server...")
+
+
+# Create FastAPI application with lifespan
+app = FastAPI(
+	title="Meeting Minutes Transcription API", 
+	version="1.0.0", 
+	lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+	CORSMiddleware,
+	allow_origins=["*"],
+	allow_credentials=True,
+	allow_methods=["*"],
+	allow_headers=["*"],
+)
+
+# Store connected clients and their latest transcriptions
+connected_clients = {}
+transcription_history = {}
+current_summary = {}
+
+# Pydantic models for request/response validation
+class LoginRequest(BaseModel):
+	user_id: str
+	password: str
+
+class TokenResponse(BaseModel):
+	token: str
+
+class TokenData(BaseModel):
+	user_id: str
+	exp: datetime.datetime
+
+class TranscriptionRequest(BaseModel):
+	transcription: str
+	previous_report: Optional[str] = None
+	summary_mode: str = "atc"
 
 # Function to generate JWT token
-def generate_jwt_token(user_id):
+def generate_jwt_token(user_id: str) -> str:
 	payload = {
 		'user_id': user_id,
-		'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=0.1)  # Token expires in 1 hour
+		'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=2)
 	}
-	# Use PyJWT's encode method
 	token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-	# PyJWT's encode in version 2.x returns bytes, so we decode it to a string if necessary
 	return token if isinstance(token, str) else token.decode('utf-8')
 
-
-# Decorator to protect routes with JWT authentication
-def token_required(func):
-	@wraps(func)
-	def wrapper(*args, **kwargs):
-		token = None
-		# Check if the token is passed in the 'Authorization' header
-		if 'Authorization' in request.headers:
-			token = request.headers['Authorization'].split(" ")[1]  # Expecting Bearer <token>
-
-		if not token:
-			return jsonify({'error': 'Token is missing!'}), 401
-
-		# TODO: FIX THIS SECURITY VULNERABILITY
-		try:
-			# Decode the token
-			data = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-			print(data)
-		# You can access `data['user_id']` here to get user info, if needed
-		except jwt.ExpiredSignatureError:
-			return jsonify({'error': 'Token has expired!'}), 401
-		except jwt.InvalidTokenError:
-			return jsonify({'error': 'Invalid token!'}), 401
-
-		return func(*args, **kwargs)
-
-	return wrapper
-
-
-# Route to get a JWT token with user_id and password validation
-@app.route('/auth/login', methods=['POST'])
-def login():
-	# Get user_id and password from the request
-	user_id = request.json.get('user_id')
-	password = request.json.get('password')
-
-	# Check if user_id and password are provided
-	if not user_id or not password:
-		return jsonify({'error': 'Missing user_id or password!'}), 400
-
-	# Validate the user_id and password
-	# TODO : FIX THIS SHIT
-	if user_id == 'atlasuser' and password == 'passwordbearer2024':
-		# Generate and return the token for the user
-		token = generate_jwt_token(user_id)
-		return jsonify({'token': token})
-	else:
-		# Return an error if the credentials are incorrect
-		return jsonify({'error': 'Invalid user_id or password!'}), 401
-
-
-@app.route('/auth/refresh', methods=['POST'])
-def refresh_token():
-	token = None
-
-	# Check if the token is passed in the 'Authorization' header
-	if 'Authorization' in request.headers:
-		token = request.headers['Authorization'].split(" ")[1]  # Expecting Bearer <token>
-
-	if not token:
-		return jsonify({'error': 'Token is missing!'}), 401
-
+# Dependency for JWT token verification
+async def get_token_data(authorization: str = Header(None)) -> TokenData:
+	if not authorization:
+		raise HTTPException(status_code=401, detail="Token is missing")
+	
 	try:
+		token = authorization.split(" ")[1]
+		payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+		
+		return TokenData(
+			user_id=payload.get('user_id'),
+			exp=datetime.datetime.fromtimestamp(payload.get('exp'))
+		)
+	except jwt.ExpiredSignatureError:
+		raise HTTPException(status_code=401, detail="Token has expired")
+	except (jwt.InvalidTokenError, IndexError):
+		raise HTTPException(status_code=401, detail="Invalid token")
+
+# Function to summarize transcription text
+async def summarize_text(transcription: str, previous_report: Optional[str] = None, summary_mode: str = 'atc') -> Dict:
+	try:
+		# Format content based on previous report
+		if previous_report is not None and previous_report != '':
+			content = f"This is the previous report:\n{previous_report}\n\nand these are new transcriptions that just came in:\n{transcription}"
+		else:
+			content = transcription
+			
+		# Get the system prompt from the appropriate file
+		file_path = f"./server/models/prompt_{summary_mode}"
+		absolute_path = os.path.abspath(file_path)
+		
+		try:
+			with open(file_path, 'r') as file:
+				system_prompt = file.read()
+		except FileNotFoundError:
+			logger.warning(f"System prompt file not found: {file_path}. Using default prompt.")
+			system_prompt = "You will summarize the meeting transcription provided."
+		
+		# Define the payload to send to the LLM service
+		payload = {
+			"model": OLLAMA_MODEL,
+			"options": {"temperature": 0.1},
+			"messages": [
+				{"role": "system", "content": system_prompt},
+				{"role": "user", "content": content}
+			],
+			"stream": False
+		}
+		
+		# Make the request to the Ollama server
+		response = await run_in_threadpool(
+			lambda: requests.post(LLM_URI, json=payload)
+		)
+		
+		# Check if the request was successful
+		if response.status_code != 200:
+			logger.error(f"Error from LLM server: {response.text}")
+			return {"error": "Failed to generate summary", "details": response.text}
+		
+		# Return the response from the LLM service
+		return response.json()
+		
+	except Exception as e:
+		logger.error(f"Error in summarize_text: {str(e)}")
+		raise
+
+# API Routes
+@app.post("/auth/login", response_model=TokenResponse)
+async def login(request: LoginRequest):
+	# Check if user_id and password are provided
+	if not request.user_id or not request.password:
+		raise HTTPException(status_code=400, detail="Missing user_id or password")
+
+	# In a production environment, validate against a secure database
+	if request.user_id == 'atlasuser' and request.password == 'passwordbearer2024':
+		token = generate_jwt_token(request.user_id)
+		return {"token": token}
+	else:
+		raise HTTPException(status_code=401, detail="Invalid user_id or password")
+
+@app.post("/auth/refresh", response_model=TokenResponse)
+async def refresh_token(authorization: str = Header(None)):
+	if not authorization:
+		raise HTTPException(status_code=401, detail="Token is missing")
+		
+	try:
+		token = authorization.split(" ")[1]
+		
 		# Decode the token without verifying the expiration
 		payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"verify_exp": False})
 		exp = datetime.datetime.utcfromtimestamp(payload['exp'])
@@ -126,260 +211,151 @@ def refresh_token():
 		time_since_expiry = now - exp
 
 		if time_since_expiry <= datetime.timedelta(hours=1):
-			# Token expired less than an hour ago, so we can renew it
 			new_payload = {
 				'user_id': payload['user_id'],
-				'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)  # Extend the expiration by 1 hour
+				'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)
 			}
 			new_token = jwt.encode(new_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-			return jsonify({'token': new_token if isinstance(new_token, str) else new_token.decode('utf-8')})
-
+			return {"token": new_token if isinstance(new_token, str) else new_token.decode('utf-8')}
 		else:
-			# Token expired more than an hour ago, so it's no longer secure to renew it
-			return jsonify(
-				{'error': 'Token is no longer secure!'}), 403  # Using 403 Forbidden to indicate security issue
-
+			raise HTTPException(status_code=403, detail="Token is no longer secure")
+			
 	except jwt.ExpiredSignatureError:
-		# This should not happen as we are not verifying exp, but added for safety
-		return jsonify({'error': 'Token has expired!'}), 401
-	except jwt.InvalidTokenError:
-		return jsonify({'error': 'Invalid token!'}), 401
+		raise HTTPException(status_code=401, detail="Token has expired")
+	except (jwt.InvalidTokenError, IndexError):
+		raise HTTPException(status_code=401, detail="Invalid token")
 
-
-@app.route('/transcribe', methods=['POST'])
-@token_required
-def transcribe_audio():
+@app.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...), token_data: TokenData = Depends(get_token_data)):
 	try:
-		if not os.path.exists('./misc/startup.wav'):
-			print("File ./misc/startup.wav not found!")
-			return
-		audio_file = request.files['file']
-		wav_io = io.BytesIO(audio_file.read())
-		# Check if the file is empty
-		if wav_io.getbuffer().nbytes == 0:
-			return jsonify({"error": "No file data received"}), 400
-
-		# Read the audio data and sample rate
-		audio_data, original_sample_rate = sf.read(wav_io)
-
-		# Convert to mono if necessary
-		if audio_data.ndim > 1:
-			audio_mono = librosa.to_mono(audio_data.T)
-		else:
-			audio_mono = audio_data
-
-		# Remove DC offset
-		audio_mono = audio_mono - np.mean(audio_mono)
-
-		# Normalize the audio to prevent clipping
-		max_val = np.max(np.abs(audio_mono))
-		if max_val > 0:
-			audio_mono = audio_mono / max_val * 0.99  # Scale to 99% to prevent clipping
-
-		# Calculate the length of the audio in seconds
-		audio_length_seconds = len(audio_mono) / original_sample_rate
-
-		# Target length in seconds (30 seconds)
-		target_length_seconds = 30
-		target_sample_rate = 16000
-
-		# If audio is shorter than 30 seconds, pad it with zeros
-		if audio_length_seconds < target_length_seconds:
-			padding_duration = target_length_seconds - audio_length_seconds
-			padding_samples = int(padding_duration * original_sample_rate)
-			audio_mono = np.pad(audio_mono, (0, padding_samples), 'constant')
-
-		# Resample to target sample rate
-		audio_resampled = resample_poly(audio_mono, up=target_sample_rate, down=original_sample_rate)
-		# **Save the audio to a WAV file**
-		sf.write('received_audio.wav', audio_resampled, target_sample_rate)
-
-		# # Initialize SoX transformer
-		# tfm = sox.Transformer()
-		# target_sample_rate = 16000
-
-		# # Use the rate function for proper downsampling with anti-aliasing
-		# tfm.rate(samplerate=target_sample_rate, quality="h")  # High-quality resampling
-
-		# # Apply the transformation to the numpy array (resampling with correct rate)
-		# audio_resampled = tfm.build_array(input_array=audio_mono, sample_rate_in=original_sample_rate)
-
-		# # Now, save the resampled audio for debugging or listening back
-		# sf.write('received_audio.wav', audio_resampled, target_sample_rate)
-
-		inputs = processor(
-			audio_resampled,
-			sampling_rate=target_sample_rate,
-			return_tensors="pt",
-			padding=True
-		).to(device)
-
-		with torch.no_grad():
-			generated_ids = model.generate(inputs["input_features"])
-
-		transcription = processor.batch_decode(
-			generated_ids, skip_special_tokens=True
-		)[0].strip()
-		transcription = apply_custom_fixes(transcription)
-
-		return jsonify({"transcription": transcription})
-
-	except Exception as e:
-		print('error,', e)
-		return jsonify({"error": f"An error occurred: {str(e)}"}), 500
-
-
-@app.route('/summary', methods=['POST'])
-@token_required
-def get_summary():
-	try:
-		# Get the transcription and previous_report from the POST request
-		transcription = request.json.get('transcription')
-		previous_report = request.json.get('previous_report')
-		summary_mode = request.json.get('summary_mode')
-		if not transcription:
-			return jsonify({'error': 'Missing transcription in request'}), 400
-
-		# Check if previous_report is provided and not None or empty
-		if previous_report is not None and previous_report != '':
-			# If previous_report is provided, adjust the content
-			content = (
-				f"This is the previous report:\n{previous_report}\n\n"
-				f"and these are new transcriptions that just came in:\n{transcription}"
-			)
-		else:
-			content = transcription
-		# Construct the file path dynamically based on the variable
-		file_path = f"./ollama_serve/Modelfile_{summary_mode}"
-
-		# Read the contents of the file and assign it to the new variable
-		with open(file_path, 'r') as file:
-			system_prompt = file.read()
-
-		# Define the payload to send to the external API
-		payload = {
-			"model": OLLAMA_MODEL,
-			"options": {
-				"temperature": 0.1
-			},
-			"messages": [
-				{"role": "system", "content": system_prompt},
-				{"role": "user", "content": content}
-			],
-			"stream": False
-		}
-
-		# Make the request to the external chat service
-		response = requests.post(LLM_URI, json=payload)
-
-		# If the external request fails, return an error
+		# Read file content
+		file_content = await file.read()
+		
+		print('received')
+		# Forward the file to the audio_server
+		files = {'file': (file.filename, file_content, file.content_type)}
+		response = requests.post(f"{AUDIO_SERVER_URL}/transcribe/file", files=files)
+		
 		if response.status_code != 200:
-			return jsonify(
-				{'error': 'Failed to query external service', 'details': response.text}
-			), response.status_code
+			raise HTTPException(status_code=response.status_code, 
+								detail=f"Audio server error: {response.text}")
+			
+		# Get the transcription from audio_server
+		result = response.json()
+		transcription = result.get('transcription', '')
 
-		# Return the response from the external service
-		return jsonify(response.json())
+		transcription = apply_custom_fixes(transcription)
+		
+		# Store the transcription in history for this user
+		user_id = token_data.user_id
+		if user_id not in transcription_history:
+			transcription_history[user_id] = []
+		
+		transcription_history[user_id].append(transcription)
+		
+		return {"transcription": transcription}
+
+	except HTTPException:
+		raise
+	except Exception as e:
+		logger.error(f"Error transcribing audio: {str(e)}")
+		raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+@app.post("/summary")
+async def get_summary(request: TranscriptionRequest, token_data: TokenData = Depends(get_token_data)):
+	try:
+		# Call the internal summarize method
+		summary_result = await summarize_text(
+			request.transcription, 
+			request.previous_report, 
+			request.summary_mode
+		)
+		
+		# Store the summary for this user
+		user_id = token_data.user_id
+		current_summary[user_id] = summary_result
+		
+		return summary_result
 
 	except Exception as e:
-		return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+		logger.error(f"Error generating summary: {str(e)}")
+		raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
+@app.get("/health")
+async def health_check():
+	health_status = {"status": "healthy", "services": {}}
+	
+	# Check audio server health
+	try:
+		audio_response = requests.get(f"{AUDIO_SERVER_URL}/health", timeout=5)
+		health_status["services"]["audio_server"] = {
+			"status": "healthy" if audio_response.status_code == 200 else "unhealthy",
+			"details": audio_response.json() if audio_response.status_code == 200 else {"error": audio_response.text}
+		}
+	except Exception as e:
+		health_status["services"]["audio_server"] = {"status": "unhealthy", "details": {"error": str(e)}}
+	
+	# Check Ollama server health
+	try:
+		ollama_response = requests.post(LLM_URI, json={
+			"model": OLLAMA_MODEL,
+			"messages": [{"role": "system", "content": "Health check"}],
+			"stream": False
+		}, timeout=5)
+		health_status["services"]["ollama_server"] = {
+			"status": "healthy" if ollama_response.status_code == 200 else "unhealthy"
+		}
+	except Exception as e:
+		health_status["services"]["ollama_server"] = {"status": "unhealthy", "details": {"error": str(e)}}
+	
+	# Set overall status
+	if any(service["status"] != "healthy" for service in health_status["services"].values()):
+		health_status["status"] = "degraded"
+	
+	return health_status
 
-@app.route('/health', methods=['GET'])
-@token_required
-def health_check():
-	return jsonify({"status": "healthy"}), 200
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+	await websocket.accept()
+	try:
+		while True:
+			data = await websocket.receive_json()
+			
+			# Get the base64 audio data from the client
+			audio_base64 = data.get('audio')
+			
+			if not audio_base64:
+				await websocket.send_json({'error': 'Missing required "audio" data'})
+				continue
 
+			# Prepare payload for the audio server
+			payload = {'audio': audio_base64}
+			
+			# Make the request to the audio server
+			response = requests.post(f"{AUDIO_SERVER_URL}/transcribe/base64", json=payload)
+			print("RESPONSE:", response)
+			
+			if response.status_code != 200:
+				await websocket.send_json({
+					'error': 'Failed to transcribe audio',
+					'status_code': response.status_code,
+					'details': response.text
+				})
+				continue
+			
+			# Retrieve the transcription from the audio server response
+			result = response.json()
+			transcription_data = result.get('transcription', '')
 
-if __name__ == '__main__':
-	# Function to transcribe ./narita.wav at startup
-	def transcribe_startup_file():
-		try:
-			# Load the './narita.wav' file for transcription
-			with open('./misc/startup.wav', 'rb') as f:
-				audio_data, original_sample_rate = sf.read(f)
+			# Send the transcription back to the client
+			await websocket.send_json({'transcription': json.dumps(transcription_data)})
 
-				# Convert to mono if necessary
-				audio_mono = librosa.to_mono(audio_data.T)
-				# Calculate the length of the audio in seconds
-				audio_length_seconds = len(audio_mono) / original_sample_rate
+	except WebSocketDisconnect:
+		logger.info("WebSocket client disconnected")
+	except Exception as e:
+		logger.error(f"WebSocket error: {str(e)}")
+		await websocket.close(code=1002, reason=str(e))
 
-				# Target length in seconds (30 seconds)
-				target_length_seconds = 30
-				target_sample_rate = 16000
-
-				# If audio is shorter than 30 seconds, pad it with zeros
-				if audio_length_seconds < target_length_seconds:
-					padding_duration = target_length_seconds - audio_length_seconds
-					padding_samples = int(padding_duration * original_sample_rate)
-					audio_mono = np.pad(audio_mono, (0, padding_samples), 'constant')
-
-				# Resample to target sample rate
-				audio_resampled = resample_poly(audio_mono, up=target_sample_rate, down=original_sample_rate)
-
-				# Process audio for transcription
-				inputs = processor(audio_resampled, sampling_rate=target_sample_rate, return_tensors="pt",
-				                   padding=True).to(device)
-
-				# Perform transcription using the loaded model
-				with torch.no_grad():
-					generated_ids = model.generate(inputs["input_features"])
-
-				transcription = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-				transcription = apply_custom_fixes(transcription)
-
-			# Log or print the transcription result
-			# print(f"Transcription of './misc/startup.wav': {transcription}")
-
-			return True  # Indicate success
-
-		except Exception as e:
-			print(f"Error transcribing './misc/startup.wav': {str(e)}")
-			return False  # Indicate failure
-
-
-	# Function to load model into memory via Ollama server
-	def check_ollama_model_status():
-		try:
-			# Define a sample payload to send to Ollama server to load the model into memory
-			payload = {
-				"model": OLLAMA_MODEL,
-				"messages": [
-					{"role": "system", "content": "Load model into memory."}
-				],
-				"stream": False
-			}
-
-			# Send a POST request to Ollama server
-			response = requests.post(LLM_URI, json=payload)
-
-			# Log or print the response status
-			if response.status_code == 200:
-				print(f"Ollama model loaded successfully: {response.json()}")
-				return True  # Indicate success
-			else:
-				print(f"Error loading Ollama model: {response.text}")
-				return False  # Indicate failure
-
-		except Exception as e:
-			print(f"Error communicating with Ollama server: {str(e)}")
-			return False  # Indicate failure
-
-
-	# Run the Flask app
-	print("Starting server and loading models...")
-
-	# Step 1: Transcribe ./narita.wav upon startup
-	transcribe_success = transcribe_startup_file()
-
-	# Step 2: Send a request to Ollama server to load the model into memory
-	ollama_success = check_ollama_model_status()
-
-	# Step 3: Print success message if both steps succeeded
-	if transcribe_success and ollama_success:
-		print("All models loaded successfully. Server starting now.")
-	else:
-		print("Failed to load all models. Please check errors above.")
-
-	# Step 4: Start the Flask application
-	app.run(host='0.0.0.0', port=5001, debug=True)
+if __name__ == "__main__":
+	import uvicorn
+	uvicorn.run(app, host="0.0.0.0", port=5002)

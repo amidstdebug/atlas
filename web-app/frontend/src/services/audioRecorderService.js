@@ -1,385 +1,426 @@
 // src/services/audioRecorderService.js
+import {encodeWAV} from '@/methods/utils/audioUtils';
 
 export class AudioRecorderService {
-  constructor(options = {}) {
-    // Recording settings
-    this.sampleRate = 48000;
-    this.preBufferDuration = options.preBufferDuration || 0.4; // seconds to retain before recording starts
-    this.preBufferSize = null;
-    this.preBuffer = null;
-    this.preBufferIndex = 0;
-    this.recordedSamples = [];
-    this.isRecording = false;
-    this.isSending = false;
-    this.chunkNumber = 1;
-    this.ws = null; // WebSocket connection
+    constructor(options = {}) {
+        // Set your API server URL, including port. You can override via options.
+        this.apiUrl = options.apiUrl || "http://localhost:5002";
 
-    // For tracking pending chunks
-    this.pendingChunks = new Set(); // holds chunk ids for which we have not received a response
-
-    // Recording/reactivation settings (unchanged)
-    this.thresholdPercentage = 0.1;
-    this.sensitivity = { activity: 0.5, reduced: 0.5 };
-    this.delayDuration = 250; // ms
-    this.forceSendDuration = 8000; // ms
-    this.fps = 60;
-    this.inactiveTimer = null;
-    this.delayTimer = null;
-    this.forceSendTimer = null;
-    this.reactivationCount = 0;
-    this.chunkBeepDuration = 250; // ms
-    this.conditionCounter = 0;
-    this.isActive = false;
-    this.chunkSent = false;
-
-    // For reactivation detection using the analyser
-    this.analyser = null;
-    this.bufferLength = null;
-    this.dataArray = null;
-
-    // Audio context and worklet
-    this.audioContext = null;
-    this.audioStream = null;
-    this.audioWorkletNode = null;
-  }
-
-  async setupAudio() {
-    try {
-      // Request microphone access
-      this.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-      }
-      this.sampleRate = this.audioContext.sampleRate;
-      const source = this.audioContext.createMediaStreamSource(this.audioStream);
-
-      // Create an analyser node for reactivation
-      this.analyser = this.audioContext.createAnalyser();
-      source.connect(this.analyser);
-      this.bufferLength = this.analyser.frequencyBinCount;
-      this.dataArray = new Uint8Array(this.bufferLength);
-
-      // Load audio worklet for recording
-      await this.audioContext.audioWorklet.addModule('/atlas/audio/processor.js')
-        .catch((error) => {
-          console.error('Error loading AudioWorkletProcessor:', error);
-        });
-      this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
-      source.connect(this.audioWorkletNode);
-
-      // Initialize pre–buffer
-      this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
-      this.preBuffer = new Float32Array(this.preBufferSize);
-      this.preBufferIndex = 0;
-
-      // Save incoming audio data to the pre–buffer and (if recording) recordedSamples
-      this.audioWorkletNode.port.onmessage = (event) => {
-        const audioData = event.data;
-        if (audioData.length > 0) {
-          this.storeInPreBuffer(audioData);
-          if (this.isRecording) {
-            this.recordedSamples.push(...audioData);
-          }
-        }
-      };
-    } catch (error) {
-      console.error('Error in setupAudio:', error);
-    }
-  }
-
-  storeInPreBuffer(audioData) {
-    const dataLength = audioData.length;
-    if (dataLength + this.preBufferIndex > this.preBufferSize) {
-      const overflow = dataLength + this.preBufferIndex - this.preBufferSize;
-      this.preBuffer.copyWithin(0, overflow, this.preBufferIndex);
-      this.preBufferIndex -= overflow;
-    }
-    this.preBuffer.set(audioData, this.preBufferIndex);
-    this.preBufferIndex += dataLength;
-  }
-
-  async startRecording() {
-    if (!this.audioContext) {
-      await this.setupAudio();
-    } else if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
-    }
-    this.isRecording = true;
-    // Append pre–buffered audio
-    const preBufferData = this.preBuffer.slice(0, this.preBufferIndex);
-    this.recordedSamples.push(...preBufferData);
-    // Reset pre–buffer index so new data is appended
-    this.preBufferIndex = this.preBufferSize;
-    // Reset reactivation counter and start loop
-    this.conditionCounter = 0;
-    this.startReactivationLoop();
-  }
-
-  async stopRecording() {
-    this.isRecording = false;
-    // Clear pending timers
-    if (this.inactiveTimer) { clearTimeout(this.inactiveTimer); this.inactiveTimer = null; }
-    if (this.delayTimer) { clearTimeout(this.delayTimer); this.delayTimer = null; }
-    if (this.forceSendTimer) { clearTimeout(this.forceSendTimer); this.forceSendTimer = null; }
-    // Send any remaining audio chunk
-    await this.sendRecordedAudio();
-    // Close microphone and audio context
-    this.closeAudio();
-    this.resetState();
-  }
-
-  closeAudio() {
-    if (this.audioStream) {
-      this.audioStream.getTracks().forEach(track => track.stop());
-      this.audioStream = null;
-    }
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
-  }
-
-  resetState() {
-    this.recordedSamples = [];
-    if (this.preBuffer) {
-      this.preBuffer.fill(0);
-      this.preBufferIndex = 0;
-    }
-    this.isRecording = false;
-    this.chunkNumber = 1;
-    this.conditionCounter = 0;
-    this.isActive = false;
-    this.chunkSent = false;
-    this.reactivationCount = 0;
-    this.pendingChunks.clear();
-  }
-
-  connectWebSocket(url) {
-    this.ws = new WebSocket(url);
-    this.ws.onopen = () => { console.log('WebSocket connection established.'); };
-
-    // Listen for responses from the backend
-    this.ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.chunk_id) {
-          console.log('Received response for chunk_id', data.chunk_id);
-          // Remove the pending chunk since we got the response.
-          this.pendingChunks.delete(data.chunk_id);
-          // Flush any queued chunks stored in cookies if there are none pending now.
-          if (this.pendingChunks.size === 0) {
-            this.flushCookieQueue();
-          }
-        }
-      } catch (e) {
-        console.error('Error parsing WebSocket message:', e);
-      }
-    };
-
-    this.ws.onerror = (error) => { console.error('WebSocket error:', error); };
-    this.ws.onclose = () => { console.log('WebSocket connection closed.'); };
-  }
-
-  startReactivationLoop() {
-    const loop = () => {
-      if (this.isRecording) {
-        this.analyser.getByteTimeDomainData(this.dataArray);
-        this.checkThresholdCondition();
-        requestAnimationFrame(loop);
-      }
-    };
-    loop();
-  }
-
-  checkThresholdCondition() {
-    const center = 128;
-    const centerThreshold = center * this.thresholdPercentage;
-    const reducedThreshold = centerThreshold * this.sensitivity.reduced;
-    const minVal = Math.min(...this.dataArray);
-    const maxVal = Math.max(...this.dataArray);
-    const withinThreshold = (Math.abs(maxVal - center) < reducedThreshold &&
-                             Math.abs(minVal - center) < reducedThreshold);
-    if (withinThreshold) {
-      this.conditionCounter++;
-      const activationThreshold = this.sensitivity.activity * this.fps;
-      if (this.conditionCounter >= activationThreshold && this.isActive) {
-        if (this.reactivationCount >= this.maxReactivations) {
-          this.forceSendChunk('max');
-        } else {
-          this.deactivateRecording();
-        }
-      }
-    } else {
-      if (!this.isActive && !this.chunkSent) {
-        this.activateRecording();
-      }
-      this.conditionCounter = 0;
-      if (this.inactiveTimer) {
-        clearTimeout(this.inactiveTimer);
-        this.inactiveTimer = null;
-      }
-    }
-  }
-
-  activateRecording() {
-    console.log('Activating recording (chunk start)');
-    this.isActive = true;
-    this.recordingStartTime = Date.now();
-    if (this.delayTimer) { clearTimeout(this.delayTimer); this.delayTimer = null; }
-    const preBufferData = this.preBuffer.slice(0, this.preBufferIndex);
-    this.recordedSamples.push(...preBufferData);
-    this.preBufferIndex = this.preBufferSize;
-    this.forceSendTimer = setTimeout(() => { this.forceSendChunk('time'); }, this.forceSendDuration);
-    this.conditionCounter = 0;
-    this.chunkSent = false;
-  }
-
-  deactivateRecording() {
-    console.log('Deactivating recording (chunk end)');
-    this.isActive = false;
-    this.delayTimer = setTimeout(() => { this.startInactiveTimer(); }, this.delayDuration);
-    this.reactivationCount++;
-    this.chunkSent = false;
-  }
-
-  forceSendChunk(reason) {
-    console.log(`Force–sending chunk due to ${reason}`);
-    this.sendRecordedAudio();
-    if (this.forceSendTimer) { clearTimeout(this.forceSendTimer); this.forceSendTimer = null; }
-    this.chunkSent = true;
-    setTimeout(() => { this.chunkSent = false; }, this.chunkBeepDuration);
-    this.isActive = false;
-  }
-
-  startInactiveTimer() {
-    if (this.inactiveTimer) return;
-    this.inactiveTimer = setTimeout(() => {
-      this.sendRecordedAudio();
-      this.reactivationCount = 0;
-      this.chunkSent = true;
-      setTimeout(() => { this.chunkSent = false; }, this.chunkBeepDuration);
-      this.inactiveTimer = null;
-    }, this.delayDuration);
-  }
-
-  // Updated sendRecordedAudio() now adds a chunk_id and checks for pending responses.
-  async sendRecordedAudio() {
-    if (this.isSending) {
-      console.log('Already sending audio, skipping.');
-      return;
-    }
-    // If there are pending chunk responses, queue this chunk in the cookie
-    if (this.pendingChunks.size > 0) {
-      console.log('Previous chunk(s) still pending; queuing new chunk in cookie.');
-      if (this.recordedSamples.length) {
-        const float32Array = new Float32Array(this.recordedSamples);
-        const base64Audio = arrayBufferToBase64(float32Array.buffer);
-        const payload = { chunk_id: this.chunkNumber, audio: base64Audio };
-        this.addChunkToCookieQueue(payload);
-        this.chunkNumber++;
+        // Recording settings
+        this.sampleRate = 48000;
+        this.preBufferDuration = options.preBufferDuration || 0.4; // seconds to retain before recording starts
+        this.preBufferSize = null;
+        this.preBuffer = null;
+        this.preBufferIndex = 0;
         this.recordedSamples = [];
-      }
-      return;
-    }
-
-    if (this.recordedSamples.length) {
-      this.isSending = true;
-      try {
-        const float32Array = new Float32Array(this.recordedSamples);
-        const base64Audio = arrayBufferToBase64(float32Array.buffer);
-        const payload = { chunk_id: this.chunkNumber, audio: base64Audio };
-        console.log('Sending chunk', this.chunkNumber, payload);
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify(payload));
-          console.log('Chunk sent over WebSocket.');
-          // Mark this chunk as pending a response.
-          this.pendingChunks.add(this.chunkNumber);
-        } else {
-          console.error('WebSocket is not connected.');
-        }
-      } catch (error) {
-        console.error('Error sending recorded audio:', error);
-      } finally {
-        this.chunkNumber++;
+        this.isRecording = false;
         this.isSending = false;
-        this.recordedSamples = [];
-      }
-    }
-  }
+        this.transcriptionInterval = null;
 
-  // --- Cookie-based Queue Helpers ---
-  addChunkToCookieQueue(payload) {
-    const cookieName = 'chunkQueue';
-    const existing = this.getCookie(cookieName);
-    let queue = [];
-    if (existing) {
-      try {
-        queue = JSON.parse(existing);
-      } catch (e) {
-        queue = [];
-      }
-    }
-    queue.push(payload);
-    this.setCookie(cookieName, JSON.stringify(queue), 1);
-  }
+        this.minChunkDuration = 5;
+        this.hasSpoken = false;
+        this.overlapDuration = options.overlapDuration || 1; // in seconds (overlap to retain if silence is short)
 
-  flushCookieQueue() {
-    const cookieName = 'chunkQueue';
-    const existing = this.getCookie(cookieName);
-    if (existing) {
-      try {
-        const queue = JSON.parse(existing);
-        if (queue.length > 0) {
-          for (let payload of queue) {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-              this.ws.send(JSON.stringify(payload));
-              console.log('Flushed queued chunk: chunk_id', payload.chunk_id);
-              // Mark the flushed chunk as pending.
-              this.pendingChunks.add(payload.chunk_id);
-            } else {
-              console.error('WebSocket is not connected. Cannot flush cookie queue.');
-              break;
+        // New properties to track silence duration.
+        this.silenceStartTime = null;
+        this.longSilence = false;
+
+        // Recording/reactivation settings
+        this.thresholdPercentage = 0.02;
+        this.sensitivity = {activity: 0.5, reduced: 0.5};
+        this.delayDuration = 250; // ms (not used in this implementation)
+
+        // How long the silence delay is before we consider sending (in ms)
+        this.silence_duration = 1200;
+
+        this.forceSendDuration = 30000; // 30 seconds fallback
+
+
+        this.fps = 60;
+        this.inactiveTimer = null;
+        this.delayTimer = null;
+        this.forceSendTimer = null;
+        this.silenceTimer = null; // tracks period of silence before sending.
+        this.chunkBeepDuration = 250; // ms
+        this.chunkSent = false;
+
+
+        // For reactivation detection using the analyser
+        this.analyser = null;
+        this.bufferLength = null;
+        this.dataArray = null;
+
+        // Audio context and worklet
+        this.audioContext = null;
+        this.audioStream = null;
+        this.audioWorkletNode = null;
+
+        // Callback for incoming transcription responses and status updates
+        this.onTranscription = null;
+        this.onStatusChange = null;
+
+        // Throttle logging to every 500ms
+        this.lastLogTime = 0;
+    }
+
+    async setupAudio() {
+        try {
+            console.log("Setting up high-quality raw microphone input");
+            // Request raw audio with preferred constraints
+            this.audioStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    sampleRate: 48000,        // Request sample rate (may be ignored by some browsers)
+                    channelCount: 1,          // mono (or adjust as needed)
+                    noiseSuppression: false,  // Disable noise suppression
+                    echoCancellation: false   // Disable echo cancellation
+                }
+            });
+
+            // Create an AudioContext with the desired sample rate
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: 48000
+            });
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
             }
-          }
-          // Once flushed, clear the cookie.
-          this.deleteCookie(cookieName);
+
+            // Set the sample rate from the AudioContext and initialize preBuffer
+            this.sampleRate = this.audioContext.sampleRate;
+            this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
+            this.preBuffer = new Float32Array(this.preBufferSize);
+            this.preBufferIndex = 0;
+
+            // Create a MediaStream source
+            const source = this.audioContext.createMediaStreamSource(this.audioStream);
+
+            // Initialize the analyser for silence detection
+            this.analyser = this.audioContext.createAnalyser();
+            this.bufferLength = this.analyser.frequencyBinCount;
+            this.dataArray = new Uint8Array(this.bufferLength);
+
+            // Connect the source to both the analyser and the AudioWorklet
+            source.connect(this.analyser);
+
+            // Load the processor module (ensure this processor doesn't perform extra processing)
+            await this.audioContext.audioWorklet.addModule('/atlas/audio/processor.js')
+                .catch((error) => {
+                    console.error('Error loading AudioWorkletProcessor:', error);
+                    this.updateStatus({error: true, lastErrorMessage: 'Failed to load audio processor'});
+                });
+
+            // Create the worklet node to capture raw audio data
+            this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
+            // Connect the source also to the worklet node
+            source.connect(this.audioWorkletNode);
+
+            // Capture audio data.
+            this.audioWorkletNode.port.onmessage = (event) => {
+                const audioData = event.data;
+                if (audioData.length > 0) {
+                    // If not recording yet, store in preBuffer
+                    if (!this.isRecording) {
+                        this.storeInPreBuffer(audioData);
+                    }
+                    // Once recording has started, push data into recordedSamples.
+                    if (this.isRecording) {
+                        this.recordedSamples.push(...audioData);
+                    }
+                }
+            };
+
+            console.log("Audio setup complete with sample rate:", this.sampleRate);
+        } catch (error) {
+            console.error('Error in setupAudio:', error);
+            this.updateStatus({error: true, lastErrorMessage: 'Failed to access microphone'});
         }
-      } catch (e) {
-        console.error('Error parsing chunk queue cookie:', e);
-      }
     }
-  }
 
-  getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
-  }
-
-  setCookie(name, value, days) {
-    let expires = "";
-    if (days) {
-      const date = new Date();
-      date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
-      expires = "; expires=" + date.toUTCString();
+    storeInPreBuffer(audioData) {
+        // If preBuffer is null (shouldn't happen after setupAudio), initialize it on the fly.
+        if (!this.preBuffer) {
+            console.warn("preBuffer is null in storeInPreBuffer(), initializing on the fly.");
+            this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
+            this.preBuffer = new Float32Array(this.preBufferSize);
+            this.preBufferIndex = 0;
+        }
+        const dataLength = audioData.length;
+        if (dataLength + this.preBufferIndex > this.preBufferSize) {
+            const overflow = dataLength + this.preBufferIndex - this.preBufferSize;
+            this.preBuffer.copyWithin(0, overflow, this.preBufferIndex);
+            this.preBufferIndex -= overflow;
+        }
+        this.preBuffer.set(audioData, this.preBufferIndex);
+        this.preBufferIndex += dataLength;
     }
-    document.cookie = name + "=" + (value || "") + expires + "; path=/";
-  }
 
-  deleteCookie(name) {
-    this.setCookie(name, "", -1);
-  }
+    async startRecording() {
+        if (!this.audioContext) {
+            await this.setupAudio();
+        } else if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+        }
+        this.isRecording = true;
+
+        // Guard: if preBuffer is null, initialize it.
+        if (!this.preBuffer) {
+            console.warn("preBuffer is null in startRecording(), initializing on the fly.");
+            this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
+            this.preBuffer = new Float32Array(this.preBufferSize);
+            this.preBufferIndex = 0;
+        }
+
+        // Append any pre-buffered audio into recordedSamples.
+        const preBufferData = this.preBuffer.slice(0, this.preBufferIndex);
+        this.recordedSamples.push(...preBufferData);
+        // Set preBufferIndex to max so further data will overwrite old data.
+        this.preBufferIndex = this.preBufferSize;
+
+        this.startReactivationLoop();
+
+        // Set a maximum duration fallback (force send)
+        this.forceSendTimer = setTimeout(() => {
+            const duration = this.recordedSamples.length / this.sampleRate;
+            if (this.hasSpoken && duration >= this.minChunkDuration) {
+                console.log("Force-sending chunk due to max duration with speech present. Duration:", duration.toFixed(2) + "s");
+                this.sendRecordedAudio();
+            } else {
+                console.log("Force send skipped due to prolonged silence or insufficient speech. Duration:", duration.toFixed(2) + "s");
+            }
+            this.forceSendTimer = null;
+        }, this.forceSendDuration);
+    }
+
+    async stopRecording() {
+        this.isRecording = false;
+        if (this.transcriptionInterval) {
+            clearInterval(this.transcriptionInterval);
+            this.transcriptionInterval = null;
+        }
+        if (this.inactiveTimer) {
+            clearTimeout(this.inactiveTimer);
+            this.inactiveTimer = null;
+        }
+        if (this.delayTimer) {
+            clearTimeout(this.delayTimer);
+            this.delayTimer = null;
+        }
+        if (this.forceSendTimer) {
+            clearTimeout(this.forceSendTimer);
+            this.forceSendTimer = null;
+        }
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+        }
+        if (this.recordedSamples.length > 0) {
+            await this.sendRecordedAudio();
+        }
+        this.closeAudio();
+        this.resetState();
+    }
+
+    closeAudio() {
+        if (this.audioStream) {
+            this.audioStream.getTracks().forEach(track => track.stop());
+            this.audioStream = null;
+        }
+        if (this.audioContext) {
+            this.audioContext.close();
+            this.audioContext = null;
+        }
+    }
+
+    resetState() {
+        this.recordedSamples = [];
+        if (this.preBuffer) {
+            this.preBuffer.fill(0);
+            this.preBufferIndex = 0;
+        }
+        this.isRecording = false;
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+        }
+        if (this.forceSendTimer) {
+            clearTimeout(this.forceSendTimer);
+            this.forceSendTimer = null;
+        }
+        this.chunkSent = false;
+    }
+
+    startReactivationLoop() {
+        // This loop uses the analyser to check for silence and reactivation.
+        const loop = () => {
+            if (this.isRecording) {
+                if (this.analyser && this.dataArray) {
+                    this.analyser.getByteTimeDomainData(this.dataArray);
+                    this.checkThresholdCondition();
+                }
+                requestAnimationFrame(loop);
+            }
+        };
+        loop();
+    }
+
+    checkThresholdCondition() {
+        // Throttle logging to every 500ms
+        const now = Date.now();
+        const center = 128;
+        const centerThreshold = center * this.thresholdPercentage;
+        const reducedThreshold = centerThreshold * this.sensitivity.reduced;
+        const minVal = Math.min(...this.dataArray);
+        const maxVal = Math.max(...this.dataArray);
+        const isSilent = (Math.abs(maxVal - center) < reducedThreshold &&
+            Math.abs(minVal - center) < reducedThreshold);
+
+        if (isSilent) {
+            if (now - this.lastLogTime >= 500) {
+                console.log("Silence detected");
+                this.lastLogTime = now;
+            }
+            if (this.silenceStartTime === null) {
+                this.silenceStartTime = now;
+            }
+            if (this.hasSpoken) {
+                if (!this.silenceTimer) {
+                    this.silenceTimer = setTimeout(() => {
+                        const duration = this.recordedSamples.length / this.sampleRate;
+                        const silenceElapsed = Date.now() - this.silenceStartTime;
+                        if (silenceElapsed > 2000) { // if silence is longer than 2 seconds
+                            this.longSilence = true;
+                        }
+                        if (duration >= this.minChunkDuration) {
+                            console.log("Silence maintained for", silenceElapsed, "ms and duration (" + duration.toFixed(2) + "s) meets minimum, sending audio chunk");
+                            this.sendRecordedAudio();
+                            this.hasSpoken = false;
+                        } else {
+                            console.log("Silence detected, but chunk duration (" + duration.toFixed(2) + "s) is less than minimum (" + this.minChunkDuration + "s); waiting for more audio.");
+                        }
+                        this.silenceTimer = null;
+                        this.silenceStartTime = null;
+                    }, this.silence_duration);
+                }
+            }
+        } else {
+            if (!this.hasSpoken && now - this.lastLogTime >= 500) {
+                console.log("Speech detected");
+                this.lastLogTime = now;
+            }
+            this.hasSpoken = true;
+            this.silenceStartTime = null;
+            this.longSilence = false;
+            if (this.silenceTimer) {
+                clearTimeout(this.silenceTimer);
+                this.silenceTimer = null;
+            }
+        }
+    }
+
+    forceSendChunk(reason) {
+        console.log(`Force-sending chunk due to ${reason}`);
+        this.sendRecordedAudio();
+        if (this.forceSendTimer) {
+            clearTimeout(this.forceSendTimer);
+            this.forceSendTimer = null;
+        }
+        this.chunkSent = true;
+        setTimeout(() => {
+            this.chunkSent = false;
+        }, this.chunkBeepDuration);
+    }
+
+    async sendRecordedAudio() {
+        if (this.isSending) {
+            console.log('Already sending audio, skipping.');
+            return;
+        }
+
+        if (this.recordedSamples.length) {
+            this.isSending = true;
+            try {
+                // Use encodeWAV to properly encode the recorded samples
+                const wavBlob = encodeWAV(this.recordedSamples, this.sampleRate);
+                const formData = new FormData();
+                formData.append('file', wavBlob, 'recorded.wav');
+
+                const token = this.getCookie('auth_token');
+
+                const response = await fetch(`${this.apiUrl}/transcribe`, {
+                    method: 'POST',
+                    headers: {
+                        ...(token ? {'Authorization': `Bearer ${token}`} : {})
+                    },
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Audio server error:", errorText);
+                    if (this.onStatusChange) {
+                        this.onStatusChange({error: true, lastErrorMessage: errorText});
+                    }
+                } else {
+                    const result = await response.json();
+                    const transcription = result.transcription || '';
+                    if (this.onTranscription) {
+                        this.onTranscription(transcription);
+                    }
+                }
+            } catch (error) {
+                console.error('Error sending recorded audio:', error);
+                if (this.onStatusChange) {
+                    this.onStatusChange({error: true, lastErrorMessage: 'Failed to send audio data'});
+                }
+            } finally {
+                this.isSending = false;
+                // If long silence was detected, clear the buffer entirely (no overlap).
+                if (this.longSilence) {
+                    this.recordedSamples = [];
+                    this.longSilence = false;
+                } else {
+                    // Otherwise, retain the last few seconds (prefix overlap).
+                    const overlapSamples = Math.floor(this.sampleRate * this.overlapDuration);
+                    if (this.recordedSamples.length > overlapSamples) {
+                        this.recordedSamples = this.recordedSamples.slice(-overlapSamples);
+                    }
+                }
+            }
+        }
+    }
+
+    // --- Cookie Helper ---
+    getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+
+    // --- Helper functions ---
+    b64toBlob(b64Data, contentType = 'audio/wav') {
+        const byteCharacters = atob(b64Data);
+        const byteArrays = [];
+        for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+            const slice = byteCharacters.slice(offset, offset + 512);
+            const byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+        }
+        return new Blob(byteArrays, {type: contentType});
+    }
 }
 
 // Helper: converts an ArrayBuffer to a base64 string.
 function arrayBufferToBase64(buffer) {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
 }

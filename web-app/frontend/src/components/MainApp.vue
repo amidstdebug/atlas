@@ -18,7 +18,7 @@
       </el-header>
     </el-row>
 
-    <!-- Main Content: Only the Transcription & Summary (Canvas removed) -->
+    <!-- Main Content: Only the Transcription & Summary -->
     <el-row justify="center" gutter="40">
       <el-col :span="24">
         <ColumnLayout
@@ -35,8 +35,9 @@
 
 <script>
 import ColumnLayout from './ColumnLayout.vue';
-// CanvasLayout is no longer used
-/* eslint-disable */
+import AtlasLight from '../assets/ATLAS_light.png';
+import AtlasDark from '../assets/ATLAS_dark.png';
+
 export default {
   name: 'MainApp',
   components: {
@@ -47,16 +48,14 @@ export default {
       activeTab: 'atc', // Default active tab
       liveRecordColor: '#e34660',
       uploadColor: '#5773d9',
-      transcription: '', // Expected to be an object with a "segments" property from the websocket
+      transcription: '', // This can be updated via events from ColumnLayout
       headerColor: '#44576D', // Default header color for 'atc'
     };
   },
   computed: {
-    // Dynamically set the logo based on the active tab with a fade transition
+    // Dynamically set the logo based on the active tab with a fade transition.
     logo() {
-      return this.activeTab === 'atc'
-        ? require('../assets/ATLAS_light.png')
-        : require('../assets/ATLAS_dark.png');
+      return this.activeTab === 'atc' ? AtlasLight : AtlasDark;
     },
   },
   methods: {
@@ -70,7 +69,7 @@ export default {
       const tabName = this.mapTabIndexToName(tab.index);
       this.activeTab = tabName;
 
-      // Update header color and other settings based on the active tab
+      // Update header color and other settings based on the active tab.
       if (tabName === 'atc') {
         this.headerColor = '#44576D';
         document.documentElement.style.setProperty('--el-color-primary', '#dfebf6');
@@ -98,48 +97,39 @@ export default {
 
 <style scoped>
 @import '../styles/main.css';
-
 html, body {
   max-width: 100%;
   overflow-x: hidden;
 }
-
 #app {
   margin-top: 20px;
   padding: 20px;
 }
-
 .main-app {
   color: #29353C;
   width: 100%;
   overflow-x: hidden;
 }
-
 .header-transition {
   transition: background-color 0.5s ease-in-out;
 }
-
 .logo-transition {
   transition: opacity 1s ease-in-out;
   opacity: 1;
 }
-
 .logo-transition:before {
   opacity: 0;
   content: '';
 }
-
 .header-tabs > .el-tabs__item.is-active {
   color: #fff !important;
   background-color: transparent !important;
   border-bottom: 2px solid #fff !important;
   font-size: 20px !important;
 }
-
 .el-tabs__content {
   display: none;
 }
-
 .header-content h1 {
   margin: 0;
 }

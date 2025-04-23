@@ -1,9 +1,9 @@
-# transcription.py
 import pandas as pd
 import re
 import logging
 from fuzzywuzzy import fuzz, process
 from collections import defaultdict
+import difflib
 from .lists import nato  # Removed number_mapping import
 
 # Set up logging
@@ -19,17 +19,9 @@ RESET = "\033[0m"
 transcription_history = defaultdict(int)
 pattern_history = defaultdict(lambda: {'count': 0, 'correct_format': ''})
 
-
-# Function to log changes
-def log_transcription_change(description, old_transcription, new_transcription):
-	if old_transcription != new_transcription:
-		logging.info(f"{description}: '{old_transcription}' -> '{new_transcription}'")
-
-
 # ============================
 # Number Parsing Utilities
 # ============================
-
 units = {
 	'zero': 0, 'oh': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
 	'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'niner': 9
@@ -115,7 +107,6 @@ def parse_number(text):
 
 
 def replace_number_words(transcription):
-	# logging.info("Replacing number words with digits...")
 	number_words_pattern = r'\b(?:' + '|'.join(number_words) + r')\b(?:\s+\b(?:' + '|'.join(number_words) + r')\b)*'
 	pattern = re.compile(number_words_pattern, flags=re.IGNORECASE)
 
@@ -126,64 +117,47 @@ def replace_number_words(transcription):
 
 	transcription_before = transcription
 	transcription = pattern.sub(replace_match, transcription)
-	# log_transcription_change("Replaced number words with digits", transcription_before, transcription)
 	return transcription
 
 
 def remove_and_between_number_words(transcription):
-	# logging.info("Removing 'and' between number words...")
 	number_word_pattern = r'\b(?:' + '|'.join(number_words) + r')\b'
 	pattern = re.compile(rf'({number_word_pattern})\s+and\s+({number_word_pattern})', flags=re.IGNORECASE)
 	transcription_before = transcription
 	transcription = pattern.sub(r'\1 \2', transcription)
-	# log_transcription_change("Removed 'and' between number words", transcription_before, transcription)
 	return transcription
 
 
 # ============================
 # 1. Initial Cleanup
 # ============================
-
 def remove_whisper_artifacts(transcription):
-	# logging.info("Removing whisper artifacts...")
 	artifacts = [
 		(r'\bthanks for watching\b[\.\!\?]?', '', "Removed 'thanks for watching'"),
 		(r'\bfor watching\b[\.\!\?]?', '', "Removed 'for watching'"),
+		# Ignore transcripts that are only 'so', 'so.', 'okay', or 'okay.' regardless of capitalization.
+		(r'^(so|so\.|okay|okay\.)$', '', "Removed trivial artifact ('so', 'okay', etc.)")
 	]
 	for pattern, replacement, description in artifacts:
 		transcription_before = transcription
 		transcription = re.sub(pattern, replacement, transcription, flags=re.IGNORECASE)
-	# log_transcription_change(description, transcription_before, transcription)
-
 	transcription = re.sub(r'\s*\.\s*$', '.', transcription)
 	transcription = re.sub(r'\.\.', '.', transcription)
 	transcription = transcription.strip()
-
 	return transcription
 
 
 # ============================
 # 2. Standardize Units and Directions
 # ============================
-
 def standardize_units(transcription):
-	# logging.info("Standardizing units...")
-
-	# Replace ' feet' with 'ft'
 	transcription_before = transcription
 	transcription = transcription.replace(' feet', 'ft')
-	# log_transcription_change("Changed 'feet' to 'ft'", transcription_before, transcription)
-
-	# Replace ' knots' with 'kts'
-	transcription_before = transcription
 	transcription = transcription.replace(' knots', 'kts')
-	# log_transcription_change("Changed 'knots' to 'kts'", transcription_before, transcription)
-
 	return transcription
 
 
 def standardize_directions(transcription):
-	# logging.info("Standardizing directional terms...")
 	transformations = [
 		(r'\b(\d+)\s+left\b', r'\1L', "Transformed 'left' to 'L'"),
 		(r'\b(\d+)\s+right\b', r'\1R', "Transformed 'right' to 'R'"),
@@ -193,8 +167,6 @@ def standardize_directions(transcription):
 	for pattern, replacement, description in transformations:
 		transcription_before = transcription
 		transcription = re.sub(pattern, replacement, transcription, flags=re.IGNORECASE)
-	# log_transcription_change(description, transcription_before, transcription)
-
 	transcription = re.sub(r'(\d+)\s+([LRC])\b', r'\1\2', transcription, flags=re.IGNORECASE)
 	return transcription
 
@@ -202,9 +174,7 @@ def standardize_directions(transcription):
 # ============================
 # 3. Specific Patterns and Mappings
 # ============================
-
 def capitalize_nato_and_first_word(transcription):
-	# logging.info("Capitalizing NATO words and the first word...")
 	nato_pattern = r'\b(' + '|'.join(nato) + r')\b'
 	transcription_before = transcription
 	transcription = re.sub(
@@ -213,12 +183,10 @@ def capitalize_nato_and_first_word(transcription):
 		transcription,
 		flags=re.IGNORECASE
 	)
-	# log_transcription_change("Capitalized NATO words", transcription_before, transcription)
 	return transcription
 
 
 def replace_zulu_with_z(transcription):
-	# logging.info("Replacing 'Zulu' with 'Z' and concatenating...")
 	transcription_before = transcription
 	transcription = re.sub(
 		r'\b(\d+)\s*Zulu\b',
@@ -226,16 +194,21 @@ def replace_zulu_with_z(transcription):
 		transcription,
 		flags=re.IGNORECASE
 	)
-	# log_transcription_change("Replaced 'Zulu' with 'Z' and concatenated", transcription_before, transcription)
+	return transcription
+
+
+def handle_gocat(transcription):
+	transcription_before = transcription
+	transcription = re.sub(r'\bgocat\s*(\d+)\b', r'TGW\1', transcription, flags=re.IGNORECASE)
+	transcription = re.sub(r'\bgocad\s*(\d+)\b', r'TGW\1', transcription, flags=re.IGNORECASE)
+
 	return transcription
 
 
 # ============================
 # 4. Number Handling and Formatting
 # ============================
-
 def combine_adjacent_digits_for_callsigns(transcription):
-	# logging.info("Combining adjacent digits for callsigns...")
 	digit_patterns = [
 		(r'\b(\d)\s+(\d)\s+(\d)\s+(\d)\b', r'\1\2\3\4', "Combined four adjacent digits"),
 		(r'\b(\d)\s+(\d)\s+(\d)(?=\s|$|[A-Za-z])', r'\1\2\3', "Combined three adjacent digits"),
@@ -243,20 +216,16 @@ def combine_adjacent_digits_for_callsigns(transcription):
 	for pattern, replacement, description in digit_patterns:
 		transcription_before = transcription
 		transcription = re.sub(pattern, replacement, transcription, flags=re.IGNORECASE)
-	# log_transcription_change(description, transcription_before, transcription)
 	return transcription
 
 
 def combine_letter_and_number(transcription):
-	# logging.info("Combining letter and number patterns...")
 	transcription_before = transcription
 	transcription = re.sub(r'\b([A-Z])\s+(\d+)\b', r'\1\2', transcription, flags=re.IGNORECASE)
-	# log_transcription_change("Combined letter and number patterns", transcription_before, transcription)
 	return transcription
 
 
 def handle_flight_levels(transcription):
-	# logging.info("Handling flight levels...")
 	transcription_before = transcription
 	transcription = re.sub(
 		r'\bflight level\s*(\d{3})(?=\s|\.|,|$)',
@@ -264,8 +233,6 @@ def handle_flight_levels(transcription):
 		transcription,
 		flags=re.IGNORECASE
 	)
-	# log_transcription_change("Formatted 'flight level'", transcription_before, transcription)
-
 	transcription_before = transcription
 	transcription = re.sub(
 		r'(FL\d{3})(?=\d)',
@@ -273,12 +240,10 @@ def handle_flight_levels(transcription):
 		transcription,
 		flags=re.IGNORECASE
 	)
-	# log_transcription_change("Ensured spacing after 'FLxxx'", transcription_before, transcription)
 	return transcription
 
 
 def handle_squawk_codes(transcription):
-	# logging.info("Handling squawk codes...")
 	transcription_before = transcription
 	transcription = re.sub(
 		r'\bsquawk\s+(\d)\s*(\d)\s*(\d)\s*(\d)\b',
@@ -286,12 +251,10 @@ def handle_squawk_codes(transcription):
 		transcription,
 		flags=re.IGNORECASE
 	)
-	# log_transcription_change("Formatted squawk code", transcription_before, transcription)
 	return transcription
 
 
 def combine_numbers_with_units(transcription):
-	# logging.info("Combining numbers with units...")
 	combinations = [
 		(r'(\d{1,2})\s+(\d{2,3})\s*ft\b', r'\1\2ft', "Combined numbers with 'ft'"),
 		(r'(\d{1,2})\s+(\d{2,3})\s*kts\b', r'\1\2kts', "Combined numbers with 'kts'"),
@@ -300,20 +263,16 @@ def combine_numbers_with_units(transcription):
 	for pattern, replacement, description in combinations:
 		transcription_before = transcription
 		transcription = re.sub(pattern, replacement, transcription, flags=re.IGNORECASE)
-	# log_transcription_change(description, transcription_before, transcription)
 	return transcription
 
 
 def replace_point_or_decimal(transcription):
-	# logging.info("Replacing 'point' or 'decimal' with '.' ...")
 	transcription_before = transcription
 	transcription = re.sub(r'\s*(point|decimal)\s*', '.', transcription, flags=re.IGNORECASE)
-	# log_transcription_change("Replaced 'point' or 'decimal' with '.'", transcription_before, transcription)
 	return transcription
 
 
 def handle_decimal_followups(transcription):
-	# logging.info("Fixing decimal follow-ups...")
 	transcription_before = transcription
 	pattern = r'(\d+\.\d{1,2})\s*(\d+)'
 	matches = re.findall(pattern, transcription)
@@ -334,17 +293,13 @@ def handle_decimal_followups(transcription):
 					f'{full_number} {follow_up}',
 					f'{full_number[:4]} {full_number[4:]}'
 				)
-	# log_transcription_change("After fix_decimal_followups", transcription_before, transcription)
 	return transcription
 
 
 # ============================
 # 5. General Number and Pattern Handling
 # ============================
-
-
 def combine_remaining_adjacent_digits(transcription):
-	# logging.info("Combining remaining adjacent digits...")
 	patterns = [
 		(r'\b(\d)\s+(\d+)\b', r'\1\2', "Combined single digit with multi-digit number"),
 		(r'\b(\d)\s+(\d)([A-Z])\b', r'\1\2\3', "Combined digits and letter for runway designations"),
@@ -352,50 +307,39 @@ def combine_remaining_adjacent_digits(transcription):
 	for pattern, replacement, description in patterns:
 		transcription_before = transcription
 		transcription = re.sub(pattern, replacement, transcription, flags=re.IGNORECASE)
-	# log_transcription_change(description, transcription_before, transcription)
 	return transcription
 
 
 # ============================
 # 6. Final Cleanup and Validation
 # ============================
-
 def validate_transcription(transcription):
-	# logging.info("Validating transcription for false activations...")
 	repeated_pattern = r'\b(\w+)(\s+\1){3,}\b'
 	if (re.search(repeated_pattern, transcription) or
 			transcription.lower() in [
 				'you', 'bye', '.', 'bye bye', 'thank you',
 				'thank you.', 'thank you very much', 'thank you very much..',
-				'thank you very much.', 'thank you so much',
-				'thank you so much.'
+				'thank you very much.', 'thank you so much', 'thank you so much.',
+				'so', 'so.', 'okay', 'okay.'
 			] or
 			(len(transcription.split()) == 1 and 'FL' not in transcription)):
-		# logging.info(f"Transcription '{transcription}' identified as 'false activation'")
 		return "false activation"
 	return transcription
 
 
 def handle_icao_callsign(transcription):
-	parquet_file = './funcs/aircraft_callsign.parquet'
+	parquet_file = './server/funcs/aircraft_callsign.parquet'
 	df = pd.read_parquet(parquet_file)
 
 	def replace_callsign_with_icao(text: str, df: pd.DataFrame) -> str:
-		# Create a dictionary mapping callsigns to ICAO codes
 		callsign_to_icao = dict(zip(df['Callsign'], df['ICAO']))
-
-		# Replace callsigns with ICAO codes in the text
 		for callsign, icao in callsign_to_icao.items():
-			# Use regex to replace callsign followed by a space and a number with ICAO followed by the number
 			pattern = r'\b' + re.escape(callsign) + r'\b\s*(\d+)'
 			replacement = icao + r'\1'
-			# Add re.IGNORECASE to make the replacement case-insensitive
 			text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-
 		return text
 
 	transcription = replace_callsign_with_icao(transcription, df)
-
 	return transcription
 
 
@@ -403,41 +347,35 @@ def capitalize_first_word(transcription):
 	transcription_before = transcription
 	if transcription:
 		transcription = transcription[0].upper() + transcription[1:]
-	# log_transcription_change("Capitalized first word", transcription_before, transcription)
 	return transcription
 
 
 def validate_atc_transcription(transcription):
-	# Dictionary mapping common misheard words to the correct ATC terms
 	misheard_words = {
 		"soles": "souls",
 		"rodger": "roger",
 		"Everett": "Emirates",
 		"tree": "three",
 	}
-
 	words = transcription.split()
 	corrected_words = []
-
 	for word in words:
 		corrected_words.append(misheard_words.get(word, word))
-
 	transcription = ' '.join(corrected_words)
 	return transcription
+
 
 # ============================
 # Main Transformation Function
 # ============================
-
 def apply_custom_fixes(transcription):
 	logging.info(f"Original transcription: {YELLOW}'{transcription}'{RESET}")
 
 	# 1. Initial Cleanup
 	transcription = remove_whisper_artifacts(transcription)
 	transcription = replace_point_or_decimal(transcription)
-	# Remove 'and' between number words
 	transcription = remove_and_between_number_words(transcription)
-	transcription = replace_number_words(transcription)  # Updated function
+	transcription = replace_number_words(transcription)
 	transcription = handle_decimal_followups(transcription)
 	transcription = combine_remaining_adjacent_digits(transcription)
 
@@ -452,6 +390,7 @@ def apply_custom_fixes(transcription):
 	# 5. General Number and Pattern Handling
 	transcription = handle_flight_levels(transcription)
 	transcription = handle_squawk_codes(transcription)
+	transcription = handle_gocat(transcription)
 
 	# 2. Standardize Units and Directions
 	transcription = standardize_units(transcription)
@@ -466,3 +405,97 @@ def apply_custom_fixes(transcription):
 	transcription = handle_icao_callsign(transcription)
 	logging.info(f"Final transcription: {GREEN}'{transcription}'{RESET}")
 	return transcription
+
+
+# ============================================
+# New Functions to Update Timestamped Transcripts
+# ============================================
+def update_words_with_final_transcript(original_words, final_transcript):
+	"""
+	Update the "words" list (each with its own timestamps) so that their 'text' values match
+	the final transcript produced by apply_custom_fixes. This function uses difflib to
+	align the original tokens (from the words list) with the final tokens.
+	"""
+	orig_tokens = [w['text'] for w in original_words]
+	final_tokens = final_transcript.split()
+
+	# If token counts match, update each word directly.
+	if len(orig_tokens) == len(final_tokens):
+		for i in range(len(original_words)):
+			original_words[i]['text'] = final_tokens[i]
+		return original_words
+
+	new_words = []
+	matcher = difflib.SequenceMatcher(None, orig_tokens, final_tokens)
+	for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+		if tag == 'equal':
+			for orig_idx, final_idx in zip(range(i1, i2), range(j1, j2)):
+				new_word = original_words[orig_idx].copy()
+				new_word['text'] = final_tokens[final_idx]
+				new_words.append(new_word)
+		elif tag == 'replace':
+			# Merge the original tokens from i1 to i2 to form a block.
+			if i1 < len(original_words):
+				start_time = original_words[i1]['start']
+			else:
+				start_time = 0
+			if i2 - 1 < len(original_words):
+				end_time = original_words[i2 - 1]['end']
+			else:
+				end_time = start_time
+			block_duration = end_time - start_time
+			num_new = j2 - j1
+			# Distribute the time interval among the new tokens.
+			for k, final_token in enumerate(final_tokens[j1:j2]):
+				token_start = start_time + (block_duration * k / num_new)
+				token_end = start_time + (block_duration * (k + 1) / num_new)
+				new_word = {
+					'text': final_token,
+					'start': token_start,
+					'end': token_end,
+					'duration': token_end - token_start
+				}
+				new_words.append(new_word)
+		elif tag == 'insert':
+			# For inserted tokens, assign a timestamp equal to the end time of the previous token.
+			prev_end = new_words[-1]['end'] if new_words else (original_words[0]['start'] if original_words else 0)
+			for final_token in final_tokens[j1:j2]:
+				new_word = {
+					'text': final_token,
+					'start': prev_end,
+					'end': prev_end,
+					'duration': 0
+				}
+				new_words.append(new_word)
+		elif tag == 'delete':
+			# Skip deleted tokens.
+			continue
+	return new_words
+
+
+def process_transcript_data(data):
+	"""
+	Given a transcript data dictionary (with keys like "text" and "words"), this function:
+	  1. Extracts the transcript from data["text"]
+	  2. Applies the custom fixes to it via apply_custom_fixes()
+	  3. Replaces the old transcript with the new one in data["text"]
+	  4. Updates the "words" list so that each word's "text" reflects the modifications,
+		 while keeping the original timestamps unchanged (or merged appropriately).
+
+	Also checks if the transcript is empty (or just whitespace). In that case, returns "false activation".
+	"""
+	original_transcript = data.get("text", "").strip()
+
+	# Check if text is empty; if so, return false activation
+	if not original_transcript:
+		final_transcript = "false activation"
+		data["text"] = final_transcript
+		if "words" in data:
+			data["words"] = update_words_with_final_transcript(data["words"], final_transcript)
+		return data
+
+	final_transcript = apply_custom_fixes(original_transcript)
+	data["text"] = final_transcript
+	if "words" in data:
+		data["words"] = update_words_with_final_transcript(data["words"], final_transcript)
+	return data

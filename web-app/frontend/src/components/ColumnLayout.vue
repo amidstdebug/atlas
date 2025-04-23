@@ -11,21 +11,28 @@
                 <span style="color:#29353C">{{ leftBoxHeader }}</span>
               </div>
             </template>
+
             <div class="transcription-box" ref="transcriptionBox">
-              <div v-if="transcriptionSegments.length > 0" class="transcription-content">
+              <!-- Use parsedSegments to loop over each actual text segment -->
+              <div v-if="parsedSegments.length > 0" class="transcription-content">
                 <div
-                  v-for="(segment, index) in transcriptionSegments"
-                  :key="index"
-                  class="segment"
+                    v-for="(segment, index) in parsedSegments"
+                    :key="index"
+                    class="segment"
                 >
-                  <span class="speaker-label" :style="getSpeakerStyle(segment.speaker)">
-                    Speaker {{ segment.speaker }}:
+                  <!-- Timestamp -->
+                  <span class="segment-timestamp">
+                    {{ formatTimestamp(segment.start) }}
                   </span>
-                  <span class="segment-text">{{ segment.transcription }}</span>
+                  <!-- Text -->
+                  <span class="segment-text">
+                    {{ segment.text }}
+                  </span>
                 </div>
               </div>
+              <!-- Otherwise, show placeholder text -->
               <div v-else class="initial-text">
-                <p>{{ leftBoxInitial }}</p>
+                <p>Upload recording or record audio to transcribe.</p>
               </div>
             </div>
           </el-card>
@@ -41,12 +48,12 @@
             </template>
             <div class="content-box">
               <el-carousel
-                :interval="0"
-                arrow="never"
-                indicator-position="outside"
-                height="600px"
-                :loop="false"
-                :trigger="'click'"
+                  :interval="0"
+                  arrow="never"
+                  indicator-position="outside"
+                  height="600px"
+                  :loop="false"
+                  :trigger="'click'"
               >
                 <template v-if="summaries.length === 0">
                   <el-carousel-item>
@@ -57,17 +64,17 @@
                 </template>
                 <template v-else>
                   <el-carousel-item
-                    v-for="summary in summaries"
-                    :key="summary.id"
-                    class="summary-item"
+                      v-for="summary in summaries"
+                      :key="summary.id"
+                      class="summary-item"
                   >
                     <div class="summary-content" ref="summaryContent">
                       <el-tag type="info" size="small" class="timestamp-tag">
                         {{ summary.timestamp }}
                       </el-tag>
                       <div
-                        v-html="summary.formattedContent"
-                        class="formatted-summary"
+                          v-html="summary.formattedContent"
+                          class="formatted-summary"
                       ></div>
                     </div>
                   </el-carousel-item>
@@ -79,44 +86,60 @@
       </el-row>
 
       <!-- Merged Button Group -->
-      <div class="button-group merged">
+      <div ref="buttonGroup" class="button-group merged">
         <!-- File Upload Button -->
         <el-button
-          :disabled="isTranscribing"
-          :style="{ color: uploadColor }"
-          class="centered-button same-width-button"
-          @click="uploadRecording"
+            :disabled="isTranscribing"
+            :style="{ color: uploadColor }"
+            class="centered-button same-width-button"
+            @click="uploadRecording"
         >
           <el-icon class="icon-group">
-            <UploadIcon />
+            <UploadIcon/>
           </el-icon>
           {{ isTranscribing ? 'Transcribing...' : 'Upload Recording' }}
         </el-button>
 
         <!-- Live Recording (Mic) Button -->
         <el-button
-          v-if="!isRecording"
-          :style="{ color: liveRecordColor }"
-          class="centered-button same-width-button"
-          @click="startMicRecording"
+            v-if="!isRecording"
+            :style="{ color: liveRecordColor }"
+            class="centered-button same-width-button"
+            @click="startMicRecording"
         >
           <el-icon class="icon-group">
-            <MicrophoneIcon />
+            <MicrophoneIcon/>
           </el-icon>
           Start Recording
         </el-button>
         <el-button
-          v-if="isRecording"
-          class="centered-button same-width-button"
-          @click="stopMicRecording"
+            v-if="isRecording"
+            class="centered-button same-width-button"
+            @click="stopMicRecording"
         >
           Stop Recording
         </el-button>
 
+        <!-- Generate Summary Button -->
+        <el-button
+            class="centered-button same-width-button"
+            @click="generateSummary"
+        >
+          Generate Summary
+        </el-button>
+
+        <!-- Toggle Auto Summary Button -->
+        <el-button
+            class="centered-button same-width-button"
+            @click="toggleAutoSummary"
+        >
+          {{ autoSummaryEnabled ? 'Disable Auto Summary' : 'Enable Auto Summary' }}
+        </el-button>
+
         <!-- Clear Transcript Button -->
         <el-button
-          class="centered-button same-width-button"
-          @click="clearTranscription"
+            class="centered-button same-width-button"
+            @click="clearTranscription"
         >
           {{ isTranscribing ? 'Stop Transcribing' : 'Clear Transcript' }}
         </el-button>
@@ -124,17 +147,18 @@
 
       <!-- Hidden File Input for Upload -->
       <input
-        ref="audioFileInput"
-        type="file"
-        accept="audio/*"
-        style="display: none;"
-        @change="handleFileUpload"
+          ref="audioFileInput"
+          type="file"
+          accept="audio/*"
+          style="display: none;"
+          @change="handleFileUpload"
       />
     </el-main>
   </el-container>
 </template>
 
 <script>
+import apiClient, {getLoadingStatus} from '@/router/apiClient';
 import {
   ElContainer,
   ElMain,
@@ -145,22 +169,26 @@ import {
   ElIcon,
   ElTag,
   ElCarousel,
-  ElCarouselItem
+  ElCarouselItem,
+  ElLoading,
+  ElMessage
 } from 'element-plus';
-import { Microphone, Upload } from '@element-plus/icons-vue';
+import {Microphone, Upload} from '@element-plus/icons-vue';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism.css';
-import { typeWriterMultiple } from '@/methods/utils/typeWriter';
-import { tabConfigurations } from '@/config/columnConfig';
-// Removed axios import since HTTP sending is no longer used.
-import { AudioRecorderService } from '@/services/audioRecorderService';
-import {jsonrepair} from "jsonrepair";
+import {typeWriterMultiple} from '@/methods/utils/typeWriter';
+import {encodeWAV} from '@/methods/utils/audioUtils';
+import {tabConfigurations} from '@/config/columnConfig';
+import {AudioRecorderService} from '@/services/audioRecorderService';
+import {jsonrepair} from 'jsonrepair';
+import Cookies from 'js-cookie';
+import axios from 'axios';
 
 const typingMappings = [
-  { configPath: ['headers', 'leftBoxHeader'], dataKey: 'leftBoxHeader' },
-  { configPath: ['headers', 'rightBoxHeader'], dataKey: 'rightBoxHeader' },
-  { configPath: ['initials', 'leftBoxInitial'], dataKey: 'leftBoxInitial' },
-  { configPath: ['initials', 'rightBoxInitial'], dataKey: 'rightBoxInitial' },
+  {configPath: ['headers', 'leftBoxHeader'], dataKey: 'leftBoxHeader'},
+  {configPath: ['headers', 'rightBoxHeader'], dataKey: 'rightBoxHeader'},
+  {configPath: ['initials', 'leftBoxInitial'], dataKey: 'leftBoxInitial'},
+  {configPath: ['initials', 'rightBoxInitial'], dataKey: 'rightBoxInitial'},
 ];
 
 function getNestedProperty(obj, path) {
@@ -212,21 +240,35 @@ export default {
       typingSpeed: 11,
       cancelTypingFunctions: [],
       isTranscribing: false,
-      // Removed cancelTokenSource and file upload related properties.
-      recordedSamples: [],
-      sampleRate: 48000,
-      chunkSize: 1600000,
-      lastSent: false,
       isRecording: false,
       audioRecorder: null,
+      liveTranscription: {
+        segments: []
+      },
+      cumulativeOffset: 0, // track audio offset for live recording segments
+      apiStatus: getLoadingStatus(),
+      // New properties for automatic summary generation
+      autoSummaryEnabled: false,
+      autoSummaryInterval: null,
+      previousSummaryLength: 0,
+      previousSummary: ""
     };
   },
   computed: {
+    /**
+     * Returns whichever segments are in “liveTranscription” or “transcription” prop
+     */
     transcriptionSegments() {
       if (
-        this.transcription &&
-        typeof this.transcription === 'object' &&
-        Array.isArray(this.transcription.segments)
+          this.liveTranscription &&
+          Array.isArray(this.liveTranscription.segments)
+      ) {
+        return this.liveTranscription.segments;
+      }
+      if (
+          this.transcription &&
+          typeof this.transcription === 'object' &&
+          Array.isArray(this.transcription.segments)
       ) {
         return this.transcription.segments;
       }
@@ -242,11 +284,103 @@ export default {
       }
       return [];
     },
+
+    /**
+     * Parses the actual text segments out of the transcription segments.
+     */
+    parsedSegments() {
+      if (!this.transcriptionSegments.length) return [];
+
+      const allSegments = [];
+      for (const item of this.transcriptionSegments) {
+        if (!item.transcription) continue;
+        try {
+          const parsed = JSON.parse(item.transcription);
+          if (parsed.segments && Array.isArray(parsed.segments)) {
+            allSegments.push(...parsed.segments);
+          }
+        } catch (err) {
+          console.error("Could not parse JSON from transcription item:", err);
+        }
+      }
+      return allSegments;
+    },
+
+    /**
+     * Joins all chunked transcriptions for the “Generate Summary” request.
+     */
     aggregatedTranscription() {
-      return this.transcriptionSegments.map(segment => segment.transcription).join("\n");
+      return this.transcriptionSegments
+          .map(segment => segment.transcription)
+          .join("\n");
     },
   },
   methods: {
+    async startMicRecording() {
+      if (!this.audioRecorder) {
+        this.audioRecorder = new AudioRecorderService({
+          apiUrl: "http://localhost:5002" // adjust as needed
+        });
+
+        // Handle partial transcripts from the server
+        this.audioRecorder.onTranscription = (rawString) => {
+          try {
+            const parsedData = JSON.parse(rawString);
+            let segments = [];
+
+            if (Array.isArray(parsedData)) {
+              segments = parsedData;
+            } else if (parsedData.segments && Array.isArray(parsedData.segments)) {
+              segments = parsedData.segments;
+            } else if (parsedData.text) {
+              segments = [{
+                start: 0,
+                end: 1.5,
+                text: parsedData.text
+              }];
+            } else {
+              console.error("Invalid transcription format:", parsedData);
+              return;
+            }
+
+            segments = segments.map(seg => ({
+              ...seg,
+              start: seg.start + this.cumulativeOffset,
+              end: seg.end + this.cumulativeOffset
+            }));
+
+            if (segments.length > 0) {
+              this.cumulativeOffset = segments[segments.length - 1].end;
+            }
+
+            this.liveTranscription.segments.push({
+              speaker: 0,
+              transcription: JSON.stringify({segments})
+            });
+          } catch (error) {
+            console.error("Error parsing server transcription chunk:", error);
+          }
+        };
+      }
+      this.isRecording = true;
+      await this.audioRecorder.startRecording();
+    },
+
+    async stopMicRecording() {
+      await this.audioRecorder.stopRecording();
+      if (this.audioRecorder.audioStream) {
+        this.audioRecorder.audioStream.getTracks().forEach(track => track.stop());
+      }
+      this.isRecording = false;
+    },
+
+    formatTimestamp(seconds) {
+      if (typeof seconds !== 'number' || isNaN(seconds)) return '';
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    },
+
     handleActiveTabChange(newTab) {
       this.cancelTypingFunctions.forEach(cancelFn => cancelFn());
       this.cancelTypingFunctions = [];
@@ -257,12 +391,13 @@ export default {
           const dataKey = mapping.dataKey;
           this[dataKey] = '';
           return {
-            text: text,
+            text,
             typingSpeed: this.typingSpeed,
             onUpdate: (currentText) => {
               this[dataKey] = currentText;
             },
-            onComplete: () => {},
+            onComplete: () => {
+            },
           };
         });
         this.cancelTypingFunctions = typeWriterMultiple(typingTasks);
@@ -270,52 +405,248 @@ export default {
         console.warn(`No configuration found for activeTab: ${newTab}`);
       }
     },
-    // File upload methods updated to use the AudioRecorderService function.
+
     uploadRecording() {
       this.$refs.audioFileInput.click();
     },
+
+    // In your component’s methods:
     async handleFileUpload(event) {
       const file = event.target.files[0];
       if (file) {
-        if (!this.audioRecorder) {
-          this.audioRecorder = new AudioRecorderService({ preBufferDuration: 0.4 });
-          // Update the URL accordingly.
-          this.audioRecorder.connectWebSocket('ws://your-websocket-server-url');
-        }
-        const arrayBuffer = await file.arrayBuffer();
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        // Use the first channel's float32 samples.
-        const float32Array = audioBuffer.getChannelData(0);
-        // Set the recordedSamples property so that sendRecordedAudio() will send this data.
-        this.audioRecorder.recordedSamples = Array.from(float32Array);
-        await this.audioRecorder.sendRecordedAudio();
-        console.log('File upload payload sent via WebSocket.');
+        // Start transcription process and set a cancel token if needed.
+        this.isTranscribing = true;
+        this.cancelTokenSource = axios.CancelToken.source();
+        await this.processAudioFile(file);
       }
     },
+
+    async processAudioFile(file) {
+      // Read the file into an ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+      // Create an AudioContext (or reuse an existing one)
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Decode the audio data
+      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      this.sampleRate = audioBuffer.sampleRate;
+      // Assume mono audio – get the first channel's data
+      this.recordedSamples = Array.from(audioBuffer.getChannelData(0));
+      // Set the chunk size to 30 seconds worth of samples
+      this.chunkSize = Math.floor(this.sampleRate * 30);
+      // Process each chunk sequentially
+      await this.chunkAndSendAudio();
+      // After processing, reset the transcription state.
+      this.isTranscribing = false;
+      this.cancelTokenSource = null;
+    },
+
+    async chunkAndSendAudio() {
+      // Loop through the recorded samples by chunkSize
+      for (let offset = 0; offset < this.recordedSamples.length && this.isTranscribing; offset += this.chunkSize) {
+        const chunk = this.recordedSamples.slice(offset, offset + this.chunkSize);
+        // Optionally flag that this is the last chunk
+        if (offset + this.chunkSize >= this.recordedSamples.length) {
+          this.lastSent = true;
+        }
+        await this.sendChunk(chunk);
+      }
+    },
+
+    async sendChunk(chunk) {
+      try {
+        // Encode the chunk into WAV format (assumes you have an encodeWAV function)
+        const wavBlob = encodeWAV(chunk, this.sampleRate);
+
+        // Create a blob URL and a temporary download link for local inspection
+        const url = URL.createObjectURL(wavBlob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `audio_chunk_${Date.now()}.wav`;
+        document.body.appendChild(a);
+        a.click();
+        // Cleanup the link and revoke the object URL after a short delay
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 1000);
+        console.log('downloading wav file')
+        // Create FormData for the POST request
+        const formData = new FormData();
+        formData.append('file', wavBlob, 'audio_chunk.wav');
+        // POST the chunk to your transcription API
+        const response = await apiClient.post(
+            'transcribe',
+            formData,
+            {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
+              cancelToken: this.cancelTokenSource.token,
+            }
+        );
+        // If the response is successful, update the transcription display
+        if (response.status === 200 && response.data.transcription) {
+          const transcription = response.data.transcription;
+          console.log("Transcription reply:", transcription);
+          this.addTranscription(transcription);
+        } else {
+          console.error('Error in transcription response:', response);
+        }
+      } catch (error) {
+        if (axios.isCancel(error)) {
+          console.log('Transcription request canceled:', error.message);
+        } else {
+          console.error('Error sending audio chunk:', error);
+        }
+      }
+    },
+
+    /**
+     * Converts ArrayBuffer to Base64
+     */
+    arrayBufferToBase64(buffer) {
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return window.btoa(binary);
+    },
+
+    /**
+     * Converts a base64 string to a Blob with a given contentType
+     */
+    b64toBlob(b64Data, contentType = 'audio/wav') {
+      const byteCharacters = atob(b64Data);
+      const byteArrays = [];
+      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+        const slice = byteCharacters.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        byteArrays.push(byteArray);
+      }
+      return new Blob(byteArrays, {type: contentType});
+    },
+
+    addTranscription(newText) {
+      // 1) If newText is an object that directly has `.segments`:
+      if (newText && newText.segments) {
+        // Apply the cumulative offset to each segment
+        const offsetSegments = newText.segments.map(seg => ({
+          ...seg,
+          start: seg.start + this.cumulativeOffset,
+          end: seg.end + this.cumulativeOffset,
+        }));
+
+        // Update our running offset to the last segment’s end
+        if (offsetSegments.length > 0) {
+          const lastSegment = offsetSegments[offsetSegments.length - 1];
+          this.cumulativeOffset = lastSegment.end;
+        }
+
+        // Push the offset-adjusted segments into liveTranscription
+        this.liveTranscription.segments.push({
+          speaker: 0,
+          transcription: JSON.stringify({segments: offsetSegments}),
+        });
+      }
+
+      // 2) If newText is just a string that may contain segments in JSON:
+      else if (typeof newText === 'string') {
+        try {
+          // Try parsing the JSON
+          const parsed = JSON.parse(newText);
+          if (parsed.segments && Array.isArray(parsed.segments)) {
+            // Apply the offset
+            const offsetSegments = parsed.segments.map(seg => ({
+              ...seg,
+              start: seg.start + this.cumulativeOffset,
+              end: seg.end + this.cumulativeOffset,
+            }));
+
+            // Update offset
+            if (offsetSegments.length > 0) {
+              const lastSegment = offsetSegments[offsetSegments.length - 1];
+              this.cumulativeOffset = lastSegment.end;
+            }
+
+            // Store the new offset segments
+            this.liveTranscription.segments.push({
+              speaker: 0,
+              transcription: JSON.stringify({segments: offsetSegments}),
+            });
+          } else {
+            // If there are no segments or it’s missing “segments,” just store as-is
+            this.liveTranscription.segments.push({
+              speaker: 0,
+              transcription: newText,
+            });
+          }
+        } catch (e) {
+          // If it’s not parseable JSON, just store it directly
+          this.liveTranscription.segments.push({
+            speaker: 0,
+            transcription: newText,
+          });
+        }
+      }
+    },
+
     clearTranscription() {
       this.$emit('transcription-cleared');
       this.summaries = [];
       this.$refs.audioFileInput.value = '';
       this.isTranscribing = false;
+      this.liveTranscription.segments = [];
+      this.cumulativeOffset = 0;
     },
-    // Microphone recording methods:
-    async startMicRecording() {
-      if (!this.audioRecorder) {
-        this.audioRecorder = new AudioRecorderService({ preBufferDuration: 0.4 });
-        // Update the URL accordingly.
-        this.audioRecorder.connectWebSocket('ws://your-websocket-server-url');
+
+    async generateSummary() {
+      if (!this.aggregatedTranscription.trim()) {
+        ElMessage.warning("No transcription to summarize.");
+        return;
       }
-      await this.audioRecorder.startRecording();
-      this.isRecording = true;
-    },
-    async stopMicRecording() {
-      await this.audioRecorder.stopRecording();
-      if (this.audioRecorder.audioStream) {
-        this.audioRecorder.audioStream.getTracks().forEach(track => track.stop());
+      let loadingInstance;
+      try {
+        loadingInstance = ElLoading.service({
+          fullscreen: true,
+          text: 'Generating summary...'
+        });
+
+        // Include the previous summary (or empty string) in the payload
+        const payload = {
+          transcription: this.aggregatedTranscription,
+          previous_report: this.previousSummary || "",
+          summary_mode: "atc"
+        };
+
+        const response = await apiClient.post('summary', payload);
+        const apiSummary = response.data.message.content;
+        const summaryObj = this.extractSummary(apiSummary);
+
+        if (summaryObj) {
+          // Update your summary display and track this as the latest summary
+          this.addSummary(summaryObj.meeting_minutes || summaryObj);
+          this.previousSummary = summaryObj.meeting_minutes
+              ? JSON.stringify(summaryObj.meeting_minutes)
+              : JSON.stringify(summaryObj);
+          ElMessage.success('Summary generated successfully');
+        } else {
+          ElMessage.error('Failed to parse summary response');
+        }
+      } catch (error) {
+        console.error('Error generating summary:', error);
+        ElMessage.error('Failed to generate summary');
+      } finally {
+        if (loadingInstance) loadingInstance.close();
       }
-      this.isRecording = false;
     },
+
     getSpeakerStyle(speaker) {
       const colors = {
         "0": "#1f8ef1",
@@ -329,19 +660,49 @@ export default {
         marginRight: "8px",
       };
     },
-    addTranscription(newText) {
-      this.$emit('transcription-received', newText);
+
+    extractSummary(apiResponse) {
+      try {
+        const start = apiResponse.indexOf('```');
+        if (start === -1) return null;
+        const end = apiResponse.indexOf('```', start + 3);
+        if (end === -1) return null;
+
+        let extracted = apiResponse.substring(start + 3, end).trim();
+        extracted = extracted
+            .replace(/\\n/g, '')
+            .replace(/\\\\/g, '\\')
+            .replace(/\\"/g, '"');
+
+        const repaired = jsonrepair(extracted);
+        return JSON.parse(repaired);
+      } catch (error) {
+        console.error('Error extracting and parsing summary:', error);
+        return null;
+      }
     },
-    encodeWAV(samples, sampleRate) {
-      return window.encodeWAV(samples, sampleRate);
+
+    addSummary(summaryObj) {
+      // If the summary object has a key "1", use its value for display.
+      if (summaryObj && typeof summaryObj === 'object' && Object.prototype.hasOwnProperty.call(summaryObj, "1")) {
+        summaryObj = summaryObj["1"];
+      }
+
+      const timestamp = new Date().toLocaleString();
+      const formattedContent = this.formatSummary(summaryObj);
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      this.summaries.unshift({
+        id: uniqueId,
+        timestamp,
+        formattedContent,
+        rawContent: summaryObj
+      });
+      if (this.summaries.length > 10) {
+        this.summaries.pop();
+      }
     },
-    convertCamelCase(text) {
-      return text.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
-    },
-    capitalizeFirstLetter(text) {
-      if (!text) return '';
-      return text.charAt(0).toUpperCase() + text.slice(1);
-    },
+
     formatSummary(summaryObj) {
       try {
         let htmlContent = '';
@@ -376,79 +737,91 @@ export default {
         return 'Invalid summary format.';
       }
     },
-    extractSummary(apiResponse) {
-      try {
-        const start = apiResponse.indexOf('```');
-        if (start === -1) return null;
-        const end = apiResponse.indexOf('```', start + 3);
-        if (end === -1) return null;
-        let extractedContent = apiResponse.substring(start + 3, end).trim();
-        extractedContent = extractedContent
-          .replace(/\\n/g, '')
-          .replace(/\\\\/g, '\\')
-          .replace(/\\"/g, '"');
-        let repaired = jsonrepair(extractedContent);
-        let jsonObj = JSON.parse(repaired);
-        return jsonObj;
-      } catch (error) {
-        console.error('Error extracting and parsing summary:', error);
-        return null;
-      }
+
+    convertCamelCase(text) {
+      return text.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
     },
-    addSummary(summaryObj) {
-      const timestamp = new Date().toLocaleString();
-      const formattedContent = this.formatSummary(summaryObj);
-      const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      this.summaries.unshift({
-        id: uniqueId,
-        timestamp,
-        formattedContent,
-        rawContent: summaryObj
-      });
-      if (this.summaries.length > 10) {
-        this.summaries.pop();
+
+    capitalizeFirstLetter(text) {
+      if (!text) return '';
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    },
+
+    // New method to toggle automatic summary generation
+    toggleAutoSummary() {
+      this.autoSummaryEnabled = !this.autoSummaryEnabled;
+      if (this.autoSummaryEnabled) {
+        // Periodically check if we've added at least 300 characters since the last summary.
+        this.autoSummaryInterval = setInterval(() => {
+          // console.log("Looking for significant change")
+          const aggregated = this.aggregatedTranscription.trim();
+          const lengthDelta = aggregated.length - (this.previousTranscriptionLength || 0);
+
+          // Only call summary if we have at least 300 new characters.
+          if (lengthDelta >= 300) {
+            console.log("Change found")
+            const payload = {
+              transcription: aggregated,
+              previous_report: this.previousSummary || "",
+              summary_mode: "atc",
+            };
+            apiClient.post('summary', payload)
+                .then(response => {
+                  const summaryObj = this.extractSummary(response.data.message.content);
+                  if (summaryObj) {
+                    this.previousSummary = summaryObj.meeting_minutes
+                        ? JSON.stringify(summaryObj.meeting_minutes)
+                        : JSON.stringify(summaryObj);
+                    this.addSummary(summaryObj.meeting_minutes || summaryObj);
+                  }
+                })
+                .catch(error => {
+                  console.error('Error generating summary:', error);
+                });
+
+            // Update the stored transcription length to the new length
+            this.previousTranscriptionLength = aggregated.length;
+          }
+        }, 2000);
+      } else {
+        clearInterval(this.autoSummaryInterval);
+        this.autoSummaryInterval = null;
       }
     },
   },
   watch: {
     transcription(newVal) {
-      // Additional logic for transcription updates.
+      // handle updates if needed
     },
     activeTab(newTab) {
       this.handleActiveTabChange(newTab);
     },
+    'apiStatus.loading'(isLoading) {
+      this.isTranscribing = isLoading;
+    }
   },
   mounted() {
     this.$watch(
-      () => this.summaries,
-      () => {
-        this.$nextTick(() => {
-          Prism.highlightAll();
-        });
-      }
+        () => this.summaries,
+        () => {
+          this.$nextTick(() => {
+            Prism.highlightAll();
+          });
+        }
     );
     if (this.activeTab) {
       this.handleActiveTabChange(this.activeTab);
     }
+    // Enable auto summary from the start by toggling it on
+    this.toggleAutoSummary();
   },
   beforeUnmount() {
-    this.cancelTypingFunctions.forEach((cancelFn) => cancelFn());
+    this.cancelTypingFunctions.forEach(cancelFn => cancelFn());
+    if (this.autoSummaryInterval) {
+      clearInterval(this.autoSummaryInterval);
+    }
   },
 };
-
-/*
-Helper function to convert an ArrayBuffer to a base64 string.
-This helper could also be imported from a shared utilities file.
-*/
-function arrayBufferToBase64(buffer) {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
-}
 </script>
 
 <style scoped>
@@ -488,20 +861,21 @@ function arrayBufferToBase64(buffer) {
 .recording-glow {
   transition: box-shadow 0.3s ease;
 }
+
 .recording-glow.active {
-  box-shadow: 0 0 20px 7px rgba(227,70,96,0.7);
+  box-shadow: 0 0 20px 7px rgba(227, 70, 96, 0.7);
   animation: pulse 1s ease-in-out infinite;
 }
 
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 10px 3px rgba(227,70,96,0.7);
+    box-shadow: 0 0 10px 3px rgba(227, 70, 96, 0.7);
   }
   50% {
-    box-shadow: 0 0 20px 7px rgba(227,70,96,0.5);
+    box-shadow: 0 0 20px 7px rgba(227, 70, 96, 0.5);
   }
   100% {
-    box-shadow: 0 0 10px 3px rgba(227,70,96,0.7);
+    box-shadow: 0 0 10px 3px rgba(227, 70, 96, 0.7);
   }
 }
 
@@ -592,5 +966,22 @@ function arrayBufferToBase64(buffer) {
 .el-button[disabled] {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+/* Each displayed segment */
+.segment {
+  margin-bottom: 10px;
+}
+
+/* Show bold “mm:ss” plus a space before the text */
+.segment-timestamp {
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+/* Wrap text within the container for long segments */
+.segment-text {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

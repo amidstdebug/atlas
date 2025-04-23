@@ -1,28 +1,41 @@
-# Use the official PyTorch image as the base image
-FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+# Use the official Python image as the base image
+FROM python:3.10-slim
 
 # Set the working directory
 WORKDIR /usr/src/app
 
-# Install system dependencies for sndfile (libsndfile1-dev)
-# RUN apt-get update && apt-get install -y libsndfile1-dev
+# Install system dependencies
 RUN apt-get -y update
 RUN apt-get install -y libsndfile1
-# RUN apt-get install -y sox
+
 # Copy the requirements.txt file to the container
 COPY requirements.txt .
 
 # Install pip dependencies from requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code to the container
-# COPY . .
+# Copy server directory
+COPY server /usr/src/app/server
 
-# Expose port 5001
-EXPOSE 5001
+# Create necessary directories
+RUN mkdir -p /usr/src/app/misc
 
-# Set environment variables for Flask
-ENV FLASK_APP=app.py
-ENV FLASK_ENV=development
+# Copy startup test file
+COPY server/misc/startup.wav /usr/src/app/misc/
+
+# Create a directory for downloaded models
+RUN mkdir -p /usr/src/app/models
+
+# Expose port 5002
+EXPOSE 5002
+
+# Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV NVIDIA_VISIBLE_DEVICES=all
+ENV AUDIO_SERVER_URL=http://audio_server:8000
+ENV OLLAMA_SERVER_URL=http://ollama:11434
+ENV JWT_SECRET=meeting_minutes_transcription_2024_secure_key
+ENV JWT_ALGORITHM=HS256
+ENV OLLAMA_MODEL=llama3.1:8b-instruct-q4_K_S
+
+# Command to run the FastAPI server
+CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "5002", "--reload"]

@@ -7,7 +7,7 @@ I want you to:
 ```
 {
     "situation_report": {
-      "callsign": "{aircraft callsign identifier on radio. NOTE: this is referring to what planes call themselves on the radio when addressing or being addressed by tower. Ensure that this is NOT tower's name}",
+      "callsign": "{aircraft callsign identifier on radio. NOTE: this is referring to what planes call themselves on the radio when addressing or being addressed by tower. Ensure that this is NOT tower's name.}",
       "event": "{brief description of the main event}",
       "location": "{CURRENT LOCATION i.e. runway used, or location in air or aerodrome}",
       "status": [
@@ -24,7 +24,7 @@ I want you to:
 ```
 5. You will then return me the json file containing situation_report. I need you to detail the events properly and be specific because I can't have you summarising details
 when we need to perform a post-incident review. If actions are taken, you need to include what was done, where was it done, how many (of whatever) was involved, etc etc.
-
+6. Modify the names and terminology if there is any typos or misspelling, or mis-hearing that may result in a different word being transcribed, use correct Aerodrome information from around the world. You are a veteran ATC controller.
 
 When passing the report format to me, ALWAYS ENCASE IT IN TRIPLE BACKTICKS LIKE THIS:
 ```

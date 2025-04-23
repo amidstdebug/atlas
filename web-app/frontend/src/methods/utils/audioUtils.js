@@ -12,45 +12,46 @@ export function writeString(view, offset, string) {
   }
 }
 
-/**
- * Encodes raw audio samples into a WAV Blob.
- * @param {Float32Array} samples - The audio samples.
- * @param {number} sampleRate - The sample rate of the audio.
- * @returns {Blob} - The WAV file as a Blob.
- */
 export function encodeWAV(samples, sampleRate) {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
 
-  // RIFF chunk descriptor
+  // RIFF identifier
   writeString(view, 0, 'RIFF');
+  // file length minus the RIFF identifier and file length itself
   view.setUint32(4, 36 + samples.length * 2, true);
+  // RIFF type
   writeString(view, 8, 'WAVE');
-
-  // FMT sub-chunk
+  // format chunk identifier
   writeString(view, 12, 'fmt ');
-  view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
-  view.setUint16(20, 1, true);  // AudioFormat (1 for PCM)
-  view.setUint16(22, 1, true);  // NumChannels (1 for Mono)
-  view.setUint32(24, sampleRate, true); // SampleRate
-  view.setUint32(28, sampleRate * 2, true); // ByteRate
-  view.setUint16(32, 2, true);  // BlockAlign
-  view.setUint16(34, 16, true); // BitsPerSample
-
-  // Data sub-chunk
+  // format chunk length
+  view.setUint32(16, 16, true);
+  // audio format (1 is PCM)
+  view.setUint16(20, 1, true);
+  // number of channels (mono)
+  view.setUint16(22, 1, true);
+  // sample rate
+  view.setUint32(24, sampleRate, true);
+  // byte rate (sampleRate * blockAlign)
+  view.setUint32(28, sampleRate * 2, true);
+  // block align (channel count * bytes per sample)
+  view.setUint16(32, 2, true);
+  // bits per sample
+  view.setUint16(34, 16, true);
+  // data chunk identifier
   writeString(view, 36, 'data');
+  // data chunk length
   view.setUint32(40, samples.length * 2, true);
 
-  // Write PCM samples
-  let offset = 44;
-  for (let i = 0; i < samples.length; i++, offset += 2) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(
-      offset,
-      s < 0 ? s * 0x8000 : s * 0x7FFF,
-      true
-    );
-  }
-
+  // Write the PCM samples
+  floatTo16BitPCM(view, 44, samples);
   return new Blob([view], { type: 'audio/wav' });
+}
+
+function floatTo16BitPCM(output, offset, input) {
+  for (let i = 0; i < input.length; i++, offset += 2) {
+    let s = Math.max(-1, Math.min(1, input[i]));
+    s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    output.setInt16(offset, s, true);
+  }
 }
