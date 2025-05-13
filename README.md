@@ -28,7 +28,7 @@ ATLAS is a powerful application designed to transcribe live ATC (Air Traffic Con
 - Built with **Vue.js** for a modern and interactive user interface.
 
 ### 2. **Backend**
-- Developed using **Flask**, providing robust API endpoints and seamless communication with the frontend.
+- Developed using **FastAPI**, providing robust API endpoints and seamless communication with the frontend.
 
 ### 3. **AI Models**
 - **Whisper**: A fine-tuned `jlvdoorn` Whisper model for highly accurate ATC transcription, with customizable model sizes.
@@ -51,7 +51,7 @@ ATLAS is a powerful application designed to transcribe live ATC (Air Traffic Con
           v
 +---------------------+
 |       Backend       |
-|    (Flask API)      |
+|    (FastAPI API)      |
 +---------------------+
           |
           v
@@ -168,7 +168,7 @@ For detailed terms, please refer to the included `LICENSE` file.
 
 - **OpenAI's Whisper**: For its robust transcription capabilities.
 - **Llama 3.1**: For its advanced language modeling.
-- **Vue.js** and **Flask**: For providing the framework for frontend and backend development.
+- **Vue.js** and **FastAPI**: For providing the framework for frontend and backend development.
 - **Docker**: For simplifying containerization and deployment.
 
 ---
