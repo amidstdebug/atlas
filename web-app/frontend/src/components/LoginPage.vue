@@ -1,6 +1,13 @@
 <template>
   <div class="login-container">
     <el-card class="login-card">
+      <div class="logo-container">
+        <img
+          src="../assets/ATLAS_light.png"
+          alt="ATLAS Logo"
+          class="logo-image"
+        />
+      </div>
       <h2 class="login-title">ATLAS - Login</h2>
       <el-form ref="loginForm" :model="loginForm" @submit.prevent="onSubmit">
         <el-form-item>
@@ -61,17 +68,17 @@ export default {
         ElMessage.warning('Please enter both username and password');
         return;
       }
-      
+
       const loading = ElLoading.service({
         lock: true,
         text: 'Logging in...',
         background: 'rgba(0, 0, 0, 0.7)'
       });
-      
+
       try {
         // Use the login helper function
         const result = await login(this.loginForm.user_id, this.loginForm.password);
-        
+
         if (result.success) {
           ElMessage.success('Login successful');
           this.$router.push('/'); // Redirect to the main app
@@ -118,5 +125,16 @@ export default {
 
 .el-input {
   margin-bottom: 20px;
+}
+
+.logo-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.logo-image {
+  max-width: 200px;
+  height: auto;
 }
 </style>
