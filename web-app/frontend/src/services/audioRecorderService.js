@@ -26,10 +26,16 @@ export class AudioRecorderService {
         this.longSilence = false;
 
         // Recording/reactivation settings
-        this.thresholdPercentage = 0.1;
+        this.thresholdPercentage = 0.02;
         this.sensitivity = {activity: 0.5, reduced: 0.5};
         this.delayDuration = 250; // ms (not used in this implementation)
-        this.forceSendDuration = 60000; // 60 seconds fallback
+
+        // How long the silence delay is before we consider sending (in ms)
+        this.silence_duration = 1200;
+
+        this.forceSendDuration = 30000; // 30 seconds fallback
+
+
         this.fps = 60;
         this.inactiveTimer = null;
         this.delayTimer = null;
@@ -38,8 +44,6 @@ export class AudioRecorderService {
         this.chunkBeepDuration = 250; // ms
         this.chunkSent = false;
 
-        // How long the silence delay is before we consider sending (in ms)
-        this.silence_duration = 500;
 
         // For reactivation detection using the analyser
         this.analyser = null;
@@ -54,45 +58,77 @@ export class AudioRecorderService {
         // Callback for incoming transcription responses and status updates
         this.onTranscription = null;
         this.onStatusChange = null;
+
+        // Throttle logging to every 500ms
+        this.lastLogTime = 0;
     }
 
     async setupAudio() {
         try {
-            console.log("Setting up microphone");
-            this.audioStream = await navigator.mediaDevices.getUserMedia({audio: true});
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            console.log("Setting up high-quality raw microphone input");
+            // Request raw audio with preferred constraints
+            this.audioStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    sampleRate: 48000,        // Request sample rate (may be ignored by some browsers)
+                    channelCount: 1,          // mono (or adjust as needed)
+                    noiseSuppression: false,  // Disable noise suppression
+                    echoCancellation: false   // Disable echo cancellation
+                }
+            });
+
+            // Create an AudioContext with the desired sample rate
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: 48000
+            });
             if (this.audioContext.state === 'suspended') {
                 await this.audioContext.resume();
             }
+
+            // Set the sample rate from the AudioContext and initialize preBuffer
             this.sampleRate = this.audioContext.sampleRate;
+            this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
+            this.preBuffer = new Float32Array(this.preBufferSize);
+            this.preBufferIndex = 0;
+
+            // Create a MediaStream source
             const source = this.audioContext.createMediaStreamSource(this.audioStream);
 
+            // Initialize the analyser for silence detection
             this.analyser = this.audioContext.createAnalyser();
-            source.connect(this.analyser);
             this.bufferLength = this.analyser.frequencyBinCount;
             this.dataArray = new Uint8Array(this.bufferLength);
 
+            // Connect the source to both the analyser and the AudioWorklet
+            source.connect(this.analyser);
+
+            // Load the processor module (ensure this processor doesn't perform extra processing)
             await this.audioContext.audioWorklet.addModule('/atlas/audio/processor.js')
                 .catch((error) => {
                     console.error('Error loading AudioWorkletProcessor:', error);
                     this.updateStatus({error: true, lastErrorMessage: 'Failed to load audio processor'});
                 });
+
+            // Create the worklet node to capture raw audio data
             this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'recorder-processor');
+            // Connect the source also to the worklet node
             source.connect(this.audioWorkletNode);
 
-            this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
-            this.preBuffer = new Float32Array(this.preBufferSize);
-            this.preBufferIndex = 0;
-
+            // Capture audio data.
             this.audioWorkletNode.port.onmessage = (event) => {
                 const audioData = event.data;
                 if (audioData.length > 0) {
-                    this.storeInPreBuffer(audioData);
+                    // If not recording yet, store in preBuffer
+                    if (!this.isRecording) {
+                        this.storeInPreBuffer(audioData);
+                    }
+                    // Once recording has started, push data into recordedSamples.
                     if (this.isRecording) {
                         this.recordedSamples.push(...audioData);
                     }
                 }
             };
+
+            console.log("Audio setup complete with sample rate:", this.sampleRate);
         } catch (error) {
             console.error('Error in setupAudio:', error);
             this.updateStatus({error: true, lastErrorMessage: 'Failed to access microphone'});
@@ -100,6 +136,13 @@ export class AudioRecorderService {
     }
 
     storeInPreBuffer(audioData) {
+        // If preBuffer is null (shouldn't happen after setupAudio), initialize it on the fly.
+        if (!this.preBuffer) {
+            console.warn("preBuffer is null in storeInPreBuffer(), initializing on the fly.");
+            this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
+            this.preBuffer = new Float32Array(this.preBufferSize);
+            this.preBufferIndex = 0;
+        }
         const dataLength = audioData.length;
         if (dataLength + this.preBufferIndex > this.preBufferSize) {
             const overflow = dataLength + this.preBufferIndex - this.preBufferSize;
@@ -117,17 +160,22 @@ export class AudioRecorderService {
             await this.audioContext.resume();
         }
         this.isRecording = true;
+
+        // Guard: if preBuffer is null, initialize it.
+        if (!this.preBuffer) {
+            console.warn("preBuffer is null in startRecording(), initializing on the fly.");
+            this.preBufferSize = Math.floor(this.preBufferDuration * this.sampleRate);
+            this.preBuffer = new Float32Array(this.preBufferSize);
+            this.preBufferIndex = 0;
+        }
+
+        // Append any pre-buffered audio into recordedSamples.
         const preBufferData = this.preBuffer.slice(0, this.preBufferIndex);
         this.recordedSamples.push(...preBufferData);
+        // Set preBufferIndex to max so further data will overwrite old data.
         this.preBufferIndex = this.preBufferSize;
-        this.startReactivationLoop();
 
-        // Commented out periodic transcription.
-        // this.transcriptionInterval = setInterval(() => {
-        //   if (this.recordedSamples.length > 0) {
-        //     this.sendRecordedAudio();
-        //   }
-        // }, 10000);
+        this.startReactivationLoop();
 
         // Set a maximum duration fallback (force send)
         this.forceSendTimer = setTimeout(() => {
@@ -201,18 +249,22 @@ export class AudioRecorderService {
     }
 
     startReactivationLoop() {
+        // This loop uses the analyser to check for silence and reactivation.
         const loop = () => {
             if (this.isRecording) {
-                this.analyser.getByteTimeDomainData(this.dataArray);
-                this.checkThresholdCondition();
+                if (this.analyser && this.dataArray) {
+                    this.analyser.getByteTimeDomainData(this.dataArray);
+                    this.checkThresholdCondition();
+                }
                 requestAnimationFrame(loop);
             }
         };
         loop();
     }
 
-    // New implementation using a silence timer with a minimum chunk duration.
     checkThresholdCondition() {
+        // Throttle logging to every 500ms
+        const now = Date.now();
         const center = 128;
         const centerThreshold = center * this.thresholdPercentage;
         const reducedThreshold = centerThreshold * this.sensitivity.reduced;
@@ -222,9 +274,12 @@ export class AudioRecorderService {
             Math.abs(minVal - center) < reducedThreshold);
 
         if (isSilent) {
-            // Record when silence first occurs.
+            if (now - this.lastLogTime >= 500) {
+                console.log("Silence detected");
+                this.lastLogTime = now;
+            }
             if (this.silenceStartTime === null) {
-                this.silenceStartTime = Date.now();
+                this.silenceStartTime = now;
             }
             if (this.hasSpoken) {
                 if (!this.silenceTimer) {
@@ -235,7 +290,7 @@ export class AudioRecorderService {
                             this.longSilence = true;
                         }
                         if (duration >= this.minChunkDuration) {
-                            console.log("Silence detected and chunk duration (" + duration.toFixed(2) + "s) meets minimum, sending audio chunk");
+                            console.log("Silence maintained for", silenceElapsed, "ms and duration (" + duration.toFixed(2) + "s) meets minimum, sending audio chunk");
                             this.sendRecordedAudio();
                             this.hasSpoken = false;
                         } else {
@@ -247,9 +302,11 @@ export class AudioRecorderService {
                 }
             }
         } else {
-            // Speech is detected.
+            if (!this.hasSpoken && now - this.lastLogTime >= 500) {
+                console.log("Speech detected");
+                this.lastLogTime = now;
+            }
             this.hasSpoken = true;
-            // Reset silence start and longSilence flag.
             this.silenceStartTime = null;
             this.longSilence = false;
             if (this.silenceTimer) {
@@ -259,7 +316,6 @@ export class AudioRecorderService {
         }
     }
 
-    // Optional forceSendChunk method remains unchanged.
     forceSendChunk(reason) {
         console.log(`Force-sending chunk due to ${reason}`);
         this.sendRecordedAudio();
@@ -273,7 +329,6 @@ export class AudioRecorderService {
         }, this.chunkBeepDuration);
     }
 
-    // Updated sendRecordedAudio: adjust overlap based on silence length.
     async sendRecordedAudio() {
         if (this.isSending) {
             console.log('Already sending audio, skipping.');
@@ -283,12 +338,6 @@ export class AudioRecorderService {
         if (this.recordedSamples.length) {
             this.isSending = true;
             try {
-                // deprecated: sending base64
-                // const float32Array = new Float32Array(this.recordedSamples);
-                //         const base64Audio = arrayBufferToBase64(float32Array.buffer);
-                //         const audioBlob = this.b64toBlob(base64Audio, 'audio/wav');
-                //         const formData = new FormData();
-                //         formData.append('file', audioBlob, 'recorded.wav');
                 // Use encodeWAV to properly encode the recorded samples
                 const wavBlob = encodeWAV(this.recordedSamples, this.sampleRate);
                 const formData = new FormData();
@@ -339,7 +388,6 @@ export class AudioRecorderService {
             }
         }
     }
-
 
     // --- Cookie Helper ---
     getCookie(name) {

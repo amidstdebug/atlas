@@ -8,8 +8,8 @@ sleep 10
 
 echo "Creating the llm model..."
 # Create the model
-ollama pull qwen2.5
-ollama run qwen2.5
+ollama pull llama3.1:8b-instruct-q4_K_S
+ollama run llama3.1:8b-instruct-q4_K_S
 # ollama pull llama3.1:7b
 # ollama run llama3.1:7b
 #ollama pull deepseek-r1:7b
