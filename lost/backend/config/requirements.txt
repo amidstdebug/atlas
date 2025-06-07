@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic
+python-jose
+python-multipart
+httpx
+requests
+numpy
+pandas
+fuzzywuzzy
+python-Levenshtein
+pydantic-settings
+pyjwt

@@ -1,3 +1,5 @@
+node_modules
+
 local_model_large
 local_model_small
 local_model_joe
@@ -189,7 +191,3 @@ cython_debug/
 #.idea/
 /web-app/backend/audio_server/models
 /web-app/backend/server/misc/*
-
-/lost/docker/services/whisper/models
-
-CLAUDE.md

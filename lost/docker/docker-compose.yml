@@ -1,0 +1,93 @@
+services:
+  backend_api:
+    platform: linux/amd64   # if needed for platform emulation
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    volumes:
+      - ../backend:/usr/src/app  # mount server code for hot reload
+    ports:
+      - "5002:5002"  # Main API and WebSocket port
+    env_file:
+      - ../backend/.env
+    environment:
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      whisper_service:
+        condition: service_started
+      summarization_service:
+        condition: service_healthy
+    networks:
+      - auto_transcript_network
+
+  whisper_service:
+    platform: linux/amd64
+    build:
+      context: ./services/whisper
+      dockerfile: Dockerfile
+    volumes:
+      - ./services/whisper:/usr/src/app  # mount audio service for hot reload
+      - ./models:/usr/src/app/models  # shared model storage
+    ports:
+      - "8000:8000"  # FastAPI port
+    env_file:
+      - ../backend/.env
+    environment:
+      PYTHONUNBUFFERED: 1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    networks:
+      - auto_transcript_network
+
+  summarization_service:
+    image: ollama/ollama
+    container_name: ollama
+    runtime: nvidia  # To use GPUs
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all  # Ensures the container can see all GPUs
+      - OLLAMA_KEEP_ALIVE=-1
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./services/ollama:/root/ollama_scripts  # Mount scripts directory to the container
+    ports:
+      - "11434:11434"  # Expose the Ollama service on port 11434
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    restart: "no"
+    entrypoint: ["bash", "/root/ollama_scripts/run_ollama.sh"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/ollama_ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - auto_transcript_network
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"  # Serve on port 80 in production mode
+    depends_on:
+      - backend_api
+    networks:
+      - auto_transcript_network
+
+volumes:
+  ollama_data:
+    driver: local  # Persistent volume for Ollama
+
+networks:
+  auto_transcript_network:
+    driver: bridge

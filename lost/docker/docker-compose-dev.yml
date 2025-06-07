@@ -1,0 +1,20 @@
+services:
+  backend_api:
+    volumes:
+      - ../backend:/usr/src/app  # Mount for hot reload
+    environment:
+      - DEBUG=True
+    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5002", "--reload"]
+
+  whisper_service:
+    volumes:
+      - ./services/whisper:/usr/src/app  # Mount for hot reload
+    environment:
+      - DEBUG=True
+    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+
+  # Frontend is run directly on the host in development mode
+  # The frontend container is only used in production
+  frontend:
+    profiles: ["production"]
