@@ -45,9 +45,24 @@ export default defineNuxtPlugin(() => {
     }
   )
 
+  // Transcription API methods
+  const transcribeAudio = async (audioBlob: Blob) => {
+    const formData = new FormData()
+    formData.append('file', audioBlob, 'audio.webm')
+    
+    const response = await api.post('/transcribe', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    
+    return response.data
+  }
+
   return {
     provide: {
-      api
+      api,
+      transcribeAudio
     }
   }
 })

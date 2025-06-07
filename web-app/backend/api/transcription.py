@@ -5,7 +5,7 @@ import json
 import logging
 
 from models.AuthType import TokenData
-from models.TranscriptionResponse import TranscriptionResponse
+from models.TranscriptionResponse import TranscriptionResponse, TranscriptionSegment
 from services.auth.jwt import get_token_data
 from services.whisper.transcribe import transcribe_audio_file
 from services.whisper.text_processor import process_transcription_text
@@ -31,22 +31,11 @@ async def transcribe_audio(
         file_content = await file.read()
 
         # Call the transcription service
-        transcription_result = await transcribe_audio_file(file_content, file.filename, file.content_type)
-        print("Transcription Result:", transcription_result)
+        segments = await transcribe_audio_file(file_content, file.filename, file.content_type)
+        print("Transcription Segments:", segments)
 
-        # Handle the transcription result structure
-        transcription_data = transcription_result.get("transcription", transcription_result)
-
-        if isinstance(transcription_data, dict) and "chunks" in transcription_data:
-            transcription_segments = transcription_data["chunks"]
-            transcription_text = transcription_data.get("text", " ".join([s.get("text", "").strip() for s in transcription_segments]))
-        elif isinstance(transcription_data, list):
-            transcription_segments = transcription_data
-            transcription_text = " ".join([segment.get("text", "").strip() for segment in transcription_segments])
-        else:
-            # Fallback - log the actual structure for debugging
-            logger.error(f"Unexpected transcription result structure: {type(transcription_result)}, {transcription_result}")
-            raise HTTPException(status_code=500, detail="Unexpected transcription result structure")
+        # Extract text for processing
+        transcription_text = " ".join([segment.text.strip() for segment in segments])
 
         # Apply text processing if requested
         processing_applied = None
@@ -63,8 +52,10 @@ async def transcribe_audio(
 
                 # If text was actually processed (changed), update segments with processed text
                 if processed_text != transcription_text:
-                    # Create a single segment with the processed text
-                    transcription_segments = [{"text": processed_text, "timestamp": [0.0, len(processed_text)]}]
+                    # Create a single segment with the processed text, preserving timing from original segments
+                    start_time = segments[0].start if segments else 0.0
+                    end_time = segments[-1].end if segments else 0.0
+                    segments = [TranscriptionSegment(text=processed_text, start=start_time, end=end_time)]
 
                 logger.info(f"Applied text processing to transcription - Numbers: {replace_numbers}, ICAO: {use_icao_callsigns}")
             except Exception as e:
@@ -78,7 +69,7 @@ async def transcribe_audio(
         transcription_history[user_id].append(transcription_text)
 
         return TranscriptionResponse(
-            transcription=transcription_segments,
+            segments=segments,
             processing_applied=processing_applied
         )
 

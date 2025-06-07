@@ -64,7 +64,27 @@ async def transcribe_audio(
 	try:
 		audio_data = await file.read()
 		transcription_result = whisper_service.transcribe(audio_data)
-		return JSONResponse(content={"transcription": transcription_result})
+		
+		# Convert result to segments format
+		segments = []
+		if isinstance(transcription_result, dict) and "chunks" in transcription_result:
+			for chunk in transcription_result["chunks"]:
+				if "timestamp" in chunk and len(chunk["timestamp"]) >= 2:
+					segments.append({
+						"text": chunk["text"],
+						"start": float(chunk["timestamp"][0]),
+						"end": float(chunk["timestamp"][1])
+					})
+		elif isinstance(transcription_result, list):
+			for item in transcription_result:
+				if "timestamp" in item and len(item["timestamp"]) >= 2:
+					segments.append({
+						"text": item["text"],
+						"start": float(item["timestamp"][0]),
+						"end": float(item["timestamp"][1])
+					})
+		
+		return JSONResponse(content={"segments": segments})
 	except Exception as e:
 		logger.error(f"Error processing transcription request: {e}")
 		raise HTTPException(status_code=500, detail="An error occurred during transcription.")

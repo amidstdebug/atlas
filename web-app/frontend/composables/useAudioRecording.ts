@@ -3,10 +3,18 @@ import { ref, computed } from 'vue';
 // import { useNuxtApp } from '#app';
 
 export interface TranscriptionSegment {
-  id: string;
   text: string;
-  timestamp: number;
-  confidence?: number;
+  start: number;
+  end: number;
+}
+
+export interface TranscriptionResponse {
+  segments: TranscriptionSegment[];
+  chunk_id: string | null;
+  processing_applied: {
+    numbers_replaced: boolean;
+    icao_callsigns_applied: boolean;
+  };
 }
 
 export interface RecordingState {
@@ -15,6 +23,7 @@ export interface RecordingState {
   duration: number;
   error: string | null;
   audioLevel: number;
+  isWaitingForTranscription: boolean;
 }
 
 export const useAudioRecording = () => {
@@ -24,6 +33,7 @@ export const useAudioRecording = () => {
     duration: 0,
     error: null,
     audioLevel: 0,
+    isWaitingForTranscription: false,
   });
 
   const transcriptionSegments = ref<TranscriptionSegment[]>([]);
@@ -37,6 +47,10 @@ export const useAudioRecording = () => {
   let animationFrame: number | null = null;
   // This destination node is the key to fixing the recording issue.
   let destinationNode: MediaStreamAudioDestinationNode | null = null;
+
+  // --- Chunking variables ---
+  let chunkInterval: NodeJS.Timeout | null = null;
+  const CHUNK_DURATION = 30000; // 30 seconds in milliseconds
 
   /**
    * Continuously samples the audio frequency to update the visual audio level.
@@ -95,8 +109,7 @@ export const useAudioRecording = () => {
   };
 
   /**
-   * Starts the recording process. It requests microphone access, sets up the
-   * audio graph, and initializes the MediaRecorder.
+   * Starts the recording process with 30-second chunking.
    */
   const startRecording = async () => {
     try {
@@ -110,7 +123,6 @@ export const useAudioRecording = () => {
       const destination = setupAudioAnalysis(audioStream);
 
       // --- FIX: Resume AudioContext if it's suspended ---
-      // This is crucial for browsers that auto-suspend audio until user interaction.
       if (audioContext && audioContext.state === 'suspended') {
         await audioContext.resume();
         console.log("AudioContext was suspended and has been resumed.");
@@ -120,31 +132,51 @@ export const useAudioRecording = () => {
         throw new Error('Failed to initialize the audio processing pipeline.');
       }
 
-      // 3. IMPORTANT: Record from the destination's stream, not the original audioStream.
-      // This stream contains the audio that has passed through the analyser.
+      // 3. Initialize MediaRecorder for chunked recording
       mediaRecorder = new MediaRecorder(destination.stream);
-      const chunks: Blob[] = [];
 
-      mediaRecorder.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = async (event) => {
         if (event.data.size > 0) {
-            chunks.push(event.data);
+          const audioBlob = new Blob([event.data], { type: 'audio/webm' });
+          await transcribeAudioChunk(audioBlob);
         }
       };
 
       mediaRecorder.onstop = async () => {
-        // Use a more common and compatible mimetype like 'audio/webm'
-        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-        await processAudioBlob(audioBlob);
+        // This handles the final chunk when recording is manually stopped
+        // ondataavailable will be called before onstop, so no need to process here
       };
 
-      // Start recording and begin the audio level visualization loop
-      mediaRecorder.start();
+      // Start recording with timeslice for 30-second chunks
+      mediaRecorder.start(CHUNK_DURATION);
       updateAudioLevel();
+
+      // Set up interval to restart recording every 30 seconds for continuous chunking
+      chunkInterval = setInterval(() => {
+        if (mediaRecorder && state.value.isRecording && mediaRecorder.state === 'recording') {
+          // Stop current recording (triggers ondataavailable) and start a new one
+          mediaRecorder.stop();
+          setTimeout(() => {
+            if (state.value.isRecording && destination) {
+              mediaRecorder = new MediaRecorder(destination.stream);
+
+              mediaRecorder.ondataavailable = async (event) => {
+                if (event.data.size > 0) {
+                  const audioBlob = new Blob([event.data], { type: 'audio/webm' });
+                  await transcribeAudioChunk(audioBlob);
+                }
+              };
+
+              mediaRecorder.start(CHUNK_DURATION);
+            }
+          }, 100); // Small delay to ensure clean stop/start
+        }
+      }, CHUNK_DURATION);
 
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       state.value.error = 'Failed to start recording: ' + message;
-      state.value.isRecording = false; // Reset state on failure
+      state.value.isRecording = false;
     }
   };
 
@@ -156,6 +188,12 @@ export const useAudioRecording = () => {
       mediaRecorder.stop();
       state.value.isRecording = false;
       state.value.audioLevel = 0;
+
+      // Clear the chunk interval
+      if (chunkInterval) {
+        clearInterval(chunkInterval);
+        chunkInterval = null;
+      }
 
       // Clean up the animation frame
       if (animationFrame) {
@@ -182,64 +220,74 @@ export const useAudioRecording = () => {
   };
 
   /**
-   * Sends a file to the transcription API.
+   * Sends a blob to the transcription API.
+   * @param blob The audio blob to transcribe.
+   */
+  const transcribeAudioChunk = async (blob: Blob) => {
+    state.value.isWaitingForTranscription = true;
+    state.value.error = null;
+
+    try {
+      const { $transcribeAudio } = useNuxtApp();
+      const response: TranscriptionResponse = await $transcribeAudio(blob);
+
+      if (response?.segments && response.segments.length > 0) {
+        const lastEndTime =
+          transcriptionSegments.value.length > 0
+            ? transcriptionSegments.value[transcriptionSegments.value.length - 1].end
+            : 0
+
+        const adjustedSegments = response.segments.map((segment) => ({
+          ...segment,
+          start: segment.start + lastEndTime,
+          end: segment.end + lastEndTime,
+        }))
+
+        transcriptionSegments.value.push(...adjustedSegments)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      state.value.error = 'Transcription failed: ' + message;
+      console.error('Transcription error:', error);
+    } finally {
+      state.value.isWaitingForTranscription = false;
+    }
+  };
+
+  /**
+   * Sends a file to the transcription API (for file uploads).
    * @param file The audio file to transcribe.
    */
   const transcribeFile = async (file: File) => {
     state.value.isProcessing = true;
     state.value.error = null;
+    clearTranscription();
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      const { $transcribeAudio } = useNuxtApp();
+      const response: TranscriptionResponse = await $transcribeAudio(file);
 
-      // This is a placeholder for your Nuxt API call.
-      // const { $api } = useNuxtApp();
-      // const response = await $api.post('/transcribe', formData, { ... });
-
-      // --- Mock API Response for demonstration ---
-      console.log("Transcribing file:", file.name, "size:", file.size);
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-      const mockResponse = {
-          data: {
-              transcription: "This is a simulated transcription of your recording."
-          }
-      };
-      // --- End Mock API Response ---
-
-      if (mockResponse.data?.transcription) {
-        const newSegment: TranscriptionSegment = {
-          id: Date.now().toString(),
-          text: mockResponse.data.transcription,
-          timestamp: Date.now(),
-        };
-        transcriptionSegments.value.push(newSegment);
+      if (response?.segments && response.segments.length > 0) {
+        transcriptionSegments.value.push(...response.segments);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       state.value.error = 'Transcription failed: ' + message;
+      console.error('Transcription error:', error);
     } finally {
       state.value.isProcessing = false;
     }
   };
 
-  /**
-   * Wraps the recorded audio blob in a File object and sends it for transcription.
-   * @param blob The recorded audio data.
-   */
-  const processAudioBlob = async (blob: Blob) => {
-    // Note: Most browsers record in webm or ogg format. Naming it .wav doesn't convert it.
-    // Your server-side transcription service needs to handle the actual format (e.g., audio/webm).
-    const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
-    await transcribeFile(file);
-  };
 
   const clearTranscription = () => {
     transcriptionSegments.value = [];
   };
 
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString();
+  const updateSegment = (index: number, newText: string) => {
+    if (transcriptionSegments.value[index]) {
+      transcriptionSegments.value[index].text = newText;
+    }
   };
 
   return {
@@ -249,6 +297,6 @@ export const useAudioRecording = () => {
     stopRecording,
     transcribeFile,
     clearTranscription,
-    formatTimestamp,
+    updateSegment,
   };
 };

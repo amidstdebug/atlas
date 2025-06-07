@@ -1,3 +1,5 @@
+node_modules
+
 local_model_large
 local_model_small
 local_model_joe
@@ -191,5 +193,6 @@ cython_debug/
 /web-app/backend/server/misc/*
 
 /web-app/docker/services/whisper/models
+/web-app/docker/models/
 
 CLAUDE.md

@@ -1,15 +1,17 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 import requests
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from config.settings import get_settings
+from models.TranscriptionResponse import TranscriptionSegment
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-async def transcribe_audio_file(file_content: bytes, filename: str, content_type: str) -> str:
+
+async def transcribe_audio_file(file_content: bytes, filename: str, content_type: str) -> List[TranscriptionSegment]:
     """
     Send audio file to audio service for transcription.
     """
@@ -28,9 +30,18 @@ async def transcribe_audio_file(file_content: bytes, filename: str, content_type
 
         # Get the transcription from audio_service
         result = response.json()
-        transcription = result.get('transcription', [])
+        segments_data = result['segments']
+        
+        segments = [
+            TranscriptionSegment(
+                text=seg['text'],
+                start=float(seg['start']),
+                end=float(seg['end'])
+            )
+            for seg in segments_data
+        ]
 
-        return transcription
+        return segments
 
     except Exception as e:
         logger.error(f"Error in transcribe_audio_file: {str(e)}")

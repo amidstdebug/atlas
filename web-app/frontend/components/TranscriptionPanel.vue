@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Clock, FileAudio, Edit3, Check, X } from 'lucide-vue-next'
+import { Clock, FileAudio } from 'lucide-vue-next'
+import { nextTick, ref } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,6 +16,7 @@ interface Props {
   isTranscribing: boolean
   isRecording?: boolean
   audioLevel?: number
+  isWaitingForTranscription?: boolean
 }
 
 const props = defineProps<Props>()
@@ -27,15 +29,35 @@ const emit = defineEmits<{
 const editingSegment = ref<number | null>(null)
 const editingText = ref('')
 
+function handleTextareaInput(event: Event) {
+  const textarea = event.target as HTMLTextAreaElement
+  textarea.style.height = 'auto'
+  textarea.style.height = `${textarea.scrollHeight}px`
+}
+
 function formatTimestamp(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
+  if (isNaN(seconds) || seconds < 0) seconds = 0
+  const hours = Math.floor(seconds / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
   const secs = Math.floor(seconds % 60)
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
 function startEditing(index: number, currentText: string) {
   editingSegment.value = index
   editingText.value = currentText
+  nextTick(() => {
+    const container = document.querySelector(`[data-segment-index="${index}"]`)
+    if (container) {
+      const textarea = container.querySelector<HTMLTextAreaElement>('textarea')
+      if (textarea) {
+        textarea.style.height = 'auto'
+        textarea.style.height = `${textarea.scrollHeight}px`
+        textarea.focus()
+        textarea.select()
+      }
+    }
+  })
 }
 
 function saveEdit() {
@@ -51,6 +73,10 @@ function cancelEdit() {
   editingText.value = ''
 }
 
+function handleBlur() {
+  saveEdit()
+}
+
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
@@ -64,31 +90,38 @@ function handleKeydown(event: KeyboardEvent) {
 
 <template>
   <Card class="h-[700px] flex flex-col border-0 shadow-xl bg-card/50 backdrop-blur-sm overflow-hidden">
-    <!-- Recording Activity Indicator -->
-    <div v-if="props.isRecording" class="absolute top-0 left-0 right-0 z-10">
-      <!-- Gray baseline -->
-      <div class="h-1 bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent">
-        <!-- Audio level indicator -->
-        <div 
-          class="h-full bg-gradient-to-r from-red-400 via-red-600 to-red-400 transition-all duration-150 ease-out"
-          :style="{ 
-            transform: `scaleX(${Math.max(0.1, (props.audioLevel || 0) * 1.5)})`,
-            opacity: Math.max(0.3, (props.audioLevel || 0))
-          }"
-        ></div>
-      </div>
-      <div class="absolute top-1 left-4 flex items-center space-x-2 bg-gray-500/20 backdrop-blur-sm rounded-full px-3 py-1">
-        <div 
-          class="w-2 h-2 rounded-full transition-colors duration-150"
-          :class="(props.audioLevel || 0) > 0.1 ? 'bg-red-500' : 'bg-gray-400'"
-        ></div>
-        <span class="text-xs font-medium"
-              :class="(props.audioLevel || 0) > 0.1 ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'">
-          RECORDING
-        </span>
+    <!-- Status Indicator -->
+    <div v-if="props.isRecording || props.isWaitingForTranscription" class="absolute top-2 right-4 z-10">
+      <div class="flex items-center space-x-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
+        <!-- Recording indicator -->
+        <div v-if="props.isRecording" class="flex items-center space-x-2">
+          <div
+            class="w-2 h-2 rounded-full transition-all duration-150"
+            :class="{
+              'bg-red-500 animate-pulse': (props.audioLevel || 0) <= 0.1,
+              'bg-red-400 scale-125': (props.audioLevel || 0) > 0.1 && (props.audioLevel || 0) <= 0.3,
+              'bg-red-500 scale-150': (props.audioLevel || 0) > 0.3 && (props.audioLevel || 0) <= 0.6,
+              'bg-red-600 scale-175': (props.audioLevel || 0) > 0.6
+            }"
+          ></div>
+          <span
+            class="text-xs font-medium transition-colors duration-150"
+            :class="{
+              'text-red-600 dark:text-red-400': (props.audioLevel || 0) <= 0.1,
+              'text-red-700 dark:text-red-300': (props.audioLevel || 0) > 0.1
+            }"
+          >
+            REC
+          </span>
+        </div>
+        <!-- Waiting indicator -->
+        <div v-if="props.isWaitingForTranscription" class="flex items-center space-x-2">
+          <div class="w-2 h-2 rounded-full bg-blue-500 animate-spin border border-blue-300"></div>
+          <span class="text-xs font-medium text-blue-600 dark:text-blue-400">Processing</span>
+        </div>
       </div>
     </div>
-    
+
     <CardHeader class="pb-4">
       <div class="flex items-center space-x-3">
         <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
@@ -103,98 +136,56 @@ function handleKeydown(event: KeyboardEvent) {
     <CardContent class="flex-1 overflow-hidden">
       <div v-if="segments.length > 0" class="h-full">
         <!-- Transcription Timeline -->
-        <div class="h-full overflow-y-auto pr-2 space-y-3">
-          <TransitionGroup
-            name="segment"
-            tag="div"
-            class="space-y-3"
-          >
-            <div
-              v-for="(segment, index) in segments"
-              :key="`segment-${index}`"
-              class="group relative bg-gradient-to-r from-background via-background to-background/50
-                     border border-border/40 rounded-xl p-4
-                     hover:border-blue-200 dark:hover:border-blue-800
-                     hover:shadow-md hover:shadow-blue-500/5
-                     transition-all duration-200 ease-out"
-            >
-              <!-- Timeline marker -->
-              <div class="absolute -left-1 top-6 w-2 h-2 bg-blue-500 rounded-full opacity-60"></div>
-              <div class="absolute -left-0.5 top-6 w-3 h-3 bg-blue-500/20 rounded-full animate-pulse"></div>
+        <div class="h-full overflow-y-auto pr-4 relative">
+          <div class="absolute top-4 bottom-4 w-0.5 bg-blue-500/10" style="left: 40px;"></div>
 
-              <!-- Header with timestamp and actions -->
-              <div class="flex items-center justify-between mb-3">
-                <div class="flex items-center space-x-3">
-                  <Badge variant="outline" class="text-xs font-mono bg-muted/30 border-border/40 px-2 py-1">
-                    <Clock class="h-3 w-3 mr-1.5" />
+          <div class="relative z-10">
+            <TransitionGroup
+              name="segment"
+              tag="div"
+              class="space-y-4 py-4"
+            >
+              <div
+                v-for="(segment, index) in segments"
+                :key="`segment-${index}`"
+                :data-segment-index="index"
+                class="grid grid-cols-[80px_1fr] items-start gap-x-4 group"
+              >
+                <!-- Timestamp -->
+                <div class="flex justify-center pt-[0.6rem] z-10">
+                  <Badge variant="secondary" class="font-mono text-xs bg-gray-100">
                     {{ formatTimestamp(segment.start) }}
                   </Badge>
-                  <div class="text-xs text-muted-foreground">
-                    {{ Math.ceil((segment.end - segment.start) * 1000) / 1000 }}s
-                  </div>
                 </div>
 
-                <!-- Edit controls -->
-                <div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    v-if="editingSegment !== index"
-                    @click="startEditing(index, segment.text)"
-                    class="p-1.5 rounded-lg hover:bg-muted/40 transition-colors"
-                  >
-                    <Edit3 class="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                  </button>
+                <!-- Content -->
+                <div class="w-full relative">
+                  <template v-if="editingSegment === index">
+                    <!-- Edit mode -->
+                    <Textarea
+                      v-model="editingText"
+                      @keydown="handleKeydown"
+                      @input="handleTextareaInput"
+                      @blur="handleBlur"
+                      class="w-full text-sm leading-relaxed bg-transparent border-0 p-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-muted/30 rounded-lg"
+                      placeholder="Edit transcription..."
+                      rows="1"
+                    />
+                  </template>
                   <template v-else>
-                    <button
-                      @click="saveEdit"
-                      class="p-1.5 rounded-lg hover:bg-green-500/10 transition-colors"
+                    <!-- Display mode -->
+                    <div
+                      class="text-sm leading-relaxed text-foreground/90 p-2 rounded-lg cursor-text hover:bg-muted/30 transition-colors border border-transparent hover:border-muted"
+                      @click="startEditing(index, segment.text)"
                     >
-                      <Check class="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-                    </button>
-                    <button
-                      @click="cancelEdit"
-                      class="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
-                    >
-                      <X class="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
-                    </button>
+                      <span v-if="segment.text">{{ segment.text }}</span>
+                      <span v-else class="text-muted-foreground italic">Click to edit...</span>
+                    </div>
                   </template>
                 </div>
               </div>
-
-              <!-- Content -->
-              <div class="relative">
-                <template v-if="editingSegment === index">
-                  <!-- Edit mode -->
-                  <Textarea
-                    v-model="editingText"
-                    @keydown="handleKeydown"
-                    class="min-h-[80px] text-sm leading-relaxed resize-none
-                           border-blue-200 dark:border-blue-800
-                           focus:border-blue-400 dark:focus:border-blue-600
-                           focus:ring-2 focus:ring-blue-500/20"
-                    placeholder="Edit transcription..."
-                    :autofocus="true"
-                  />
-                  <div class="mt-2 text-xs text-muted-foreground">
-                    Press Enter to save • Escape to cancel • Shift+Enter for new line
-                  </div>
-                </template>
-                <template v-else>
-                  <!-- Display mode -->
-                  <div
-                    class="text-sm leading-relaxed text-foreground/90
-                           cursor-pointer rounded-lg p-2 -m-2
-                           hover:bg-muted/20 transition-colors"
-                    @click="startEditing(index, segment.text)"
-                  >
-                    {{ segment.text }}
-                  </div>
-                </template>
-              </div>
-
-              <!-- Subtle progress bar -->
-              <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500/0 via-blue-500/20 to-blue-500/0 rounded-b-xl"></div>
-            </div>
-          </TransitionGroup>
+            </TransitionGroup>
+          </div>
         </div>
       </div>
       <div v-else class="h-full flex items-center justify-center">

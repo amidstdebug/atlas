@@ -34,6 +34,7 @@ interface _GlobalComponents {
     'AlertDescription': typeof import("../components/ui/alert/index")['AlertDescription']
     'AlertTitle': typeof import("../components/ui/alert/index")['AlertTitle']
     'Badge': typeof import("../components/ui/badge/index")['Badge']
+    'Button': typeof import("../components/ui/button/index")['Button']
     'Card': typeof import("../components/ui/card/index")['Card']
     'CardAction': typeof import("../components/ui/card/index")['CardAction']
     'CardContent': typeof import("../components/ui/card/index")['CardContent']
@@ -41,14 +42,13 @@ interface _GlobalComponents {
     'CardFooter': typeof import("../components/ui/card/index")['CardFooter']
     'CardHeader': typeof import("../components/ui/card/index")['CardHeader']
     'CardTitle': typeof import("../components/ui/card/index")['CardTitle']
-    'Button': typeof import("../components/ui/button/index")['Button']
+    'Input': typeof import("../components/ui/input/index")['Input']
     'Carousel': typeof import("../components/ui/carousel/index")['Carousel']
     'CarouselContent': typeof import("../components/ui/carousel/index")['CarouselContent']
     'CarouselItem': typeof import("../components/ui/carousel/index")['CarouselItem']
     'CarouselNext': typeof import("../components/ui/carousel/index")['CarouselNext']
     'CarouselPrevious': typeof import("../components/ui/carousel/index")['CarouselPrevious']
     'CarouselApi': typeof import("../components/ui/carousel/index")['CarouselApi']
-    'Input': typeof import("../components/ui/input/index")['Input']
     'Label': typeof import("../components/ui/label/index")['Label']
     'Progress': typeof import("../components/ui/progress/index")['Progress']
     'Textarea': typeof import("../components/ui/textarea/index")['Textarea']
@@ -87,6 +87,7 @@ interface _GlobalComponents {
     'LazyAlertDescription': LazyComponent<typeof import("../components/ui/alert/index")['AlertDescription']>
     'LazyAlertTitle': LazyComponent<typeof import("../components/ui/alert/index")['AlertTitle']>
     'LazyBadge': LazyComponent<typeof import("../components/ui/badge/index")['Badge']>
+    'LazyButton': LazyComponent<typeof import("../components/ui/button/index")['Button']>
     'LazyCard': LazyComponent<typeof import("../components/ui/card/index")['Card']>
     'LazyCardAction': LazyComponent<typeof import("../components/ui/card/index")['CardAction']>
     'LazyCardContent': LazyComponent<typeof import("../components/ui/card/index")['CardContent']>
@@ -94,14 +95,13 @@ interface _GlobalComponents {
     'LazyCardFooter': LazyComponent<typeof import("../components/ui/card/index")['CardFooter']>
     'LazyCardHeader': LazyComponent<typeof import("../components/ui/card/index")['CardHeader']>
     'LazyCardTitle': LazyComponent<typeof import("../components/ui/card/index")['CardTitle']>
-    'LazyButton': LazyComponent<typeof import("../components/ui/button/index")['Button']>
+    'LazyInput': LazyComponent<typeof import("../components/ui/input/index")['Input']>
     'LazyCarousel': LazyComponent<typeof import("../components/ui/carousel/index")['Carousel']>
     'LazyCarouselContent': LazyComponent<typeof import("../components/ui/carousel/index")['CarouselContent']>
     'LazyCarouselItem': LazyComponent<typeof import("../components/ui/carousel/index")['CarouselItem']>
     'LazyCarouselNext': LazyComponent<typeof import("../components/ui/carousel/index")['CarouselNext']>
     'LazyCarouselPrevious': LazyComponent<typeof import("../components/ui/carousel/index")['CarouselPrevious']>
     'LazyCarouselApi': LazyComponent<typeof import("../components/ui/carousel/index")['CarouselApi']>
-    'LazyInput': LazyComponent<typeof import("../components/ui/input/index")['Input']>
     'LazyLabel': LazyComponent<typeof import("../components/ui/label/index")['Label']>
     'LazyProgress': LazyComponent<typeof import("../components/ui/progress/index")['Progress']>
     'LazyTextarea': LazyComponent<typeof import("../components/ui/textarea/index")['Textarea']>
@@ -146,6 +146,7 @@ export const Alert: typeof import("../components/ui/alert/index")['Alert']
 export const AlertDescription: typeof import("../components/ui/alert/index")['AlertDescription']
 export const AlertTitle: typeof import("../components/ui/alert/index")['AlertTitle']
 export const Badge: typeof import("../components/ui/badge/index")['Badge']
+export const Button: typeof import("../components/ui/button/index")['Button']
 export const Card: typeof import("../components/ui/card/index")['Card']
 export const CardAction: typeof import("../components/ui/card/index")['CardAction']
 export const CardContent: typeof import("../components/ui/card/index")['CardContent']
@@ -153,14 +154,13 @@ export const CardDescription: typeof import("../components/ui/card/index")['Card
 export const CardFooter: typeof import("../components/ui/card/index")['CardFooter']
 export const CardHeader: typeof import("../components/ui/card/index")['CardHeader']
 export const CardTitle: typeof import("../components/ui/card/index")['CardTitle']
-export const Button: typeof import("../components/ui/button/index")['Button']
+export const Input: typeof import("../components/ui/input/index")['Input']
 export const Carousel: typeof import("../components/ui/carousel/index")['Carousel']
 export const CarouselContent: typeof import("../components/ui/carousel/index")['CarouselContent']
 export const CarouselItem: typeof import("../components/ui/carousel/index")['CarouselItem']
 export const CarouselNext: typeof import("../components/ui/carousel/index")['CarouselNext']
 export const CarouselPrevious: typeof import("../components/ui/carousel/index")['CarouselPrevious']
 export const CarouselApi: typeof import("../components/ui/carousel/index")['CarouselApi']
-export const Input: typeof import("../components/ui/input/index")['Input']
 export const Label: typeof import("../components/ui/label/index")['Label']
 export const Progress: typeof import("../components/ui/progress/index")['Progress']
 export const Textarea: typeof import("../components/ui/textarea/index")['Textarea']
@@ -199,6 +199,7 @@ export const LazyAlert: LazyComponent<typeof import("../components/ui/alert/inde
 export const LazyAlertDescription: LazyComponent<typeof import("../components/ui/alert/index")['AlertDescription']>
 export const LazyAlertTitle: LazyComponent<typeof import("../components/ui/alert/index")['AlertTitle']>
 export const LazyBadge: LazyComponent<typeof import("../components/ui/badge/index")['Badge']>
+export const LazyButton: LazyComponent<typeof import("../components/ui/button/index")['Button']>
 export const LazyCard: LazyComponent<typeof import("../components/ui/card/index")['Card']>
 export const LazyCardAction: LazyComponent<typeof import("../components/ui/card/index")['CardAction']>
 export const LazyCardContent: LazyComponent<typeof import("../components/ui/card/index")['CardContent']>
@@ -206,14 +207,13 @@ export const LazyCardDescription: LazyComponent<typeof import("../components/ui/
 export const LazyCardFooter: LazyComponent<typeof import("../components/ui/card/index")['CardFooter']>
 export const LazyCardHeader: LazyComponent<typeof import("../components/ui/card/index")['CardHeader']>
 export const LazyCardTitle: LazyComponent<typeof import("../components/ui/card/index")['CardTitle']>
-export const LazyButton: LazyComponent<typeof import("../components/ui/button/index")['Button']>
+export const LazyInput: LazyComponent<typeof import("../components/ui/input/index")['Input']>
 export const LazyCarousel: LazyComponent<typeof import("../components/ui/carousel/index")['Carousel']>
 export const LazyCarouselContent: LazyComponent<typeof import("../components/ui/carousel/index")['CarouselContent']>
 export const LazyCarouselItem: LazyComponent<typeof import("../components/ui/carousel/index")['CarouselItem']>
 export const LazyCarouselNext: LazyComponent<typeof import("../components/ui/carousel/index")['CarouselNext']>
 export const LazyCarouselPrevious: LazyComponent<typeof import("../components/ui/carousel/index")['CarouselPrevious']>
 export const LazyCarouselApi: LazyComponent<typeof import("../components/ui/carousel/index")['CarouselApi']>
-export const LazyInput: LazyComponent<typeof import("../components/ui/input/index")['Input']>
 export const LazyLabel: LazyComponent<typeof import("../components/ui/label/index")['Label']>
 export const LazyProgress: LazyComponent<typeof import("../components/ui/progress/index")['Progress']>
 export const LazyTextarea: LazyComponent<typeof import("../components/ui/textarea/index")['Textarea']>

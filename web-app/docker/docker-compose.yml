@@ -27,7 +27,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./services/whisper:/usr/src/app  # mount audio service for hot reload
-      - ./models:/usr/src/app/models  # shared model storage
+      - ./services/whisper/models:/usr/src/app/models  # shared model storage
     ports:
       - "8000:8000"  # FastAPI port
     env_file:

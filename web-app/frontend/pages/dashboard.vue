@@ -26,19 +26,23 @@ const {
   stopRecording,
   transcribeFile,
   clearTranscription,
-  formatTimestamp
+  updateSegment
 } = useAudioRecording()
 
 const {
   state: summaryState,
   generateSummary,
+  generateAutoReport,
   toggleAutoSummary,
   toggleAutoReport,
+  updateAutoReportConfig,
   setAutoReportInterval,
+  setCustomPrompt,
   formatSummaryContent,
   autoReport,
   autoReportInterval,
-  nextReportCountdown
+  nextReportCountdown,
+  cleanup
 } = useSummaryGeneration()
 
 // File upload
@@ -80,11 +84,12 @@ onMounted(() => {
       autoReportIntervalValue.value = parseInt(savedAutoReportInterval) || 30
     }
 
-    // Set interval in composable
-    setAutoReportInterval(autoReportIntervalValue.value)
-    if (autoReportEnabled.value !== autoReport) {
-      toggleAutoReport()
-    }
+    // Update composable config
+    updateAutoReportConfig({
+      enabled: autoReportEnabled.value,
+      interval: autoReportIntervalValue.value,
+      customPrompt: customPrompt.value
+    })
   }
 })
 
@@ -92,6 +97,7 @@ onMounted(() => {
 watch(customPrompt, (newValue) => {
   if (process.client) {
     localStorage.setItem('atlas-custom-prompt', newValue)
+    setCustomPrompt(newValue)
   }
 })
 
@@ -110,6 +116,7 @@ watch(useIcaoCallsigns, (newValue) => {
 watch(autoReportIntervalValue, (newValue) => {
   if (process.client) {
     localStorage.setItem('atlas-auto-report-interval', newValue.toString())
+    setAutoReportInterval(newValue)
   }
 })
 
@@ -146,7 +153,7 @@ async function handleFileUpload(event: Event) {
 
   if (file) {
     try {
-      await transcribeFile(file, replaceNumbers.value, useIcaoCallsigns.value)
+      await transcribeFile(file)
     } catch (error) {
       console.error('File upload failed:', error)
     }
@@ -198,20 +205,20 @@ function resetConfig() {
   autoReportIntervalValue.value = 30
 
   // Reset composable state
-  setAutoReportInterval(30)
-  if (autoReport) {
-    toggleAutoReport()
-  }
+  updateAutoReportConfig({
+    enabled: false,
+    interval: 30,
+    customPrompt: ''
+  })
 }
 
 function handleApplySettings() {
-  // Update interval setting
-  setAutoReportInterval(autoReportIntervalValue.value)
-
-  // Update auto-report state if changed
-  if (autoReportEnabled.value !== autoReport) {
-    toggleAutoReport()
-  }
+  // Update all auto-report configuration
+  updateAutoReportConfig({
+    enabled: autoReportEnabled.value,
+    interval: autoReportIntervalValue.value,
+    customPrompt: customPrompt.value
+  })
 }
 
 function handleClearTranscription() {
@@ -225,9 +232,14 @@ function logout() {
 }
 
 function handleUpdateSegment(index: number, text: string) {
-  transcriptionStore.updateSegment(index, text)
+  updateSegment(index, text)
 }
 
+
+// Cleanup on unmount
+onUnmounted(() => {
+  cleanup()
+})
 
 useHead({
   title: 'ATLAS - Air Incident Investigation'
@@ -267,6 +279,7 @@ useHead({
             :is-transcribing="recordingState.isTranscribing"
             :is-recording="recordingState.isRecording"
             :audio-level="recordingState.audioLevel"
+            :is-waiting-for-transcription="recordingState.isWaitingForTranscription"
             @update-segment="handleUpdateSegment"
           />
         </div>

@@ -409,10 +409,10 @@ declare global {
   export type { Component, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
   // @ts-ignore
-  export type { TranscriptionSegment, RecordingState } from '../../composables/useAudioRecording'
+  export type { TranscriptionSegment, TranscriptionResponse, RecordingState } from '../../composables/useAudioRecording'
   import('../../composables/useAudioRecording')
   // @ts-ignore
-  export type { SummaryState } from '../../composables/useSummaryGeneration'
+  export type { SummaryState, AutoReportConfig } from '../../composables/useSummaryGeneration'
   import('../../composables/useSummaryGeneration')
   // @ts-ignore
   export type { User, AuthState } from '../../stores/auth'
