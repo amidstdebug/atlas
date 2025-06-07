@@ -190,6 +190,6 @@ cython_debug/
 /web-app/backend/audio_server/models
 /web-app/backend/server/misc/*
 
-/lost/docker/services/whisper/models
+/web-app/docker/services/whisper/models
 
 CLAUDE.md
