@@ -37,7 +37,9 @@ export const useSummaryGeneration = () => {
     transcriptionText: string,
     summaryMode: string = 'atc',
     customPrompt?: string,
-    previousReport?: string
+    previousReport?: string,
+    structured: boolean = true,
+    transcriptionSegments?: any[]
   ) => {
     if (!transcriptionText.trim()) {
       state.value.error = 'No transcription text provided'
@@ -49,11 +51,21 @@ export const useSummaryGeneration = () => {
 
     try {
       const { $api } = useNuxtApp()
+      
+      // Convert transcription segments to the format expected by the backend
+      const segments = transcriptionSegments?.map(seg => ({
+        text: seg.text,
+        start: seg.start,
+        end: seg.end
+      }))
+      
       const response = await $api.post('/summary', {
         transcription: transcriptionText,
+        transcription_segments: segments || undefined,
         previous_report: previousReport || '',
         summary_mode: summaryMode,
-        custom_prompt: customPrompt || undefined
+        custom_prompt: customPrompt || undefined,
+        structured: structured && summaryMode === 'atc'
       })
 
       if (response.data?.summary) {
@@ -61,11 +73,19 @@ export const useSummaryGeneration = () => {
 
         // Store in transcription store
         const transcriptionStore = useTranscriptionStore()
-        transcriptionStore.addSummary({
-          id: Date.now().toString(),
-          summary: response.data.summary,
-          timestamp: new Date().toISOString()
-        })
+        
+        if (response.data.append_suggestions) {
+          // Handle append suggestions - update existing summary
+          transcriptionStore.appendToLatestSummary(response.data.append_suggestions)
+        } else {
+          // Add new summary
+          transcriptionStore.addSummary({
+            id: Date.now().toString(),
+            summary: response.data.summary,
+            structured_summary: response.data.structured_summary || undefined,
+            timestamp: new Date().toISOString()
+          })
+        }
 
         return response.data
       }
@@ -81,6 +101,7 @@ export const useSummaryGeneration = () => {
   const generateAutoReport = async () => {
     const transcriptionStore = useTranscriptionStore()
     const currentTranscription = transcriptionStore.getTranscription
+    const transcriptionSegments = transcriptionStore.getSegments
 
     if (!currentTranscription) {
       console.warn('No transcription available for auto-report')
@@ -92,7 +113,9 @@ export const useSummaryGeneration = () => {
         currentTranscription,
         autoReportConfig.value.summaryMode,
         autoReportConfig.value.customPrompt,
-        state.value.lastSummary
+        state.value.lastSummary,
+        true, // structured
+        transcriptionSegments
       )
     } catch (error) {
       console.error('Auto-report generation failed:', error)

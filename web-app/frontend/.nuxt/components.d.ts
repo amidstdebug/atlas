@@ -17,6 +17,7 @@ interface _GlobalComponents {
     'ConfigPanel': typeof import("../components/ConfigPanel.vue")['default']
     'HeaderBar': typeof import("../components/HeaderBar.vue")['default']
     'Main': typeof import("../components/Main.vue")['default']
+    'SuggestedActionsPanel': typeof import("../components/SuggestedActionsPanel.vue")['default']
     'TranscriptionPanel': typeof import("../components/TranscriptionPanel.vue")['default']
     'NuxtWelcome': typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']
     'NuxtLayout': typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']
@@ -70,6 +71,7 @@ interface _GlobalComponents {
     'LazyConfigPanel': LazyComponent<typeof import("../components/ConfigPanel.vue")['default']>
     'LazyHeaderBar': LazyComponent<typeof import("../components/HeaderBar.vue")['default']>
     'LazyMain': LazyComponent<typeof import("../components/Main.vue")['default']>
+    'LazySuggestedActionsPanel': LazyComponent<typeof import("../components/SuggestedActionsPanel.vue")['default']>
     'LazyTranscriptionPanel': LazyComponent<typeof import("../components/TranscriptionPanel.vue")['default']>
     'LazyNuxtWelcome': LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']>
     'LazyNuxtLayout': LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']>
@@ -129,6 +131,7 @@ export const AnalysisPanel: typeof import("../components/AnalysisPanel.vue")['de
 export const ConfigPanel: typeof import("../components/ConfigPanel.vue")['default']
 export const HeaderBar: typeof import("../components/HeaderBar.vue")['default']
 export const Main: typeof import("../components/Main.vue")['default']
+export const SuggestedActionsPanel: typeof import("../components/SuggestedActionsPanel.vue")['default']
 export const TranscriptionPanel: typeof import("../components/TranscriptionPanel.vue")['default']
 export const NuxtWelcome: typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']
 export const NuxtLayout: typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']
@@ -182,6 +185,7 @@ export const LazyAnalysisPanel: LazyComponent<typeof import("../components/Analy
 export const LazyConfigPanel: LazyComponent<typeof import("../components/ConfigPanel.vue")['default']>
 export const LazyHeaderBar: LazyComponent<typeof import("../components/HeaderBar.vue")['default']>
 export const LazyMain: LazyComponent<typeof import("../components/Main.vue")['default']>
+export const LazySuggestedActionsPanel: LazyComponent<typeof import("../components/SuggestedActionsPanel.vue")['default']>
 export const LazyTranscriptionPanel: LazyComponent<typeof import("../components/TranscriptionPanel.vue")['default']>
 export const LazyNuxtWelcome: LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']>
 export const LazyNuxtLayout: LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']>

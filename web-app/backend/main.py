@@ -9,6 +9,7 @@ import uvicorn
 from api.auth import router as auth_router
 from api.transcription import router as transcription_router
 from api.summary import router as summary_router
+from api.actions import router as actions_router
 from config.settings import settings
 
 app = FastAPI(
@@ -30,6 +31,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(transcription_router)
 app.include_router(summary_router)
+app.include_router(actions_router)
 
 @app.get("/health")
 async def health_check():

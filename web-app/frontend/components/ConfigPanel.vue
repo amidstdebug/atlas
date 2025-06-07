@@ -140,8 +140,22 @@ function resetToDefaults() {
   emit('reset')
 }
 
-function loadDefaultPrompt() {
-  localCustomPrompt.value = defaultPrompt
+async function loadDefaultPrompt() {
+  try {
+    const { $api } = useNuxtApp()
+    const response = await $api.get('/summary/default-prompt')
+    
+    if (response.data?.default_prompt) {
+      localCustomPrompt.value = response.data.default_prompt
+    } else {
+      // Fallback to hardcoded default if API fails
+      localCustomPrompt.value = defaultPrompt
+    }
+  } catch (error) {
+    console.error('Failed to load default prompt:', error)
+    // Fallback to hardcoded default
+    localCustomPrompt.value = defaultPrompt
+  }
 }
 </script>
 

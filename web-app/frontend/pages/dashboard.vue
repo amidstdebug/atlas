@@ -2,12 +2,14 @@
 import { Progress } from '@/components/ui/progress'
 import { useAudioRecording } from '@/composables/useAudioRecording'
 import { useSummaryGeneration } from '@/composables/useSummaryGeneration'
+import { useSuggestedActions } from '@/composables/useSuggestedActions'
 import { useTranscriptionStore } from '@/stores/transcription'
 import { useAuthStore } from '@/stores/auth'
 import ConfigPanel from '@/components/ConfigPanel.vue'
 import HeaderBar from '@/components/HeaderBar.vue'
 import TranscriptionPanel from '@/components/TranscriptionPanel.vue'
 import AnalysisPanel from '@/components/AnalysisPanel.vue'
+import SuggestedActionsPanel from '@/components/SuggestedActionsPanel.vue'
 import ActionBar from '@/components/ActionBar.vue'
 import { watch } from 'vue'
 
@@ -44,6 +46,21 @@ const {
   nextReportCountdown,
   cleanup
 } = useSummaryGeneration()
+
+const {
+  state: actionsState,
+  autoActionsEnabled,
+  nextActionsCountdown,
+  actions,
+  pendingActions,
+  criticalActions,
+  generateActions,
+  completeAction,
+  toggleAutoActions,
+  formatActionContent,
+  shouldTriggerActions,
+  cleanup: cleanupActions
+} = useSuggestedActions()
 
 // File upload
 const audioFileInput = ref<HTMLInputElement>()
@@ -135,6 +152,44 @@ watch(autoReportEnabled, (enabled) => {
   }
 })
 
+// ------------------------------------------------------
+// 3. Coordinate between panels (async coordination)
+// ------------------------------------------------------
+// Watch for new transcription segments and check if actions should be triggered
+watch(transcriptionSegments, async (newSegments, oldSegments) => {
+  if (!newSegments || newSegments.length === 0) return
+
+  // Only check if we have new segments
+  if (!oldSegments || newSegments.length > oldSegments.length) {
+    const recentSegments = newSegments.slice(oldSegments?.length || 0)
+    const recentText = recentSegments.map(seg => seg.text).join(' ')
+
+    // Check if the new transcription should trigger actions
+    if (shouldTriggerActions(recentText, recentSegments)) {
+      console.log('Trigger conditions detected, generating suggested actions...')
+
+      // Automatically generate actions when trigger conditions are met
+      try {
+        await generateActions(
+          aggregatedTranscription.value,
+          transcriptionSegments.value,
+          pendingActions.value
+        )
+      } catch (error) {
+        console.error('Auto-triggered actions generation failed:', error)
+      }
+    }
+  }
+}, { deep: true })
+
+// Watch for critical actions and provide user notifications
+watch(criticalActions, (newCriticalActions) => {
+  if (newCriticalActions && newCriticalActions.length > 0) {
+    // Could add toast notifications or other alerts for critical actions
+    console.log(`${newCriticalActions.length} critical actions requiring attention`)
+  }
+}, { deep: true })
+
 // Computed
 const aggregatedTranscription = computed(() => {
   return transcriptionSegments.value.map(segment => segment.text).join(' ')
@@ -182,10 +237,16 @@ async function handleStopRecording() {
 async function handleGenerateSummary() {
   if (aggregatedTranscription.value) {
     try {
+      // Get the latest summary for previous report context
+      const latestSummary = summaries.value.length > 0 ? summaries.value[summaries.value.length - 1].summary : undefined
+
       await generateSummary(
         aggregatedTranscription.value,
         'atc',
-        customPrompt.value || undefined
+        customPrompt.value || undefined,
+        latestSummary, // pass previous report for context
+        true, // structured
+        transcriptionSegments.value
       )
     } catch (error) {
       console.error('Summary generation failed:', error)
@@ -236,9 +297,33 @@ function handleUpdateSegment(index: number, text: string) {
 }
 
 
+// Action handlers for suggested actions
+async function handleRefreshActions() {
+  if (aggregatedTranscription.value) {
+    try {
+      await generateActions(
+        aggregatedTranscription.value,
+        transcriptionSegments.value,
+        pendingActions.value
+      )
+    } catch (error) {
+      console.error('Actions generation failed:', error)
+    }
+  }
+}
+
+function handleCompleteAction(actionId: string) {
+  completeAction(actionId)
+}
+
+function handleToggleAutoActions() {
+  toggleAutoActions()
+}
+
 // Cleanup on unmount
 onUnmounted(() => {
   cleanup()
+  cleanupActions()
 })
 
 useHead({
@@ -255,7 +340,7 @@ useHead({
     />
 
     <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-6 py-8">
+    <main class="max-w-screen-2xl mx-auto px-6 py-8">
       <!-- Progress Indicators -->
       <div v-if="recordingState.isTranscribing || summaryState.isGenerating" class="mb-8">
         <div class="max-w-md mx-auto space-y-4">
@@ -271,7 +356,7 @@ useHead({
       </div>
 
       <!-- Content Grid -->
-      <div class="grid grid-cols-1 xl:grid-cols-5 gap-8">
+      <div class="grid grid-cols-1 xl:grid-cols-8 gap-8">
         <!-- Transcription Panel -->
         <div class="xl:col-span-2">
           <TranscriptionPanel
@@ -292,6 +377,22 @@ useHead({
             :auto-report-enabled="autoReportEnabled"
             :next-report-countdown="nextReportCountdown"
             :format-summary-content="formatSummaryContent"
+            :transcription-segments="transcriptionSegments"
+            :aggregated-transcription="aggregatedTranscription"
+          />
+        </div>
+
+        <!-- Suggested Actions Panel -->
+        <div class="xl:col-span-3">
+          <SuggestedActionsPanel
+            :is-generating="actionsState.isGenerating"
+            :actions="actions"
+            :auto-actions-enabled="autoActionsEnabled"
+            :next-actions-countdown="nextActionsCountdown"
+            :format-action-content="formatActionContent"
+            @complete-action="handleCompleteAction"
+            @refresh-actions="handleRefreshActions"
+            @toggle-auto-actions="handleToggleAutoActions"
           />
         </div>
       </div>

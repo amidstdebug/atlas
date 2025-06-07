@@ -236,6 +236,7 @@ declare global {
   const useIntersectionObserver: typeof import('@vueuse/core')['useIntersectionObserver']
   const useInterval: typeof import('@vueuse/core')['useInterval']
   const useIntervalFn: typeof import('@vueuse/core')['useIntervalFn']
+  const useInvestigation: typeof import('../../composables/useInvestigation')['useInvestigation']
   const useKeyModifier: typeof import('@vueuse/core')['useKeyModifier']
   const useLastChanged: typeof import('@vueuse/core')['useLastChanged']
   const useLazyAsyncData: typeof import('../../node_modules/nuxt/dist/app/composables/asyncData')['useLazyAsyncData']
@@ -343,6 +344,7 @@ declare global {
   const useStepper: typeof import('@vueuse/core')['useStepper']
   const useStorageAsync: typeof import('@vueuse/core')['useStorageAsync']
   const useStyleTag: typeof import('@vueuse/core')['useStyleTag']
+  const useSuggestedActions: typeof import('../../composables/useSuggestedActions')['useSuggestedActions']
   const useSummaryGeneration: typeof import('../../composables/useSummaryGeneration')['useSummaryGeneration']
   const useSupported: typeof import('@vueuse/core')['useSupported']
   const useSwipe: typeof import('@vueuse/core')['useSwipe']
@@ -411,6 +413,12 @@ declare global {
   // @ts-ignore
   export type { TranscriptionSegment, TranscriptionResponse, RecordingState } from '../../composables/useAudioRecording'
   import('../../composables/useAudioRecording')
+  // @ts-ignore
+  export type { InvestigationState, ChatMessage, TimeRange, InvestigationRequest } from '../../composables/useInvestigation'
+  import('../../composables/useInvestigation')
+  // @ts-ignore
+  export type { ActionItem, SuggestedActionsState, AutoActionsConfig } from '../../composables/useSuggestedActions'
+  import('../../composables/useSuggestedActions')
   // @ts-ignore
   export type { SummaryState, AutoReportConfig } from '../../composables/useSummaryGeneration'
   import('../../composables/useSummaryGeneration')
@@ -660,6 +668,7 @@ declare module 'vue' {
     readonly useIntersectionObserver: UnwrapRef<typeof import('@vueuse/core')['useIntersectionObserver']>
     readonly useInterval: UnwrapRef<typeof import('@vueuse/core')['useInterval']>
     readonly useIntervalFn: UnwrapRef<typeof import('@vueuse/core')['useIntervalFn']>
+    readonly useInvestigation: UnwrapRef<typeof import('../../composables/useInvestigation')['useInvestigation']>
     readonly useKeyModifier: UnwrapRef<typeof import('@vueuse/core')['useKeyModifier']>
     readonly useLastChanged: UnwrapRef<typeof import('@vueuse/core')['useLastChanged']>
     readonly useLazyAsyncData: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/asyncData')['useLazyAsyncData']>
@@ -767,6 +776,7 @@ declare module 'vue' {
     readonly useStepper: UnwrapRef<typeof import('@vueuse/core')['useStepper']>
     readonly useStorageAsync: UnwrapRef<typeof import('@vueuse/core')['useStorageAsync']>
     readonly useStyleTag: UnwrapRef<typeof import('@vueuse/core')['useStyleTag']>
+    readonly useSuggestedActions: UnwrapRef<typeof import('../../composables/useSuggestedActions')['useSuggestedActions']>
     readonly useSummaryGeneration: UnwrapRef<typeof import('../../composables/useSummaryGeneration')['useSummaryGeneration']>
     readonly useSupported: UnwrapRef<typeof import('@vueuse/core')['useSupported']>
     readonly useSwipe: UnwrapRef<typeof import('@vueuse/core')['useSwipe']>
