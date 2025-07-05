@@ -64,7 +64,8 @@ async def transcribe_audio(
 	try:
 		audio_data = await file.read()
 		transcription_result = whisper_service.transcribe(audio_data)
-		
+		print("transcription_result", transcription_result)
+
 		# Convert result to segments format
 		segments = []
 		if isinstance(transcription_result, dict) and "chunks" in transcription_result:
@@ -83,7 +84,7 @@ async def transcribe_audio(
 						"start": float(item["timestamp"][0]),
 						"end": float(item["timestamp"][1])
 					})
-		
+
 		return JSONResponse(content={"segments": segments})
 	except Exception as e:
 		logger.error(f"Error processing transcription request: {e}")

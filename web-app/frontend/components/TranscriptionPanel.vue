@@ -153,7 +153,7 @@ function handleKeydown(event: KeyboardEvent) {
               >
                 <!-- Timestamp -->
                 <div class="flex justify-center pt-[0.6rem] z-10">
-                  <Badge variant="secondary" class="font-mono text-xs bg-gray-100">
+                  <Badge variant="secondary" class="font-mono text-xs">
                     {{ formatTimestamp(segment.start) }}
                   </Badge>
                 </div>

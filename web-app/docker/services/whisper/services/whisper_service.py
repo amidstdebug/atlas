@@ -18,7 +18,9 @@ class WhisperService:
 				cls._instance.device = "cuda:0" if torch.cuda.is_available() else "cpu"
 				torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 
-				model_id = "openai/whisper-large-v3-turbo"
+				# model_id = "openai/whisper-large-v3-turbo"
+				model_id = "distil-whisper/distil-large-v3.5"
+
 				cache_dir = "models"
 				os.makedirs(cache_dir, exist_ok=True)
 
@@ -55,7 +57,7 @@ class WhisperService:
 		"""
 		if not self.pipe:
 			raise RuntimeError("Whisper service is not initialized.")
-		
+
 		try:
 			logger.info("Starting batch transcription...")
 			result = self.pipe(audio_data)

@@ -27,7 +27,48 @@ export interface AutoActionsConfig {
 export const useSuggestedActions = () => {
   const state = ref<SuggestedActionsState>({
     isGenerating: false,
-    actions: [],
+    actions: [
+      {
+        id: 'demo-action-1',
+        type: 'critical',
+        title: 'Issue ILS Approach Clearance',
+        description: '<strong>[00:04:09]</strong> Vector Empire 11 to seven-mile final. Treat as ILS. Continue verbal guidance.<br><br><strong>Required Actions:</strong><br>• Instruct Empire 11: descend and maintain 2,200 feet<br>• Turn Empire 11 left to heading 310<br>• At 4.5 miles: pilot\'s discretion descent, standard rate, maintain 1,000 feet',
+        priority: 9,
+        timestamp: new Date(Date.now() - 300000).toISOString(), // 5 minutes ago
+        context: 'Vector Empire 11 - ILS Approach Sequence',
+        completed: false
+      },
+      {
+        id: 'demo-action-2',
+        type: 'warning',
+        title: 'Monitor Final Approach Progress',
+        description: '<strong>[00:04:32]</strong> At 4 miles, ensure aircraft remains on frequency. Current conditions: Winds 010 at 7 knots.<br><br><strong>Verification Required:</strong><br>• Confirm Empire 11 established on final approach<br>• Monitor 3-mile checkpoint notification<br>• Verify runway alignment at 1.25-mile final',
+        priority: 7,
+        timestamp: new Date(Date.now() - 240000).toISOString(), // 4 minutes ago
+        context: 'Empire 11 Final Approach Monitoring',
+        completed: false
+      },
+      {
+        id: 'demo-action-3',
+        type: 'advisory',
+        title: 'Coordinate Landing Clearance',
+        description: '<strong>[00:04:47]</strong> Confirm Empire 11 aligned for Runway 3L at 1.25-mile final.<br><br><strong>Position Data:</strong><br>• Coordinates: N 38°44\'00", W 90°22\'86"<br>• Distance: Runway 1 mile ahead<br>• If field in sight: Clear to land Runway 30L<br>• <strong>Caution:</strong> Aircraft appears low on approach',
+        priority: 6,
+        timestamp: new Date(Date.now() - 180000).toISOString(), // 3 minutes ago
+        context: 'Empire 11 Landing Sequence',
+        completed: false
+      },
+      {
+        id: 'demo-action-4',
+        type: 'routine',
+        title: 'Update Weather Information',
+        description: 'Ensure current weather conditions are communicated to approaching aircraft.<br><br><strong>Current Conditions:</strong><br>• Wind: 010 at 7 knots<br>• Visibility: Good<br>• Runway conditions: Normal<br>• Approach lighting: Operational',
+        priority: 3,
+        timestamp: new Date(Date.now() - 120000).toISOString(), // 2 minutes ago
+        context: 'Standard Weather Update',
+        completed: false
+      }
+    ],
     error: null
   })
 
