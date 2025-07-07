@@ -13,27 +13,26 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
     depends_on:
-      whisper_service:
+      whisper_livekit:
         condition: service_started
       summarization_service:
         condition: service_healthy
     networks:
       - auto_transcript_network
 
-  whisper_service:
+  whisper_livekit:
     platform: linux/amd64
     build:
-      context: ./services/whisper
+      context: ./services/whisper-livekit
       dockerfile: Dockerfile
     volumes:
-      - ./services/whisper:/usr/src/app  # mount audio service for hot reload
-      - ./services/whisper/models:/usr/src/app/models  # shared model storage
+      - ./services/whisper-livekit:/app  # mount service code for hot reload
+      - ./services/whisper-livekit/models:/app/models  # shared model storage
     ports:
       - "8000:8000"  # FastAPI port
-    env_file:
-      - ../backend/.env
     environment:
       PYTHONUNBUFFERED: 1
+      CUDA_VISIBLE_DEVICES: 0
     deploy:
       resources:
         reservations:
@@ -41,6 +40,7 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
+    restart: unless-stopped
     networks:
       - auto_transcript_network
 

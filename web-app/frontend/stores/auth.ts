@@ -42,12 +42,19 @@ export const useAuthStore = defineStore('auth', {
           this.user = user
           this.isAuthenticated = true
 
-          // Store in cookie
+          // Store token in cookie
           const authCookie = useCookie<string | null>('auth_token', {
             default: () => null,
             maxAge: 60 * 60 * 24 * 7 // 7 days
           })
           authCookie.value = this.token
+
+          // Store user data in cookie
+          const userCookie = useCookie<User | null>('auth_user', {
+            default: () => null,
+            maxAge: 60 * 60 * 24 * 7 // 7 days
+          })
+          userCookie.value = user
 
           // Only fetch user if we don't have user data from login response
           if (!user) {
@@ -77,9 +84,11 @@ export const useAuthStore = defineStore('auth', {
       this.token = null
       this.isAuthenticated = false
 
-      // Clear cookie
+      // Clear cookies
       const authCookie = useCookie('auth_token')
+      const userCookie = useCookie('auth_user')
       authCookie.value = null
+      userCookie.value = null
 
       await navigateTo('/login')
     },
@@ -130,13 +139,24 @@ export const useAuthStore = defineStore('auth', {
 
     async checkAuth() {
       const authCookie = useCookie('auth_token')
+      const userCookie = useCookie<User | null>('auth_user')
       const token = authCookie.value
+      const user = userCookie.value
 
       if (token) {
         this.token = token
+        this.user = user
         this.isAuthenticated = true
         // Note: In a real app, you'd validate the token with the server
-        await this.fetchUser() // Fetch user data on app load
+        // Only fetch user if we don't have user data from cookie
+        if (!user) {
+          await this.fetchUser()
+        }
+      } else {
+        // Ensure clean state if no token
+        this.user = null
+        this.token = null
+        this.isAuthenticated = false
       }
     }
   }

@@ -1,8 +1,0 @@
-fastapi
-uvicorn[standard]
-torch
-transformers
-datasets
-ffmpeg-python
-SoundFile
-python-multipart

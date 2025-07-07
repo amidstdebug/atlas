@@ -1,6 +1,6 @@
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin(async () => {
   const authStore = useAuthStore()
   
   // Check authentication status on app startup
-  authStore.checkAuth()
+  await authStore.checkAuth()
 })

@@ -192,7 +192,7 @@ cython_debug/
 /web-app/backend/audio_server/models
 /web-app/backend/server/misc/*
 
-/web-app/docker/services/whisper/models
+/web-app/docker/services/whisper-livekit/models
 /web-app/docker/models/
 
 CLAUDE.md

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     port: int = int(os.environ.get("PORT", "5001"))
 
     # Service URLs
-    audio_server_url: str = os.environ.get("AUDIO_SERVER_URL", "http://whisper_service:8000")
+    audio_server_url: str = os.environ.get("AUDIO_SERVER_URL", "http://whisper_livekit:8000")
     ollama_server_url: str = os.environ.get("OLLAMA_SERVER_URL", "http://summarization_service:11434")
     llm_uri: str = f"{ollama_server_url}/api/chat"
 

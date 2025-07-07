@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
+import { Settings } from 'lucide-vue-next'
 import { useAudioRecording } from '@/composables/useAudioRecording'
 import { useSummaryGeneration } from '@/composables/useSummaryGeneration'
 import { useSuggestedActions } from '@/composables/useSuggestedActions'
@@ -8,9 +10,8 @@ import { useAuthStore } from '@/stores/auth'
 import ConfigPanel from '@/components/ConfigPanel.vue'
 import HeaderBar from '@/components/HeaderBar.vue'
 import TranscriptionPanel from '@/components/TranscriptionPanel.vue'
-import AnalysisPanel from '@/components/AnalysisPanel.vue'
-import SuggestedActionsPanel from '@/components/SuggestedActionsPanel.vue'
-import ActionBar from '@/components/ActionBar.vue'
+import LiveIncidentPanel from '@/components/LiveIncidentPanel.vue'
+import InvestigationPanel from '@/components/InvestigationPanel.vue'
 import { watch } from 'vue'
 
 definePageMeta({
@@ -26,6 +27,7 @@ const {
   transcriptionSegments,
   startRecording,
   stopRecording,
+  toggleRecording,
   transcribeFile,
   clearTranscription,
   updateSegment
@@ -72,6 +74,12 @@ const replaceNumbers = ref(true)
 const useIcaoCallsigns = ref(true)
 const autoReportEnabled = ref(false) // UI state only, copies from composable
 const autoReportIntervalValue = ref(30)
+
+// Sidebar resizing state
+const sidebarWidth = ref(320)
+const isResizing = ref(false)
+const minWidth = 250
+const maxWidth = 600
 
 
 // -------------------------------
@@ -234,6 +242,14 @@ async function handleStopRecording() {
   }
 }
 
+async function handleToggleRecording() {
+  try {
+    await toggleRecording()
+  } catch (error) {
+    console.error('Toggle recording failed:', error)
+  }
+}
+
 async function handleGenerateSummary() {
   if (aggregatedTranscription.value) {
     try {
@@ -296,6 +312,27 @@ function handleUpdateSegment(index: number, text: string) {
   updateSegment(index, text)
 }
 
+// Resize handlers
+function handleResizeStart() {
+  isResizing.value = true
+  document.addEventListener('mousemove', handleResizeMove)
+  document.addEventListener('mouseup', handleResizeEnd)
+}
+
+function handleResizeMove(event: MouseEvent) {
+  if (!isResizing.value) return
+  
+  const newWidth = Math.max(minWidth, Math.min(maxWidth, event.clientX))
+  sidebarWidth.value = newWidth
+}
+
+function handleResizeEnd() {
+  isResizing.value = false
+  document.removeEventListener('mousemove', handleResizeMove)
+  document.removeEventListener('mouseup', handleResizeEnd)
+}
+
+
 
 // Action handlers for suggested actions
 async function handleRefreshActions() {
@@ -320,6 +357,16 @@ function handleToggleAutoActions() {
   toggleAutoActions()
 }
 
+function handleForceAnalysis() {
+  if (aggregatedTranscription.value) {
+    handleGenerateSummary()
+  }
+}
+
+function handleToggleAutoMode() {
+  autoReportEnabled.value = !autoReportEnabled.value
+}
+
 // Cleanup on unmount
 onUnmounted(() => {
   cleanup()
@@ -332,85 +379,104 @@ useHead({
 </script>
 
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 tech-grid-bg">
+  <div class="h-screen bg-background flex flex-col">
     <!-- Header -->
     <HeaderBar
       :username="authStore.user?.username"
       @logout="logout"
+      class="shrink-0"
     />
 
-    <!-- Main Content -->
-    <main class="max-w-screen-2xl mx-auto px-6 py-8">
-      <!-- Progress Indicators -->
-      <div v-if="recordingState.isTranscribing || summaryState.isGenerating" class="mb-8">
-        <div class="max-w-md mx-auto space-y-4">
-          <div v-if="recordingState.isTranscribing" class="text-center">
-            <p class="text-sm text-muted-foreground mb-3">Processing audio transcription...</p>
-            <Progress class="h-2 rounded-full" />
-          </div>
-          <div v-if="summaryState.isGenerating" class="text-center">
-            <p class="text-sm text-muted-foreground mb-3">Generating incident analysis...</p>
-            <Progress class="h-2 rounded-full" />
-          </div>
+    <!-- Progress Indicators -->
+    <div v-if="recordingState.isTranscribing || summaryState.isGenerating" class="shrink-0 border-b border-border">
+      <div class="px-4 py-2 space-y-2">
+        <div v-if="recordingState.isTranscribing" class="flex items-center space-x-2">
+          <div class="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
+          <span class="text-sm text-muted-foreground">Processing audio transcription...</span>
+        </div>
+        <div v-if="summaryState.isGenerating" class="flex items-center space-x-2">
+          <div class="w-4 h-4 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin"></div>
+          <span class="text-sm text-muted-foreground">Generating incident analysis...</span>
         </div>
       </div>
+    </div>
 
-      <!-- Content Grid -->
-      <div class="grid grid-cols-1 xl:grid-cols-8 gap-8">
-        <!-- Transcription Panel -->
-        <div class="xl:col-span-2">
-          <TranscriptionPanel
-            :segments="transcriptionSegments"
-            :is-transcribing="recordingState.isTranscribing"
-            :is-recording="recordingState.isRecording"
-            :audio-level="recordingState.audioLevel"
-            :is-waiting-for-transcription="recordingState.isWaitingForTranscription"
-            @update-segment="handleUpdateSegment"
-          />
-        </div>
-
-        <!-- Analysis Panel -->
-        <div class="xl:col-span-3">
-          <AnalysisPanel
-            :summaries="summaries"
-            :is-generating="summaryState.isGenerating"
-            :auto-report-enabled="autoReportEnabled"
-            :next-report-countdown="nextReportCountdown"
-            :format-summary-content="formatSummaryContent"
-            :transcription-segments="transcriptionSegments"
-            :aggregated-transcription="aggregatedTranscription"
-          />
-        </div>
-
-        <!-- Suggested Actions Panel -->
-        <div class="xl:col-span-3">
-          <SuggestedActionsPanel
-            :is-generating="actionsState.isGenerating"
-            :actions="actions"
-            :auto-actions-enabled="autoActionsEnabled"
-            :next-actions-countdown="nextActionsCountdown"
-            :format-action-content="formatActionContent"
-            @complete-action="handleCompleteAction"
-            @refresh-actions="handleRefreshActions"
-            @toggle-auto-actions="handleToggleAutoActions"
-          />
-        </div>
+    <!-- Main IDE-style Layout -->
+    <div class="flex-1 flex overflow-hidden">
+      <!-- Left Panel - Transcription -->
+      <div class="flex border-r border-border flex flex-col" :style="{ width: sidebarWidth + 'px' }">
+        <TranscriptionPanel
+          :segments="transcriptionSegments"
+          :is-transcribing="recordingState.isTranscribing"
+          :is-recording="recordingState.isRecording"
+          :audio-level="recordingState.audioLevel"
+          :is-waiting-for-transcription="recordingState.isWaitingForTranscription"
+          :recording-state="recordingState"
+          :sidebar-width="sidebarWidth"
+          @update-segment="handleUpdateSegment"
+          @upload-recording="uploadRecording"
+          @start-recording="handleToggleRecording"
+          @stop-recording="handleToggleRecording"
+          @toggle-recording="handleToggleRecording"
+          @clear-transcription="handleClearTranscription"
+          class="h-full"
+        />
       </div>
-    </main>
 
-    <!-- Action Bar -->
-    <ActionBar
-      :recording-state="recordingState"
-      :summary-state="summaryState"
-      :aggregated-transcription="aggregatedTranscription"
-      :auto-report-enabled="autoReportEnabled"
-      @upload-recording="uploadRecording"
-      @start-recording="handleStartRecording"
-      @stop-recording="handleStopRecording"
-      @generate-summary="handleGenerateSummary"
-      @clear-transcription="handleClearTranscription"
-      @open-config="openConfigPanel"
-    />
+      <!-- Resize Handle -->
+      <div 
+        class="w-1 bg-border hover:bg-border/80 cursor-col-resize transition-colors relative"
+        @mousedown="handleResizeStart"
+      >
+        <div class="absolute inset-y-0 -left-1 -right-1 cursor-col-resize"></div>
+      </div>
+
+      <!-- Center Panel - Live Incident Analysis -->
+      <div class="flex-1 border-r border-border flex flex-col">
+        <LiveIncidentPanel
+          :summaries="summaries"
+          :is-generating="summaryState.isGenerating"
+          :auto-report-enabled="autoReportEnabled"
+          :next-report-countdown="nextReportCountdown"
+          :format-summary-content="formatSummaryContent"
+          :transcription-segments="transcriptionSegments"
+          :aggregated-transcription="aggregatedTranscription"
+          @force-analysis="handleForceAnalysis"
+          @toggle-auto-mode="handleToggleAutoMode"
+          class="h-full"
+        />
+      </div>
+
+      <!-- Right Panel - Investigation -->
+      <div class="w-96 flex flex-col">
+        <InvestigationPanel
+          :transcription-segments="transcriptionSegments"
+          :aggregated-transcription="aggregatedTranscription"
+          :is-generating="actionsState.isGenerating"
+          :actions="actions"
+          :auto-actions-enabled="autoActionsEnabled"
+          :next-actions-countdown="nextActionsCountdown"
+          :format-action-content="formatActionContent"
+          @complete-action="handleCompleteAction"
+          @refresh-actions="handleRefreshActions"
+          @toggle-auto-actions="handleToggleAutoActions"
+          class="h-full"
+        />
+      </div>
+    </div>
+
+    <!-- Bottom Panel - Configuration Button -->
+    <div class="shrink-0 border-t border-border px-4 py-2 flex justify-end">
+      <Button
+        @click="openConfigPanel"
+        variant="ghost"
+        size="sm"
+        class="text-xs"
+      >
+        <Settings class="h-3 w-3 mr-1" />
+        Configuration
+      </Button>
+    </div>
 
     <!-- Hidden file input -->
     <input

@@ -3,6 +3,9 @@ from fastapi.websockets import WebSocket, WebSocketDisconnect
 from typing import Dict, List, Optional
 import json
 import logging
+import asyncio
+import httpx
+import websockets
 
 from models.AuthType import TokenData
 from models.TranscriptionResponse import TranscriptionResponse, TranscriptionSegment
@@ -17,6 +20,7 @@ router = APIRouter(tags=["Transcription"])
 # Store connected clients and their latest transcriptions
 connected_clients = {}
 transcription_history = {}
+
 
 @router.post("/transcribe", response_model=TranscriptionResponse)
 async def transcribe_audio(
@@ -76,3 +80,57 @@ async def transcribe_audio(
     except Exception as e:
         logger.error(f"Error transcribing audio: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+@router.websocket("/ws/live-transcribe")
+async def websocket_live_transcribe(websocket: WebSocket):
+    """WebSocket endpoint for live audio transcription (proxy to Whisper)"""
+    # extract token from query string
+    token = websocket.query_params.get("token")
+    # accept the websocket handshake first
+    await websocket.accept()
+
+    if not token:
+        await websocket.close(code=1008, reason="No token provided")
+        return
+
+    try:
+        import jwt
+        from config.settings import get_settings
+        settings = get_settings()
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        user_id = payload.get("user_id")
+    except jwt.ExpiredSignatureError:
+        await websocket.close(code=1008, reason="Token has expired")
+        return
+    except jwt.InvalidTokenError:
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
+    # now proxy to whisper-livekit
+    try:
+        async with websockets.connect("ws://whisper_livekit:8000/asr") as proxy_ws:
+            async def forward_client_to_proxy():
+                try:
+                    while True:
+                        data = await websocket.receive_bytes()
+                        await proxy_ws.send(data)
+                except WebSocketDisconnect:
+                    await proxy_ws.close()
+
+            async def forward_proxy_to_client():
+                try:
+                    async for msg in proxy_ws:
+                        if isinstance(msg, bytes):
+                            await websocket.send_bytes(msg)
+                        else:
+                            await websocket.send_text(msg)
+                except Exception:
+                    await websocket.close()
+
+            await asyncio.gather(
+                forward_client_to_proxy(),
+                forward_proxy_to_client(),
+            )
+    except Exception as e:
+        logger.error(f"WebSocket proxy error for user {user_id}: {e}")
+        await websocket.close(code=1011, reason="Proxy error")
