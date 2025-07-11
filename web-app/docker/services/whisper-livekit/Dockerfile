@@ -71,4 +71,4 @@ EXPOSE 8000
 ENTRYPOINT ["whisperlivekit-server", "--host", "0.0.0.0"]
 
 # Default args optimized for ATC use case
-CMD ["--model", "large-v3-turbo", "--buffer_trimming", "segment"]
+CMD ["--model", "large-v3-turbo"]

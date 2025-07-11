@@ -172,7 +172,7 @@ declare global {
   const useAsyncQueue: typeof import('@vueuse/core')['useAsyncQueue']
   const useAsyncState: typeof import('@vueuse/core')['useAsyncState']
   const useAttrs: typeof import('vue')['useAttrs']
-  const useAudioRecording: typeof import('../../composables/useAudioRecording')['useAudioRecording']
+  const useAudioRecording: typeof import('../../composables/audio-recording/index')['useAudioRecording']
   const useAuthStore: typeof import('../../stores/auth')['useAuthStore']
   const useBase64: typeof import('@vueuse/core')['useBase64']
   const useBattery: typeof import('@vueuse/core')['useBattery']
@@ -236,7 +236,6 @@ declare global {
   const useIntersectionObserver: typeof import('@vueuse/core')['useIntersectionObserver']
   const useInterval: typeof import('@vueuse/core')['useInterval']
   const useIntervalFn: typeof import('@vueuse/core')['useIntervalFn']
-  const useInvestigation: typeof import('../../composables/useInvestigation')['useInvestigation']
   const useKeyModifier: typeof import('@vueuse/core')['useKeyModifier']
   const useLastChanged: typeof import('@vueuse/core')['useLastChanged']
   const useLazyAsyncData: typeof import('../../node_modules/nuxt/dist/app/composables/asyncData')['useLazyAsyncData']
@@ -344,12 +343,12 @@ declare global {
   const useStepper: typeof import('@vueuse/core')['useStepper']
   const useStorageAsync: typeof import('@vueuse/core')['useStorageAsync']
   const useStyleTag: typeof import('@vueuse/core')['useStyleTag']
-  const useSuggestedActions: typeof import('../../composables/useSuggestedActions')['useSuggestedActions']
   const useSummaryGeneration: typeof import('../../composables/useSummaryGeneration')['useSummaryGeneration']
   const useSupported: typeof import('@vueuse/core')['useSupported']
   const useSwipe: typeof import('@vueuse/core')['useSwipe']
   const useTemplateRef: typeof import('vue')['useTemplateRef']
   const useTemplateRefsList: typeof import('@vueuse/core')['useTemplateRefsList']
+  const useTextCleaning: typeof import('../../composables/useTextCleaning')['useTextCleaning']
   const useTextDirection: typeof import('@vueuse/core')['useTextDirection']
   const useTextSelection: typeof import('@vueuse/core')['useTextSelection']
   const useTextareaAutosize: typeof import('@vueuse/core')['useTextareaAutosize']
@@ -411,17 +410,14 @@ declare global {
   export type { Component, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
   // @ts-ignore
-  export type { TranscriptionSegment, TranscriptionResponse, RecordingState } from '../../composables/useAudioRecording'
-  import('../../composables/useAudioRecording')
-  // @ts-ignore
-  export type { InvestigationState, ChatMessage, TimeRange, InvestigationRequest } from '../../composables/useInvestigation'
-  import('../../composables/useInvestigation')
-  // @ts-ignore
-  export type { ActionItem, SuggestedActionsState, AutoActionsConfig } from '../../composables/useSuggestedActions'
-  import('../../composables/useSuggestedActions')
+  export type { TranscriptionSegment, TranscriptionResponse, RecordingState, AudioRecordingVariables } from '../../composables/audio-recording/types'
+  import('../../composables/audio-recording/types')
   // @ts-ignore
   export type { SummaryState, AutoReportConfig } from '../../composables/useSummaryGeneration'
   import('../../composables/useSummaryGeneration')
+  // @ts-ignore
+  export type { CleanedSegment } from '../../composables/useTextCleaning'
+  import('../../composables/useTextCleaning')
   // @ts-ignore
   export type { User, AuthState } from '../../stores/auth'
   import('../../stores/auth')
@@ -604,7 +600,7 @@ declare module 'vue' {
     readonly useAsyncQueue: UnwrapRef<typeof import('@vueuse/core')['useAsyncQueue']>
     readonly useAsyncState: UnwrapRef<typeof import('@vueuse/core')['useAsyncState']>
     readonly useAttrs: UnwrapRef<typeof import('vue')['useAttrs']>
-    readonly useAudioRecording: UnwrapRef<typeof import('../../composables/useAudioRecording')['useAudioRecording']>
+    readonly useAudioRecording: UnwrapRef<typeof import('../../composables/audio-recording/index')['useAudioRecording']>
     readonly useAuthStore: UnwrapRef<typeof import('../../stores/auth')['useAuthStore']>
     readonly useBase64: UnwrapRef<typeof import('@vueuse/core')['useBase64']>
     readonly useBattery: UnwrapRef<typeof import('@vueuse/core')['useBattery']>
@@ -668,7 +664,6 @@ declare module 'vue' {
     readonly useIntersectionObserver: UnwrapRef<typeof import('@vueuse/core')['useIntersectionObserver']>
     readonly useInterval: UnwrapRef<typeof import('@vueuse/core')['useInterval']>
     readonly useIntervalFn: UnwrapRef<typeof import('@vueuse/core')['useIntervalFn']>
-    readonly useInvestigation: UnwrapRef<typeof import('../../composables/useInvestigation')['useInvestigation']>
     readonly useKeyModifier: UnwrapRef<typeof import('@vueuse/core')['useKeyModifier']>
     readonly useLastChanged: UnwrapRef<typeof import('@vueuse/core')['useLastChanged']>
     readonly useLazyAsyncData: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/asyncData')['useLazyAsyncData']>
@@ -776,12 +771,12 @@ declare module 'vue' {
     readonly useStepper: UnwrapRef<typeof import('@vueuse/core')['useStepper']>
     readonly useStorageAsync: UnwrapRef<typeof import('@vueuse/core')['useStorageAsync']>
     readonly useStyleTag: UnwrapRef<typeof import('@vueuse/core')['useStyleTag']>
-    readonly useSuggestedActions: UnwrapRef<typeof import('../../composables/useSuggestedActions')['useSuggestedActions']>
     readonly useSummaryGeneration: UnwrapRef<typeof import('../../composables/useSummaryGeneration')['useSummaryGeneration']>
     readonly useSupported: UnwrapRef<typeof import('@vueuse/core')['useSupported']>
     readonly useSwipe: UnwrapRef<typeof import('@vueuse/core')['useSwipe']>
     readonly useTemplateRef: UnwrapRef<typeof import('vue')['useTemplateRef']>
     readonly useTemplateRefsList: UnwrapRef<typeof import('@vueuse/core')['useTemplateRefsList']>
+    readonly useTextCleaning: UnwrapRef<typeof import('../../composables/useTextCleaning')['useTextCleaning']>
     readonly useTextDirection: UnwrapRef<typeof import('@vueuse/core')['useTextDirection']>
     readonly useTextSelection: UnwrapRef<typeof import('@vueuse/core')['useTextSelection']>
     readonly useTextareaAutosize: UnwrapRef<typeof import('@vueuse/core')['useTextareaAutosize']>

@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 
+
 class TranscriptionSegment(BaseModel):
     text: str
     start: float
@@ -24,17 +25,27 @@ class SectionAppendSuggestion(BaseModel):
     new_timestamps: List[Dict[str, Any]] = []  # New timestamps to add
     has_updates: bool = False  # Whether this section has new information
 
+class PendingInformationItem(BaseModel):
+    description: str
+    eta_etr_info: Optional[str] = None
+    calculated_time: Optional[str] = None  # Calculated actual time
+    priority: str = "medium"  # low, medium, high
+    timestamps: List[Dict[str, Any]] = []
+
+class EmergencyItem(BaseModel):
+    category: str  # MAYDAY_PAN, CASEVAC, AIRCRAFT_DIVERSION, OTHERS
+    description: str
+    severity: str = "high"  # always high for emergencies
+    immediate_action_required: bool = True
+    timestamps: List[Dict[str, Any]] = []
+
 class StructuredSummary(BaseModel):
-    situation_update: SectionWithTimestamps
-    current_situation_details: SectionWithTimestamps
-    recent_actions_taken: SectionWithTimestamps
-    overall_status: SectionWithTimestamps
+    pending_information: List[PendingInformationItem]
+    emergency_information: List[EmergencyItem]
 
 class StructuredSummaryAppendSuggestions(BaseModel):
-    situation_update: SectionAppendSuggestion
-    current_situation_details: SectionAppendSuggestion
-    recent_actions_taken: SectionAppendSuggestion
-    overall_status: SectionAppendSuggestion
+    pending_information: List[PendingInformationItem]
+    emergency_information: List[EmergencyItem]
 
 class SummaryResponse(BaseModel):
     summary: str

@@ -114,7 +114,7 @@ const hasCustomChanges = computed(() => {
          !localReplaceNumbers.value ||
          !localUseIcaoCallsigns.value ||
          localAutoReportEnabled.value ||
-         localAutoReportInterval.value !== 30
+         localAutoReportInterval.value !== 0.166
 })
 
 function closePanel() {
@@ -144,7 +144,7 @@ async function loadDefaultPrompt() {
   try {
     const { $api } = useNuxtApp()
     const response = await $api.get('/summary/default-prompt')
-    
+
     if (response.data?.default_prompt) {
       localCustomPrompt.value = response.data.default_prompt
     } else {

@@ -23,7 +23,7 @@ function handleLogout() {
 
 <template>
   <header class="border-b border-border/50 bg-background/80 backdrop-blur-xl sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-6 py-4">
+    <div class="px-6 py-4">
       <div class="flex items-center justify-between">
         <!-- Logo and Title -->
         <div class="flex items-center space-x-4">

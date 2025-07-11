@@ -11,7 +11,7 @@ ollama serve &
 sleep 10
 
 # Determine which model to ensure
-MODEL_NAME=${OLLAMA_MODEL:-"llama3.1:8b"}
+MODEL_NAME=${OLLAMA_MODEL:-"gemma3:4b-it-qat"}
 
 echo "Setting up model: $MODEL_NAME"
 

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = os.environ.get("JWT_ALGORITHM", "HS256")
 
     # Model settings
-    ollama_model: str = os.environ.get("OLLAMA_MODEL", "llama3.1")
+    ollama_model: str = os.environ.get("OLLAMA_MODEL", "gemma3:4b-it-qat")
 
     # CORS settings
     cors_origins: list = ["*"]

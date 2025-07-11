@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { Clock, FileAudio, Mic, Upload, Square, RotateCcw } from 'lucide-vue-next'
-import { nextTick, ref } from 'vue'
+import { Clock, FileAudio, Mic, Upload, Square, RotateCcw, AlertTriangle } from 'lucide-vue-next'
+import { nextTick, ref, watch } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { useTextCleaning } from '@/composables/useTextCleaning'
 
 interface TranscriptionSegment {
   text: string
   start: number
   end: number
+  isLive?: boolean
 }
 
 interface RecordingState {
@@ -29,26 +32,38 @@ interface Props {
   audioLevel?: number
   isWaitingForTranscription?: boolean
   recordingState: RecordingState
+  sidebarWidth?: number
 }
 
 const props = defineProps<Props>()
-
-
 
 // Editing state
 const editingSegment = ref<number | null>(null)
 const editingText = ref('')
 
-// Props for resizing
-interface Props {
-  segments: TranscriptionSegment[]
-  isTranscribing: boolean
-  isRecording?: boolean
-  audioLevel?: number
-  isWaitingForTranscription?: boolean
-  recordingState: RecordingState
-  sidebarWidth?: number
-}
+// Text cleaning functionality
+const { isCleanMode, cleanTextBlock, getDisplayText, isSegmentProcessing, toggleCleanMode, clearCleanedSegments } = useTextCleaning()
+
+// Watch for finalized segments to clean them
+watch(
+  () => props.segments,
+  (newSegments, oldSegments) => {
+    if (!isCleanMode.value || !newSegments) return
+    
+    // Check if any new segments were added (finalized)
+    if (oldSegments && newSegments.length > oldSegments.length) {
+      // Clean the newly finalized segment (not the last one which might still be live)
+      const finalizedIndex = newSegments.length - 2
+      if (finalizedIndex >= 0) {
+        const segment = newSegments[finalizedIndex]
+        if (segment && !segment.isLive) {
+          cleanTextBlock(segment.text, finalizedIndex)
+        }
+      }
+    }
+  },
+  { deep: true }
+)
 
 function handleTextareaInput(event: Event) {
   const textarea = event.target as HTMLTextAreaElement
@@ -117,7 +132,12 @@ function handleRecordingToggle() {
 }
 
 function handleClearTranscription() {
+  clearCleanedSegments()
   emit('clearTranscription')
+}
+
+function handleToggleCleanMode() {
+  toggleCleanMode()
 }
 
 // Emit resize events to parent
@@ -190,6 +210,31 @@ const emit = defineEmits<{
               <p class="text-sm text-muted-foreground">Real-time audio analysis</p>
             </div>
           </div>
+          
+          <!-- Raw/Clean Toggle -->
+          <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-2">
+              <Label for="clean-mode-toggle" class="text-xs font-medium text-muted-foreground">
+                {{ isCleanMode ? 'Clean' : 'Raw' }}
+              </Label>
+              <Switch
+                id="clean-mode-toggle"
+                :checked="isCleanMode"
+                @update:checked="handleToggleCleanMode"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Error Display -->
+        <div v-if="recordingState.error" class="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+          <div class="flex items-start space-x-2">
+            <AlertTriangle class="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p class="text-sm font-medium text-red-900 dark:text-red-100">Connection Error</p>
+              <p class="text-xs text-red-700 dark:text-red-300 mt-1">{{ recordingState.error }}</p>
+            </div>
+          </div>
         </div>
 
         <!-- Recording Controls -->
@@ -236,10 +281,9 @@ const emit = defineEmits<{
       <div class="flex-1 overflow-hidden p-4">
         <div v-if="segments.length > 0" class="h-full">
           <!-- Transcription Timeline -->
-          <div class="h-full overflow-y-auto pr-4 relative">
-            <div class="absolute top-4 bottom-4 w-0.5 bg-blue-500/10" style="left: 40px;"></div>
-
+          <div class="h-full overflow-y-auto pr-4">
             <div class="relative z-10">
+              <div class="absolute top-4 bottom-4 w-0.5 bg-blue-500/10" style="left: 40px;"></div>
               <TransitionGroup
                 name="segment"
                 tag="div"
@@ -275,11 +319,19 @@ const emit = defineEmits<{
                     <template v-else>
                       <!-- Display mode -->
                       <div
-                        class="text-sm leading-relaxed text-foreground/90 p-2 rounded-lg cursor-text hover:bg-muted/30 transition-colors border border-transparent hover:border-muted"
+                        class="text-sm leading-relaxed text-foreground/90 p-2 rounded-lg cursor-text hover:bg-muted/30 transition-colors border"
+                        :class="{
+                          'border-transparent hover:border-muted': !segment.isLive && !isSegmentProcessing(index),
+                          'border-blue-500/50 ring-2 ring-blue-500/20 animate-pulse':
+                            segment.isLive && !recordingState.waitingForStop,
+                          'border-green-500/50 ring-2 ring-green-500/20 animate-pulse bg-green-50/30 dark:bg-green-900/10':
+                            isSegmentProcessing(index)
+                        }"
                         @click="startEditing(index, segment.text)"
                       >
-                        <span v-if="segment.text">{{ segment.text }}</span>
+                        <span v-if="segment.text">{{ getDisplayText(index, segment.text) }}</span>
                         <span v-else class="text-muted-foreground italic">Click to edit...</span>
+                        <span v-if="segment.isLive && isTranscribing" class="text-muted-foreground">...</span>
                       </div>
                     </template>
                   </div>

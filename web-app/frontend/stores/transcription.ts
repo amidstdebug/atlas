@@ -4,6 +4,7 @@ export interface SummaryEntry {
   id: string
   summary: string
   timestamp: string
+  structured_summary?: Record<string, any>
   previous_report?: string
 }
 
@@ -38,7 +39,8 @@ export const useTranscriptionStore = defineStore('transcription', {
     getIsRecording: (state) => state.recording,
     getLoading: (state) => state.loading,
     getCurrentSummary: (state) => state.currentSummary,
-    getLatestSummary: (state) => state.summaries[state.summaries.length - 1] || null
+    getLatestSummary: (state) => state.summaries[state.summaries.length - 1] || null,
+    getSegments: (state) => state.segments
   },
 
   actions: {

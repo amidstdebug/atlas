@@ -83,7 +83,7 @@ useHead({
 		  </div>
 
           <div class="space-y-2">
-            <CardTitle class="text-lg font-bold">Air Communications Incident Investigation</CardTitle>
+            <CardTitle class="text-lg font-bold">Air Traffic Control Analysis System</CardTitle>
             <CardDescription class="text-base">
               Sign in to access your dashboard
             </CardDescription>

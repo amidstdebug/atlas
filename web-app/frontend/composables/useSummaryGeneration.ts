@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useTranscriptionStore } from '@/stores/transcription'
 
 export interface SummaryState {
@@ -10,12 +10,14 @@ export interface SummaryState {
 
 export interface AutoReportConfig {
   enabled: boolean
-  interval: number // minutes
+  // interval: number // No longer needed
   customPrompt?: string
   summaryMode: string
 }
 
-export const useSummaryGeneration = () => {
+export const useSummaryGeneration = (reactiveSegments: Ref<any[]>) => {
+  const transcriptionStore = useTranscriptionStore()
+
   const state = ref<SummaryState>({
     isGenerating: false,
     lastSummary: '',
@@ -25,13 +27,30 @@ export const useSummaryGeneration = () => {
 
   const autoReportConfig = ref<AutoReportConfig>({
     enabled: false,
-    interval: 30,
+    // interval: 30, // No longer needed
     customPrompt: '',
-    summaryMode: 'atc'
+    summaryMode: 'atc',
   })
 
-  const nextReportCountdown = ref(0)
-  let reportTimer: NodeJS.Timeout | null = null
+  // Watch for changes in the segments array to detect when a segment is finalized.
+  watch(
+    () => [...reactiveSegments.value], // Watch a shallow copy to get different old/new values
+    (newSegments, oldSegments) => {
+      if (!autoReportConfig.value.enabled || !newSegments || newSegments.length === 0) {
+        return
+      }
+
+      console.log(`[Auto-Report Watcher] Segments changed. New length: ${newSegments.length}, Old length: ${oldSegments?.length ?? 0}`);
+
+      // A segment is considered "finalized" if a new segment has been added.
+      if (oldSegments && newSegments.length > oldSegments.length) {
+        const finalizedSegment = newSegments[newSegments.length - 2];
+        console.log(`%c[Auto-Report] Triggered by new finalized segment: "${finalizedSegment.text}"`, 'color: #4CAF50; font-weight: bold;');
+        generateAutoReport(newSegments);
+      }
+    },
+    { deep: true }
+  )
 
   const generateSummary = async (
     transcriptionText: string,
@@ -39,7 +58,7 @@ export const useSummaryGeneration = () => {
     customPrompt?: string,
     previousReport?: string,
     structured: boolean = true,
-    transcriptionSegments?: any[]
+    transcriptionSegments?: any[],
   ) => {
     if (!transcriptionText.trim()) {
       state.value.error = 'No transcription text provided'
@@ -51,21 +70,21 @@ export const useSummaryGeneration = () => {
 
     try {
       const { $api } = useNuxtApp()
-      
+
       // Convert transcription segments to the format expected by the backend
       const segments = transcriptionSegments?.map(seg => ({
         text: seg.text,
         start: seg.start,
         end: seg.end
       }))
-      
+
       const response = await $api.post('/summary', {
         transcription: transcriptionText,
         transcription_segments: segments || undefined,
         previous_report: previousReport || '',
         summary_mode: summaryMode,
         custom_prompt: customPrompt || undefined,
-        structured: structured && summaryMode === 'atc'
+        structured: structured && summaryMode === 'atc',
       })
 
       if (response.data?.summary) {
@@ -73,19 +92,14 @@ export const useSummaryGeneration = () => {
 
         // Store in transcription store
         const transcriptionStore = useTranscriptionStore()
-        
-        if (response.data.append_suggestions) {
-          // Handle append suggestions - update existing summary
-          transcriptionStore.appendToLatestSummary(response.data.append_suggestions)
-        } else {
-          // Add new summary
-          transcriptionStore.addSummary({
-            id: Date.now().toString(),
-            summary: response.data.summary,
-            structured_summary: response.data.structured_summary || undefined,
-            timestamp: new Date().toISOString()
-          })
-        }
+
+        transcriptionStore.addSummary({
+          id: Date.now().toString(),
+          summary: response.data.summary,
+          structured_summary: response.data.structured_summary || undefined,
+          timestamp: new Date().toISOString()
+        })
+
 
         return response.data
       }
@@ -98,16 +112,18 @@ export const useSummaryGeneration = () => {
     }
   }
 
-  const generateAutoReport = async () => {
+  const generateAutoReport = async (segmentsToProcess?: any[]) => {
     const transcriptionStore = useTranscriptionStore()
-    const currentTranscription = transcriptionStore.getTranscription
-    const transcriptionSegments = transcriptionStore.getSegments
+    // Prioritize segments passed from the watcher, fall back to store for manual triggers.
+    const segments = segmentsToProcess || transcriptionStore.getSegments
+    const currentTranscription = segments.map((s: any) => s.text).join(' ')
 
     if (!currentTranscription) {
       console.warn('No transcription available for auto-report')
       return
     }
 
+    console.log('[Auto-Report] Attempting to send API request for summary generation.')
     try {
       await generateSummary(
         currentTranscription,
@@ -115,7 +131,8 @@ export const useSummaryGeneration = () => {
         autoReportConfig.value.customPrompt,
         state.value.lastSummary,
         true, // structured
-        transcriptionSegments
+        segments, // use the determined segments
+        false
       )
     } catch (error) {
       console.error('Auto-report generation failed:', error)
@@ -128,62 +145,31 @@ export const useSummaryGeneration = () => {
 
   const toggleAutoReport = () => {
     autoReportConfig.value.enabled = !autoReportConfig.value.enabled
+    console.log(`Auto-report mode ${autoReportConfig.value.enabled ? 'enabled' : 'disabled'}.`);
 
-    if (autoReportConfig.value.enabled) {
-      startReportTimer()
-    } else {
-      stopReportTimer()
+    // If we just enabled it and there's already transcription, trigger an initial report.
+    if (autoReportConfig.value.enabled && transcriptionStore.getTranscription) {
+       generateAutoReport()
     }
   }
 
   const updateAutoReportConfig = (config: Partial<AutoReportConfig>) => {
-    const wasEnabled = autoReportConfig.value.enabled
-
     autoReportConfig.value = {
       ...autoReportConfig.value,
       ...config
     }
-
-    // Restart timer if enabled and interval changed
-    if (autoReportConfig.value.enabled) {
-      if (!wasEnabled || config.interval) {
-        stopReportTimer()
-        startReportTimer()
-      }
-    }
   }
 
   const setAutoReportInterval = (minutes: number) => {
-    updateAutoReportConfig({ interval: minutes })
+    // This function is now obsolete but kept to avoid breaking other parts if they reference it.
+    // It can be removed in a future cleanup.
+    console.warn("setAutoReportInterval is deprecated. Auto-reporting is now segment-driven.")
   }
 
   const setCustomPrompt = (prompt: string) => {
     updateAutoReportConfig({ customPrompt: prompt })
   }
 
-  const startReportTimer = () => {
-    if (reportTimer) clearInterval(reportTimer)
-
-    nextReportCountdown.value = autoReportConfig.value.interval * 60 // convert to seconds
-
-    reportTimer = setInterval(() => {
-      nextReportCountdown.value--
-
-      if (nextReportCountdown.value <= 0) {
-        // Trigger auto-report generation
-        generateAutoReport()
-        nextReportCountdown.value = autoReportConfig.value.interval * 60
-      }
-    }, 1000)
-  }
-
-  const stopReportTimer = () => {
-    if (reportTimer) {
-      clearInterval(reportTimer)
-      reportTimer = null
-    }
-    nextReportCountdown.value = 0
-  }
 
   const formatSummaryContent = (content: string) => {
     // Basic formatting for display
@@ -195,15 +181,15 @@ export const useSummaryGeneration = () => {
 
   // Cleanup on unmount
   const cleanup = () => {
-    stopReportTimer()
+    // No longer anything to clean up
   }
 
   return {
     state: computed(() => state.value),
     autoReportConfig: computed(() => autoReportConfig.value),
     autoReport: computed(() => autoReportConfig.value.enabled),
-    autoReportInterval: computed(() => autoReportConfig.value.interval),
-    nextReportCountdown: computed(() => nextReportCountdown.value),
+    autoReportInterval: computed(() => 0), // Obsolete
+    nextReportCountdown: computed(() => 0), // Obsolete
     generateSummary,
     generateAutoReport,
     toggleAutoSummary,
