@@ -12,6 +12,8 @@ WORKDIR /app/SimulStreaming
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
+RUN mkdir -p /models
+
 EXPOSE 43007
 
-CMD ["python", "simulstreaming_whisper_server.py", "--host", "0.0.0.0", "--port", "43007", "--model_path", "./large-v3.pt"]
+CMD ["python", "simulstreaming_whisper_server.py", "--host", "0.0.0.0", "--port", "43007", "--model_path", "/models/large-v3.pt"]
