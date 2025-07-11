@@ -193,6 +193,8 @@ cython_debug/
 /web-app/backend/server/misc/*
 
 /web-app/docker/services/whisper-livekit/models
+/web-app/docker/services/simulstreaming/models/*
+!/web-app/docker/services/simulstreaming/models/.gitkeep
 /web-app/docker/models/
 
 CLAUDE.md

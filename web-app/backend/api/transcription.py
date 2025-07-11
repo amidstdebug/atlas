@@ -106,31 +106,66 @@ async def websocket_live_transcribe(websocket: WebSocket):
         await websocket.close(code=1008, reason="Invalid token")
         return
 
-    # now proxy to whisper-livekit
+    from config.settings import get_settings
+    settings = get_settings()
     try:
-        async with websockets.connect("ws://whisper_livekit:8000/asr") as proxy_ws:
-            async def forward_client_to_proxy():
-                try:
-                    while True:
-                        data = await websocket.receive_bytes()
-                        await proxy_ws.send(data)
-                except WebSocketDisconnect:
-                    await proxy_ws.close()
+        reader, writer = await asyncio.open_connection(settings.simul_host, settings.simul_port)
 
-            async def forward_proxy_to_client():
-                try:
-                    async for msg in proxy_ws:
-                        if isinstance(msg, bytes):
-                            await websocket.send_bytes(msg)
-                        else:
-                            await websocket.send_text(msg)
-                except Exception:
-                    await websocket.close()
+        PACKET_SIZE = 65536
 
-            await asyncio.gather(
-                forward_client_to_proxy(),
-                forward_proxy_to_client(),
+        async def convert_webm_to_pcm(data: bytes) -> bytes:
+            proc = await asyncio.create_subprocess_exec(
+                'ffmpeg', '-i', 'pipe:0', '-f', 's16le', '-ac', '1', '-ar', '16000', 'pipe:1',
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL
             )
+            out, _ = await proc.communicate(data)
+            return out
+
+        async def forward_client_to_server():
+            try:
+                while True:
+                    data = await websocket.receive_bytes()
+                    if len(data) == 0:
+                        writer.write_eof()
+                        await writer.drain()
+                        break
+                    pcm = await convert_webm_to_pcm(data)
+                    if pcm:
+                        writer.write(pcm)
+                        await writer.drain()
+            except WebSocketDisconnect:
+                writer.close()
+
+        async def forward_server_to_client():
+            buffer = b""
+            try:
+                while True:
+                    chunk = await reader.read(PACKET_SIZE)
+                    if not chunk:
+                        break
+                    buffer += chunk
+                    while b'\0' in buffer:
+                        packet, buffer = buffer.split(b'\0', 1)
+                        line = packet.decode('utf-8', errors='replace').strip('\n')
+                        if not line:
+                            continue
+                        parts = line.split(maxsplit=2)
+                        if len(parts) >= 3:
+                            beg = float(parts[0]) / 1000.0
+                            end = float(parts[1]) / 1000.0
+                            text = parts[2]
+                            msg = json.dumps({
+                                'lines': [{ 'beg': beg, 'end': end, 'text': text }]
+                            })
+                            await websocket.send_text(msg)
+            finally:
+                await websocket.send_text(json.dumps({'type': 'ready_to_stop'}))
+
+        await asyncio.gather(
+            forward_client_to_server(),
+            forward_server_to_client(),
+        )
     except Exception as e:
         logger.error(f"WebSocket proxy error for user {user_id}: {e}")
         await websocket.close(code=1011, reason="Proxy error")
