@@ -163,11 +163,9 @@ const aggregatedTranscription = computed(() => {
   return transcriptionSegments.value.map(segment => segment.text).join(' ')
 })
 
-// Get cleaned transcription for LLM calls (default to clean if available)
-const getCleanedTranscription = () => {
-  return transcriptionSegments.value.map((segment, index) => {
-    return getDisplayText(index, segment.text)
-  }).join(' ')
+// Get processed transcription for LLM calls (uses NER processed text, cleaned text, or raw as fallback)
+const getProcessedTranscription = () => {
+  return getAggregatedProcessedText(transcriptionSegments.value)
 }
 
 const summaries = computed(() => transcriptionStore.getSummaries)
@@ -223,8 +221,8 @@ async function handleGenerateSummary() {
       // Get the latest summary for previous report context
       const latestSummary = summaries.value.length > 0 ? summaries.value[summaries.value.length - 1].summary : undefined
 
-      // Use cleaned transcription by default, fallback to raw if not available
-      const transcriptionToUse = getCleanedTranscription() || aggregatedTranscription.value
+      // Use processed transcription (NER/cleaned) by default, fallback to raw if not available
+      const transcriptionToUse = getProcessedTranscription() || aggregatedTranscription.value
 
       await generateSummary(
         transcriptionToUse,

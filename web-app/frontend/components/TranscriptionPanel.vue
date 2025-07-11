@@ -7,8 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
-import { useTextCleaning } from '@/composables/useTextCleaning'
+import { useAdvancedTextProcessing } from '@/composables/useAdvancedTextProcessing'
 
 interface TranscriptionSegment {
   text: string
@@ -41,23 +40,35 @@ const props = defineProps<Props>()
 const editingSegment = ref<number | null>(null)
 const editingText = ref('')
 
-// Text cleaning functionality
-const { isCleanMode, cleanTextBlock, getDisplayText, isSegmentProcessing, toggleCleanMode, clearCleanedSegments } = useTextCleaning()
+// Hover state for raw text tooltip
+const showRawTooltip = ref<number | null>(null)
 
-// Watch for finalized segments to clean them
+// Advanced text processing functionality
+const { 
+  processTranscriptionBlock, 
+  getDisplayText, 
+  getRawText,
+  isBlockProcessing, 
+  isBlockProcessed,
+  hasNERHighlights,
+  getProcessingStatus,
+  clearProcessedBlocks 
+} = useAdvancedTextProcessing()
+
+// Watch for finalized segments to process them
 watch(
   () => props.segments,
   (newSegments, oldSegments) => {
-    if (!isCleanMode.value || !newSegments) return
+    if (!newSegments) return
     
     // Check if any new segments were added (finalized)
     if (oldSegments && newSegments.length > oldSegments.length) {
-      // Clean the newly finalized segment (not the last one which might still be live)
+      // Process the newly finalized segment (not the last one which might still be live)
       const finalizedIndex = newSegments.length - 2
       if (finalizedIndex >= 0) {
         const segment = newSegments[finalizedIndex]
         if (segment && !segment.isLive) {
-          cleanTextBlock(segment.text, finalizedIndex)
+          processTranscriptionBlock(segment.text, finalizedIndex)
         }
       }
     }
@@ -132,12 +143,8 @@ function handleRecordingToggle() {
 }
 
 function handleClearTranscription() {
-  clearCleanedSegments()
+  clearProcessedBlocks()
   emit('clearTranscription')
-}
-
-function handleToggleCleanMode() {
-  toggleCleanMode()
 }
 
 // Emit resize events to parent
@@ -211,18 +218,10 @@ const emit = defineEmits<{
             </div>
           </div>
           
-          <!-- Raw/Clean Toggle -->
-          <div class="flex items-center space-x-3">
-            <div class="flex items-center space-x-2">
-              <Label for="clean-mode-toggle" class="text-xs font-medium text-muted-foreground">
-                {{ isCleanMode ? 'Clean' : 'Raw' }}
-              </Label>
-              <Switch
-                id="clean-mode-toggle"
-                :checked="isCleanMode"
-                @update:checked="handleToggleCleanMode"
-              />
-            </div>
+          <!-- Processing Status Indicator -->
+          <div class="flex items-center space-x-2">
+            <div class="h-2 w-2 bg-blue-500 rounded-full"></div>
+            <span class="text-xs text-muted-foreground">Smart Processing Active</span>
           </div>
         </div>
 
@@ -321,19 +320,57 @@ const emit = defineEmits<{
                       <div
                         class="text-sm leading-relaxed text-foreground/90 p-2 rounded-lg cursor-text hover:bg-muted/30 transition-colors border"
                         :class="{
-                          'border-transparent hover:border-muted': !segment.isLive && !isSegmentProcessing(index),
+                          'border-transparent hover:border-muted': !segment.isLive && getProcessingStatus(index) === 'raw',
                           'border-blue-500/50 ring-2 ring-blue-500/20 animate-pulse':
                             segment.isLive && !recordingState.waitingForStop,
                           'border-green-500/50 ring-2 ring-green-500/20 animate-pulse bg-green-50/30 dark:bg-green-900/10':
-                            isSegmentProcessing(index)
+                            isBlockProcessing(index),
+                          'border-purple-500/50 ring-1 ring-purple-500/30 bg-gradient-to-r from-purple-50/30 to-blue-50/30 dark:from-purple-900/10 dark:to-blue-900/10 cursor-pointer hover:ring-2 hover:ring-purple-500/50':
+                            isBlockProcessed(index) && hasNERHighlights(index),
+                          'border-gray-300/50 bg-gray-50/30 dark:bg-gray-800/30':
+                            isBlockProcessed(index) && !hasNERHighlights(index)
                         }"
                         @click="startEditing(index, segment.text)"
                       >
-                        <span v-if="segment.text">{{ getDisplayText(index, segment.text) }}</span>
+                        <span v-if="segment.text">
+                          <!-- Show NER highlighted text if processed, otherwise show original -->
+                          <template v-if="isBlockProcessed(index) && hasNERHighlights(index)">
+                            <div 
+                              v-html="getDisplayText(index, segment.text)" 
+                              class="ner-highlighted-content"
+                              @mouseenter="showRawTooltip = index"
+                              @mouseleave="showRawTooltip = null"
+                            ></div>
+                          </template>
+                          <template v-else>
+                            {{ getDisplayText(index, segment.text) }}
+                          </template>
+                        </span>
                         <span v-else class="text-muted-foreground italic">Click to edit...</span>
                         <span v-if="segment.isLive && isTranscribing" class="text-muted-foreground">...</span>
                       </div>
                     </template>
+                    
+                    <!-- Raw Text Tooltip -->
+                    <Transition
+                      enter-active-class="transition-all duration-200 ease-out"
+                      enter-from-class="opacity-0 scale-95"
+                      enter-to-class="opacity-100 scale-100"
+                      leave-active-class="transition-all duration-150 ease-in"
+                      leave-from-class="opacity-100 scale-100"
+                      leave-to-class="opacity-0 scale-95"
+                    >
+                      <div 
+                        v-if="showRawTooltip === index && getRawText(index)"
+                        class="absolute z-50 max-w-sm p-3 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded-lg shadow-lg border border-gray-700 dark:border-gray-300 pointer-events-none"
+                        style="top: -10px; left: 50%; transform: translateX(-50%) translateY(-100%);"
+                      >
+                        <div class="font-medium mb-1 text-yellow-300 dark:text-yellow-600">Original Transcription:</div>
+                        <div class="leading-relaxed">{{ getRawText(index) }}</div>
+                        <!-- Tooltip arrow -->
+                        <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 dark:bg-gray-100 rotate-45"></div>
+                      </div>
+                    </Transition>
                   </div>
                 </div>
               </TransitionGroup>
@@ -360,6 +397,56 @@ const emit = defineEmits<{
 .segment-enter-active,
 .segment-leave-active {
   transition: all 0.3s ease-out;
+}
+
+/* NER Entity Highlighting */
+.ner-highlighted-content :deep(.ner-important) {
+  background: linear-gradient(135deg, #fef3c7 0%, #fbbf24 100%);
+  color: #92400e;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+  border: 1px solid #f59e0b;
+  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.2);
+}
+
+.ner-highlighted-content :deep(.ner-weather) {
+  background: linear-gradient(135deg, #dbeafe 0%, #60a5fa 100%);
+  color: #1e40af;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+  border: 1px solid #3b82f6;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
+}
+
+.ner-highlighted-content :deep(.ner-times) {
+  background: linear-gradient(135deg, #f3e8ff 0%, #a855f7 100%);
+  color: #7c2d12;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+  border: 1px solid #9333ea;
+  box-shadow: 0 1px 2px rgba(147, 51, 234, 0.2);
+}
+
+/* Dark mode variants */
+.dark .ner-highlighted-content :deep(.ner-important) {
+  background: linear-gradient(135deg, #451a03 0%, #92400e 100%);
+  color: #fbbf24;
+  border-color: #92400e;
+}
+
+.dark .ner-highlighted-content :deep(.ner-weather) {
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  color: #60a5fa;
+  border-color: #1e40af;
+}
+
+.dark .ner-highlighted-content :deep(.ner-times) {
+  background: linear-gradient(135deg, #581c87 0%, #7c2d12 100%);
+  color: #a855f7;
+  border-color: #7c2d12;
 }
 
 .segment-enter-from {

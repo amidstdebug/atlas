@@ -154,6 +154,7 @@ declare global {
   const until: typeof import('@vueuse/core')['until']
   const updateAppConfig: typeof import('../../node_modules/nuxt/dist/app/config')['updateAppConfig']
   const useActiveElement: typeof import('@vueuse/core')['useActiveElement']
+  const useAdvancedTextProcessing: typeof import('../../composables/useAdvancedTextProcessing')['useAdvancedTextProcessing']
   const useAnimate: typeof import('@vueuse/core')['useAnimate']
   const useAppConfig: typeof import('../../node_modules/nuxt/dist/app/config')['useAppConfig']
   const useArrayDifference: typeof import('@vueuse/core')['useArrayDifference']
@@ -410,6 +411,9 @@ declare global {
   export type { Component, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
   // @ts-ignore
+  export type { NEREntity, ProcessedBlock } from '../../composables/useAdvancedTextProcessing'
+  import('../../composables/useAdvancedTextProcessing')
+  // @ts-ignore
   export type { TranscriptionSegment, TranscriptionResponse, RecordingState, AudioRecordingVariables } from '../../composables/audio-recording/types'
   import('../../composables/audio-recording/types')
   // @ts-ignore
@@ -582,6 +586,7 @@ declare module 'vue' {
     readonly until: UnwrapRef<typeof import('@vueuse/core')['until']>
     readonly updateAppConfig: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/config')['updateAppConfig']>
     readonly useActiveElement: UnwrapRef<typeof import('@vueuse/core')['useActiveElement']>
+    readonly useAdvancedTextProcessing: UnwrapRef<typeof import('../../composables/useAdvancedTextProcessing')['useAdvancedTextProcessing']>
     readonly useAnimate: UnwrapRef<typeof import('@vueuse/core')['useAnimate']>
     readonly useAppConfig: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/config')['useAppConfig']>
     readonly useArrayDifference: UnwrapRef<typeof import('@vueuse/core')['useArrayDifference']>
