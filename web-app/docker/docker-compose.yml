@@ -13,23 +13,22 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
     depends_on:
-      whisper_livekit:
+      simulstreaming:
         condition: service_started
       summarization_service:
         condition: service_healthy
     networks:
       - auto_transcript_network
 
-  whisper_livekit:
+  simulstreaming:
     platform: linux/amd64
     build:
-      context: ./services/whisper-livekit
+      context: ./services/simulstreaming
       dockerfile: Dockerfile
     volumes:
-      - ./services/whisper-livekit:/app  # mount service code for hot reload
-      - ./services/whisper-livekit/models:/app/models  # shared model storage
+      - ./services/simulstreaming:/app
     ports:
-      - "8000:8000"  # FastAPI port
+      - "43007:43007"
     environment:
       PYTHONUNBUFFERED: 1
       CUDA_VISIBLE_DEVICES: 0
