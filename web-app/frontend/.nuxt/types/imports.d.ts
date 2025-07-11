@@ -349,7 +349,6 @@ declare global {
   const useSwipe: typeof import('@vueuse/core')['useSwipe']
   const useTemplateRef: typeof import('vue')['useTemplateRef']
   const useTemplateRefsList: typeof import('@vueuse/core')['useTemplateRefsList']
-  const useTextCleaning: typeof import('../../composables/useTextCleaning')['useTextCleaning']
   const useTextDirection: typeof import('@vueuse/core')['useTextDirection']
   const useTextSelection: typeof import('@vueuse/core')['useTextSelection']
   const useTextareaAutosize: typeof import('@vueuse/core')['useTextareaAutosize']
@@ -411,17 +410,14 @@ declare global {
   export type { Component, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
   // @ts-ignore
-  export type { NEREntity, ProcessedBlock } from '../../composables/useAdvancedTextProcessing'
+  export type { ProcessedBlock } from '../../composables/useAdvancedTextProcessing'
   import('../../composables/useAdvancedTextProcessing')
   // @ts-ignore
-  export type { TranscriptionSegment, TranscriptionResponse, RecordingState, AudioRecordingVariables } from '../../composables/audio-recording/types'
+  export type { TranscriptionSegment, NEREntity, TranscriptionResponse, CleanTextResponse, ProcessBlockResponse, RecordingState, AudioRecordingVariables } from '../../composables/audio-recording/types'
   import('../../composables/audio-recording/types')
   // @ts-ignore
   export type { SummaryState, AutoReportConfig } from '../../composables/useSummaryGeneration'
   import('../../composables/useSummaryGeneration')
-  // @ts-ignore
-  export type { CleanedSegment } from '../../composables/useTextCleaning'
-  import('../../composables/useTextCleaning')
   // @ts-ignore
   export type { User, AuthState } from '../../stores/auth'
   import('../../stores/auth')
@@ -781,7 +777,6 @@ declare module 'vue' {
     readonly useSwipe: UnwrapRef<typeof import('@vueuse/core')['useSwipe']>
     readonly useTemplateRef: UnwrapRef<typeof import('vue')['useTemplateRef']>
     readonly useTemplateRefsList: UnwrapRef<typeof import('@vueuse/core')['useTemplateRefsList']>
-    readonly useTextCleaning: UnwrapRef<typeof import('../../composables/useTextCleaning')['useTextCleaning']>
     readonly useTextDirection: UnwrapRef<typeof import('@vueuse/core')['useTextDirection']>
     readonly useTextSelection: UnwrapRef<typeof import('@vueuse/core')['useTextSelection']>
     readonly useTextareaAutosize: UnwrapRef<typeof import('@vueuse/core')['useTextareaAutosize']>

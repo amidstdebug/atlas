@@ -7,30 +7,30 @@ services:
     volumes:
       - ../backend:/usr/src/app  # mount server code for hot reload
     ports:
-      - "5002:5002"  # Main API and WebSocket port
+      - "5002:5002"  # Main API port
     env_file:
       - ../backend/.env
     environment:
       PYTHONUNBUFFERED: 1
+      WHISPER_SERVICE_URL: "http://whisper_service:8000"
     depends_on:
-      simulstreaming:
-        condition: service_started
+      whisper_service:
+        condition: service_healthy
       summarization_service:
         condition: service_healthy
     networks:
       - auto_transcript_network
 
-  simulstreaming:
+  whisper_service:
     platform: linux/amd64
     build:
-      context: ./services/simulstreaming
+      context: ./services/whisper
       dockerfile: Dockerfile
-    volumes:
-      - ./services/simulstreaming/models:/models
     ports:
-      - "43007:43007"
+      - "8000:8000"  # Whisper service port
     environment:
       PYTHONUNBUFFERED: 1
+      WHISPER_MODEL_SIZE: "large-v3-turbo"  # Options: tiny, base, small, medium, large
       CUDA_VISIBLE_DEVICES: 0
     deploy:
       resources:
@@ -40,6 +40,12 @@ services:
               count: 1
               capabilities: [ gpu ]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - auto_transcript_network
 

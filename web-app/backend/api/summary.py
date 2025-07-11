@@ -99,132 +99,80 @@ async def get_default_prompt(
         logger.error(f"Error reading default prompt: {str(e)}")
         return {"default_prompt": "Default ATC analysis prompt for structured summaries."}
 
-@router.post("/clean-text")
-async def clean_text_block(
-    request: dict,
-    token_data: TokenData = Depends(get_token_data)
-):
-    """Clean a single text block by removing filler words, unnecessary questions, etc."""
-    try:
-        text_block = request.get("text", "")
-        if not text_block.strip():
-            return {"cleaned_text": ""}
-
-        # System prompt for cleaning transcription text
-        system_prompt = """You are an expert text cleaner for air traffic control transcriptions.
-Your task is to clean up raw transcription text by:
-
-1. Removing filler words (um, uh, er, ah, etc.)
-2. Removing unnecessary questions or confirmations that don't add informational value
-3. Keeping only clear, informative statements
-4. Maintaining technical accuracy and aviation terminology
-5. Preserving callsigns, frequencies, and operational instructions exactly
-6. Keeping the essential meaning while making it more readable
-
-Return only the cleaned text without any explanations or additional formatting."""
-
-        # Clean the text using the LLM
-        summary_result = await generate_summary(
-            text_block,
-            "",
-            "standard",
-            system_prompt
-        )
-
-        return {"cleaned_text": summary_result.summary.strip()}
-
-    except Exception as e:
-        logger.error(f"Error cleaning text block: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Text cleaning failed: {str(e)}")
 
 @router.post("/process-block")
 async def process_transcription_block(
     request: dict,
     token_data: TokenData = Depends(get_token_data)
 ):
-    """Process a completed transcription block: clean text and extract NER entities"""
+    """Process a completed transcription block: clean text and extract NER entities in one step."""
     try:
         raw_text = request.get("text", "")
         if not raw_text.strip():
             return {"cleaned_text": "", "ner_text": "", "entities": []}
 
-        # Step 1: Clean the text
-        clean_prompt = """You are an expert text cleaner for air traffic control transcriptions.
-Your task is to clean up raw transcription text by:
+        combined_prompt = f"""
+You are an expert Air Traffic Control text processor. Your task is to process a raw transcription block by first cleaning it and then performing Named Entity Recognition (NER).
 
-1. Removing filler words (um, uh, er, ah, etc.)
-2. Removing unnecessary questions or confirmations that don't add informational value
-3. Keeping only clear, informative statements
-4. Maintaining technical accuracy and aviation terminology
-5. Preserving callsigns, frequencies, and operational instructions exactly
-6. Keeping the essential meaning while making it more readable
+RAW TRANSCRIPTION:
+{raw_text}
 
-Return only the cleaned text without any explanations or additional formatting."""
+**Instructions:**
 
-        # Clean the text
-        clean_result = await generate_summary(raw_text, "", "standard", clean_prompt)
-        cleaned_text = clean_result.summary.strip()
+1.  **Clean the Text:**
+    *   Transform the conversational `RAW TRANSCRIPTION` into a factual, clean version.
+    *   Keep only clear, informative statements.
+    *   Maintain all technical accuracy and aviation terminology.
+    *   Preserve factual information exactly. Do not add or assume information.
+    *   Maintain the identity of speakers (e.g., "Tower to Speedbird 123").
 
-        # Step 2: Extract NER entities and create highlighted text
-        ner_prompt = f"""You are an expert aviation Named Entity Recognition system. Analyze the following cleaned ATC transcription and identify entities in these categories:
+2.  **Perform NER on Cleaned Text:**
+    *   Analyze the cleaned text you generated.
+    *   Identify entities from the following categories:
+        *   `IDENTIFIER`: Identification, name, or callsign (e.g., "Speedbird 123", "Tower").
+        *   `WEATHER`: Weather information (e.g., "wind 270 at 10 knots", "visibility 10k").
+        *   `TIMES`: Time references (e.g., "at 14:35Z", "in 10 minutes").
+        *   `LOCATION`: Locations (e.g., "runway 27 right", "overhead the field").
+        *   `IMPACT`: Any mentioned impact to mission (e.g., "unable to comply", "declaring an emergency").
 
-CATEGORIES:
-1. IMPORTANT_INFO: Critical operational information (clearances, instructions, restrictions, alerts)
-2. WEATHER: Weather-related information (conditions, visibility, wind, precipitation)
-3. TIMES: Time references (ETAs, ETRs, specific times, deadlines)
+3.  **Format the Output:**
+    *   Return a single, valid JSON object. Do not include any other text, explanations, or markdown formatting.
+    *   The JSON object must have three keys: `cleaned_text`, `ner_text`, and `entities`.
+    *   `cleaned_text`: The cleaned version of the transcription.
+    *   `ner_text`: The cleaned text with identified entities wrapped in HTML `<span>` tags. Use these exact class names: `ner-identifier`, `ner-weather`, `ner-times`, `ner-location`, `ner-impact`.
+    *   `entities`: A list of JSON objects, one for each entity found, with `text`, `category`, `start_pos`, and `end_pos`.
 
-CLEANED TEXT: {cleaned_text}
+**Crucial:** This data is for air incident investigation. Inaccuracies or assumptions could have serious consequences. If you have insufficient information, do not attempt to extrapolate.
+Return only a valid JSON object using double quotes.
+"""
+        # Call the summarization service once with the combined prompt
+        result = await generate_summary(raw_text, "", "standard", combined_prompt)
 
-Your task:
-1. Identify all entities in the above categories
-2. Return the text with HTML span tags around identified entities
-3. Use these exact class names for highlighting:
-   - IMPORTANT_INFO: class="ner-important"
-   - WEATHER: class="ner-weather"
-   - TIMES: class="ner-times"
-
-RESPONSE FORMAT: Return a JSON object with this structure:
-{{
-    "ner_text": "Text with <span class='ner-category'>highlighted entities</span>",
-    "entities": [
-        {{
-            "text": "entity text",
-            "category": "IMPORTANT_INFO|WEATHER|TIMES",
-            "start_pos": 0,
-            "end_pos": 10
-        }}
-    ]
-}}
-
-Return only the JSON object, no other text."""
-
-        # Get NER results
-        ner_result = await generate_summary(cleaned_text, "", "standard", ner_prompt)
-
-        # Parse NER JSON response
+        # Parse the JSON response
         try:
-            import json
-            ner_json_str = ner_result.summary.strip()
-            if ner_json_str.startswith("```json"):
-                ner_json_str = ner_json_str[7:]
-            if ner_json_str.endswith("```"):
-                ner_json_str = ner_json_str[:-3]
-            ner_json_str = ner_json_str.strip()
+            json_str = result.summary.strip()
+            if json_str.startswith("```json"):
+                json_str = json_str[7:]
+            if json_str.endswith("```"):
+                json_str = json_str[:-3]
+            json_str = json_str.strip()
 
-            ner_data = json.loads(ner_json_str)
+            data = json.loads(json_str)
 
+            # Ensure all keys are present, providing sensible defaults
+            cleaned_text = data.get("cleaned_text", raw_text) # Fallback to raw_text if not in response
             return {
                 "cleaned_text": cleaned_text,
-                "ner_text": ner_data.get("ner_text", cleaned_text),
-                "entities": ner_data.get("entities", [])
+                "ner_text": data.get("ner_text", cleaned_text),
+                "entities": data.get("entities", [])
             }
 
         except (json.JSONDecodeError, TypeError) as e:
-            logger.error(f"Failed to parse NER JSON: {e}\nRaw response: {ner_result.summary}")
-            # Fallback - return cleaned text without NER highlighting
+            logger.error(f"Failed to parse combined processing JSON: {e}\nRaw response: {result.summary}")
+            # Fallback - return the raw text if JSON parsing fails
             return {
-                "cleaned_text": cleaned_text,
-                "ner_text": cleaned_text,
+                "cleaned_text": raw_text,
+                "ner_text": raw_text,
                 "entities": []
             }
 

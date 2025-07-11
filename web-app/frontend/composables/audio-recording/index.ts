@@ -1,11 +1,23 @@
 import { ref, computed } from 'vue';
 import type { RecordingState, TranscriptionSegment, TranscriptionResponse } from './types';
-import { parseTimestamp } from './utils';
-import { buildSegmentsFromLines } from './segmentation';
-import { setupWebSocket, type WebSocketHandlers } from './websocket';
-import { startRecording as startRecordingInternal, stopRecording as stopRecordingInternal, type RecordingHandlers, type RecordingVariables } from './recording';
+import { useAuthStore } from '@/stores/auth';
+import { useAdvancedTextProcessing } from '@/composables/useAdvancedTextProcessing';
+import { AUDIO_CONFIG } from '@/constants/audio';
 
 export * from './types';
+
+interface RecordingVariables {
+  mediaRecorder: MediaRecorder | null;
+  audioStream: MediaStream | null;
+  audioContext: AudioContext | null;
+  analyser: AnalyserNode | null;
+  dataArray: Uint8Array | null;
+  animationFrame: number | null;
+  startTime: number | null;
+  timerInterval: NodeJS.Timeout | null;
+  recordingTimeout: NodeJS.Timeout | null;
+  chunkCount: number;
+}
 
 export const useAudioRecording = () => {
   const state = ref<RecordingState>({
@@ -20,16 +32,11 @@ export const useAudioRecording = () => {
   });
 
   const transcriptionSegments = ref<TranscriptionSegment[]>([]);
+  const authStore = useAuthStore();
+  const { processTranscriptionBlock: processAdvancedBlock } = useAdvancedTextProcessing();
 
   // Recording variables
   const variables: RecordingVariables = {
-    chunkDuration: 2000, // 2 second chunks
-    currentSessionStartTime: 0,
-    lastProcessedText: '',
-    lastAudioTime: 0,
-    silenceBreakPoints: [], // Legacy, can be removed later
-    breakPoints: [], // The character indices where splits occur
-    currentSegmentStartChar: 0,
     mediaRecorder: null,
     audioStream: null,
     audioContext: null,
@@ -38,12 +45,9 @@ export const useAudioRecording = () => {
     animationFrame: null,
     startTime: null,
     timerInterval: null,
-    websocket: null,
-    userClosing: false,
-    cumulativeSegmentEndTime: 0,
+    recordingTimeout: null,
+    chunkCount: 0,
   };
-
-  const animationFrameRef = { current: null as number | null };
 
   // Create update audio level function
   const updateAudioLevel = () => {
@@ -55,124 +59,224 @@ export const useAudioRecording = () => {
       const average = sum / variables.dataArray.length;
 
       // Normalize the average to a 0-1 range for the UI
-      state.value.audioLevel = Math.min(average / 128, 1);
+      state.value.audioLevel = Math.min(average / AUDIO_CONFIG.AUDIO_LEVEL_NORMALIZE_THRESHOLD, 1);
 
       // Request the next frame to continue the animation loop
-      animationFrameRef.current = requestAnimationFrame(updateAudioLevel);
+      variables.animationFrame = requestAnimationFrame(updateAudioLevel);
     }
   };
 
-  // Recording handlers
-  const recordingHandlers: RecordingHandlers = {
-    onStateUpdate: (updates) => {
-      Object.assign(state.value, updates);
+  // Auto-process new transcription blocks using the advanced text processing
+  const autoProcessNewBlock = async (segmentIndex: number) => {
+    const segment = transcriptionSegments.value[segmentIndex];
+    if (!segment || !segment.text.trim()) return;
+
+    try {
+      console.log(`[Auto-Processing] 🚀 Starting processing for block ${segmentIndex}`);
+      await processAdvancedBlock(segment.text, segmentIndex);
+      console.log(`[Auto-Processing] ✅ Block ${segmentIndex} processed successfully`);
+    } catch (error) {
+      console.error(`[Auto-Processing] ❌ Block ${segmentIndex} processing failed:`, error);
     }
   };
 
-  // Process transcription data from WebSocket
-  const processTranscriptionData = (data: any, isFinalizing: boolean) => {
-    console.log('[Transcription] 🔄 Processing data. IsFinalizing:', isFinalizing, 'Data:', data);
-
-    // Handle lines format - this is the cumulative text case (like reference code)
-    if (data.lines && Array.isArray(data.lines) && data.lines.length > 0) {
-      console.log('[Transcription] 📄 Processing lines format:', data.lines.length, 'lines');
-
-      const fullLine = data.lines[0];
-      const fullText = (fullLine.text || '').trim();
-      
-      const lastBreakPoint = variables.breakPoints.length > 0 ? variables.breakPoints[variables.breakPoints.length - 1] : 0;
-      const liveText = fullText.substring(lastBreakPoint);
-      
-      const sessionDuration = (parseTimestamp(fullLine.end) - parseTimestamp(fullLine.beg));
-      // Handle potential division by zero if fullText is empty.
-      const durationOfLiveText = fullText.length > 0 
-        ? (liveText.length / fullText.length) * sessionDuration
-        : 0;
-
-      // If live text is over 10s, add a new breakpoint, preferably at a sentence end.
-      if (durationOfLiveText > 10 && !isFinalizing) {
-        const lastDotIndex = fullText.lastIndexOf('.');
-        
-        // Ensure the dot is within the current "live" segment to be a valid split point.
-        if (lastDotIndex > lastBreakPoint) {
-            const newBreakPoint = lastDotIndex + 1; // Break after the full stop.
-            if (!variables.breakPoints.includes(newBreakPoint)) {
-                console.log(`[Segmentation] Smart break at sentence end: index ${newBreakPoint}`);
-                variables.breakPoints.push(newBreakPoint);
-            }
-        } else {
-            // Fallback: No sentence end found. Break at the end of the current text.
-            const newBreakPoint = fullText.length;
-            if (newBreakPoint > lastBreakPoint && !variables.breakPoints.includes(newBreakPoint)) {
-                console.log(`[Segmentation] Timed break (10s) without sentence end: index ${newBreakPoint}`);
-                variables.breakPoints.push(newBreakPoint);
-            }
-        }
-      }
-
-      const bufferText = (data.buffer_transcription || '').trim();
-      const { segments: newSegments, newCumulativeEndTime } = buildSegmentsFromLines(
-        data.lines,
-        variables.currentSessionStartTime,
-        bufferText,
-        isFinalizing,
-        variables.breakPoints
-      );
-
-      // After building segments, update the cumulative end time
-      variables.cumulativeSegmentEndTime = newCumulativeEndTime;
-
-      // Replace the segments for the current session
-      const sessionStartIndex = transcriptionSegments.value.findIndex(seg => seg.start >= variables.currentSessionStartTime);
-      if (sessionStartIndex >= 0) {
-        transcriptionSegments.value.splice(sessionStartIndex);
-      }
-      transcriptionSegments.value.push(...newSegments);
-
-      state.value.isTranscribing = false;
-      console.log('[Transcription] ✅ Lines processing completed, total segments:', transcriptionSegments.value.length);
-    }
-    // Handle segments format (keep existing logic for compatibility)
-    else if (data.segments && Array.isArray(data.segments)) {
-      console.log('[Transcription] 📝 Processing segments format:', data.segments.length, 'segments');
-
-      const newSegments = data.segments.map((seg: any) => ({
-        text: seg.text || '',
-        start: parseTimestamp(seg.start),
-        end: parseTimestamp(seg.end)
-      }));
-
-      if (isFinalizing) {
-        transcriptionSegments.value.push(...newSegments);
-      } else {
-        const sessionStartIndex = transcriptionSegments.value.findIndex(seg => seg.start >= variables.currentSessionStartTime);
-        if (sessionStartIndex >= 0) {
-          transcriptionSegments.value.splice(sessionStartIndex);
-        }
-        transcriptionSegments.value.push(...newSegments);
-      }
-
-      state.value.isTranscribing = false;
-    }
-    else if (data.type === 'processing') {
-      console.log('[Transcription] ⏳ Processing status received');
+  // Send audio chunk to backend via HTTP POST
+  const sendAudioChunk = async (audioBlob: Blob) => {
+    try {
       state.value.isTranscribing = true;
-    } else if (data.type === 'error') {
-      console.error('[Transcription] ❌ Error received:', data.message);
-      state.value.error = data.message;
+
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'audio.webm');
+      formData.append('replace_numbers', 'true');
+      formData.append('use_icao_callsigns', 'true');
+
+      const baseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:5002' : '';
+      const response = await fetch(`${baseUrl}/transcribe`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authStore.token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: TranscriptionResponse = await response.json();
+
+      // Process the transcription response - treat each 10-second chunk as one block
+      if (data.segments && data.segments.length > 0) {
+        // Combine all text from the chunk into a single segment
+        const allText = data.segments.map(seg => seg.text.trim()).join(' ').trim();
+        
+        if (allText) {
+          // Each chunk is exactly CHUNK_DURATION_SECONDS, starting at chunkCount * CHUNK_DURATION_SECONDS
+          const chunkSegment: TranscriptionSegment = {
+            text: allText,
+            start: variables.chunkCount * AUDIO_CONFIG.CHUNK_DURATION_SECONDS,
+            end: (variables.chunkCount + 1) * AUDIO_CONFIG.CHUNK_DURATION_SECONDS,
+          };
+          
+          const segmentIndex = transcriptionSegments.value.length;
+          transcriptionSegments.value.push(chunkSegment);
+
+          // Immediately start processing the block for clean-text and NER
+          autoProcessNewBlock(segmentIndex);
+        }
+      }
+
+      console.log('[Transcription] ✅ HTTP transcription completed, total segments:', transcriptionSegments.value.length);
+    } catch (error) {
+      console.error('[Transcription] ❌ HTTP transcription failed:', error);
+      state.value.error = `Transcription failed: ${error instanceof Error ? error.message : String(error)}`;
+    } finally {
       state.value.isTranscribing = false;
-    } else {
-      console.warn('[Transcription] ⚠️ Unknown data format received:', data);
     }
   };
 
-  // WebSocket handlers
-  const websocketHandlers: WebSocketHandlers = {
-    onProcessTranscriptionData: processTranscriptionData,
-    onStateUpdate: (updates) => {
-      Object.assign(state.value, updates);
-    },
-    onStopRecording: () => stopRecording()
+  // Start recording with 10-second chunks
+  const startRecording = async () => {
+    try {
+      state.value.error = null;
+      state.value.isRecording = true;
+      state.value.isTranscribing = false;
+
+      // Initialize chunk counter - continue from where we left off
+      variables.chunkCount = transcriptionSegments.value.length;
+
+      console.log('[Recording] 🎬 Starting recording session, chunk count:', variables.chunkCount);
+
+      // Get user's microphone
+      variables.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Set up audio analysis for visualization
+      variables.audioContext = new AudioContext();
+      variables.analyser = variables.audioContext.createAnalyser();
+      variables.analyser.fftSize = AUDIO_CONFIG.FFT_SIZE;
+      const bufferLength = variables.analyser.frequencyBinCount;
+      variables.dataArray = new Uint8Array(bufferLength);
+
+      const microphone = variables.audioContext.createMediaStreamSource(variables.audioStream);
+      microphone.connect(variables.analyser);
+
+      // Set up MediaRecorder for configurable duration chunks
+      variables.mediaRecorder = new MediaRecorder(variables.audioStream, {
+        mimeType: AUDIO_CONFIG.MIME_TYPE
+      });
+
+      const audioChunks: Blob[] = [];
+
+      variables.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+
+      variables.mediaRecorder.onstop = async () => {
+        if (audioChunks.length > 0) {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          await sendAudioChunk(audioBlob);
+          variables.chunkCount++; // Increment chunk counter after sending
+        }
+        audioChunks.length = 0;
+      };
+
+      // Start recording and schedule 10-second chunks
+      variables.mediaRecorder.start();
+
+      const recordChunk = () => {
+        if (variables.mediaRecorder && variables.mediaRecorder.state === 'recording') {
+          variables.mediaRecorder.stop();
+
+          // Start next chunk if still recording
+          if (state.value.isRecording) {
+            setTimeout(() => {
+              if (variables.mediaRecorder && state.value.isRecording) {
+                variables.mediaRecorder.start();
+                variables.recordingTimeout = setTimeout(recordChunk, AUDIO_CONFIG.CHUNK_DURATION_SECONDS * 1000);
+              }
+            }, AUDIO_CONFIG.CHUNK_RESTART_DELAY);
+          }
+        }
+      };
+
+      // Schedule first chunk completion after configured duration
+      variables.recordingTimeout = setTimeout(recordChunk, AUDIO_CONFIG.CHUNK_DURATION_SECONDS * 1000);
+
+      // Start timer and audio level monitoring
+      variables.startTime = Date.now();
+      variables.timerInterval = setInterval(() => {
+        if (variables.startTime) {
+          const elapsed = Math.floor((Date.now() - variables.startTime) / 1000);
+          state.value.duration = elapsed;
+        }
+      }, AUDIO_CONFIG.TIMER_UPDATE_INTERVAL);
+
+      // Start audio level monitoring
+      updateAudioLevel();
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      state.value.error = 'Failed to start recording: ' + message;
+      state.value.isRecording = false;
+      state.value.isTranscribing = false;
+    }
+  };
+
+  // Stop recording
+  const stopRecording = () => {
+    state.value.isRecording = false;
+    state.value.waitingForStop = false;
+
+    // Clear recording timeout
+    if (variables.recordingTimeout) {
+      clearTimeout(variables.recordingTimeout);
+      variables.recordingTimeout = null;
+    }
+
+    // Stop media recorder and send final chunk
+    if (variables.mediaRecorder && variables.mediaRecorder.state === 'recording') {
+      variables.mediaRecorder.stop();
+    }
+    variables.mediaRecorder = null;
+
+    // Clean up audio resources
+    if (variables.audioContext && variables.audioContext.state !== 'closed') {
+      try {
+        variables.audioContext.close();
+      } catch (e) {
+        console.warn('Could not close audio context:', e);
+      }
+    }
+    variables.audioContext = null;
+
+    // Stop audio stream
+    if (variables.audioStream) {
+      variables.audioStream.getTracks().forEach(track => track.stop());
+      variables.audioStream = null;
+    }
+
+    // Clean up animation frame
+    if (variables.animationFrame) {
+      cancelAnimationFrame(variables.animationFrame);
+      variables.animationFrame = null;
+    }
+
+    // Clear timer
+    if (variables.timerInterval) {
+      clearInterval(variables.timerInterval);
+      variables.timerInterval = null;
+    }
+
+    // Reset audio level and timer
+    state.value.audioLevel = 0;
+    state.value.duration = 0;
+    variables.startTime = null;
+    variables.analyser = null;
+    variables.dataArray = null;
+
+    console.log('[Recording] 🎬 Recording session ended');
   };
 
   // Toggle recording function
@@ -182,45 +286,13 @@ export const useAudioRecording = () => {
         console.log('Waiting for stop, early return');
         return;
       }
-
-      console.log('Connecting to WebSocket');
-      try {
-        // Reset error state
-        state.value.error = null;
-        state.value.isTranscribing = true;
-        
-        // Always create a new WebSocket connection for each recording session
-        variables.websocket = await setupWebSocket(websocketHandlers, {
-          userClosing: variables.userClosing,
-          lastReceivedData: null,
-          websocket: variables.websocket
-        });
-        await startRecordingInternal(variables, recordingHandlers, transcriptionSegments, updateAudioLevel);
-      } catch (err) {
-        console.error('[Recording] Failed to start recording:', err);
-        const errorMessage = err instanceof Error ? err.message : 'Could not connect to transcription service or access microphone.';
-        state.value.error = errorMessage;
-        state.value.isRecording = false;
-        state.value.isTranscribing = false;
-        state.value.waitingForStop = false;
-      }
+      await startRecording();
     } else {
-      console.log('Stopping recording');
       stopRecording();
     }
   };
 
-  // Start recording
-  const startRecording = async () => {
-    await startRecordingInternal(variables, recordingHandlers, transcriptionSegments, updateAudioLevel);
-  };
-
-  // Stop recording
-  const stopRecording = () => {
-    stopRecordingInternal(variables, recordingHandlers);
-  };
-
-  // Transcribe file (for file uploads)
+  // Transcribe file (for file uploads) - use existing HTTP endpoint
   const transcribeFile = async (file: File) => {
     state.value.isProcessing = true;
     state.value.isTranscribing = true;
@@ -228,16 +300,29 @@ export const useAudioRecording = () => {
     clearTranscription();
 
     try {
-      // Note: This would need to be implemented with your transcription service
-      // const { $transcribeAudio } = useNuxtApp();
-      // const response: TranscriptionResponse = await $transcribeAudio(file);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('replace_numbers', 'true');
+      formData.append('use_icao_callsigns', 'true');
 
-      // if (response?.segments && response.segments.length > 0) {
-      //   transcriptionSegments.value.push(...response.segments);
-      // }
+      const baseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:5002' : '';
+      const response = await fetch(`${baseUrl}/transcribe`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authStore.token}`,
+        },
+        body: formData,
+      });
 
-      console.warn('File transcription not implemented - add your transcription service here');
-      throw new Error('File transcription not implemented');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: TranscriptionResponse = await response.json();
+
+      if (data.segments && data.segments.length > 0) {
+        transcriptionSegments.value.push(...data.segments);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       state.value.error = 'Transcription failed: ' + message;
@@ -251,13 +336,7 @@ export const useAudioRecording = () => {
   // Clear transcription
   const clearTranscription = () => {
     transcriptionSegments.value = [];
-    variables.lastProcessedText = '';
-    variables.lastAudioTime = 0;
-    variables.silenceBreakPoints = [];
-    variables.breakPoints = [];
-    variables.currentSegmentStartChar = 0;
-    variables.currentSessionStartTime = 0;
-    variables.cumulativeSegmentEndTime = 0;
+    variables.chunkCount = 0;
   };
 
   // Update segment
@@ -276,5 +355,6 @@ export const useAudioRecording = () => {
     transcribeFile,
     clearTranscription,
     updateSegment,
+    autoProcessNewBlock, // Expose for manual processing
   };
 };

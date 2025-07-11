@@ -1,41 +1,34 @@
 # Audio Recording Composable
 
-This directory contains the modular audio recording composable, broken down into logical components for better maintainability.
+This directory contains the simplified audio recording composable for HTTP-based transcription with 10-second chunks.
 
 ## File Structure
 
 ```
 audio-recording/
-├── index.ts           # Main composable that ties everything together
+├── index.ts           # Main composable with HTTP-based transcription
 ├── types.ts           # TypeScript interfaces and types
-├── utils.ts           # Utility functions (timestamp parsing)
-├── segmentation.ts    # Audio segmentation logic
-├── websocket.ts       # WebSocket connection management
-├── recording.ts       # Audio recording start/stop logic
 └── README.md         # This file
 ```
 
 ## Key Features
 
-### Silence & Time-Based Segmentation
-The composable automatically segments transcription based on **either** of the following conditions:
-1. A silence marker – lines with `speaker === -2`
-2. The running segment exceeds **10 seconds** in duration
+### 10-Second Chunk Processing
+The composable now uses a simplified approach:
+1. Records audio in **10-second chunks**
+2. Each chunk is sent via **HTTP POST** to the transcription service
+3. Each chunk becomes **one transcription segment** (no complex segmentation)
+4. Simple sequential timing: chunk 0 = 0-10s, chunk 1 = 10-20s, etc.
 
-Whichever happens first closes the current segment and starts a new one, giving concise, meaningful timestamps while avoiding segments that are too long.
-
-### Modular Architecture
+### Simplified Architecture
 - **types.ts**: All TypeScript interfaces centralized
-- **utils.ts**: Pure utility functions (timestamp parsing)
-- **segmentation.ts**: Contains `buildSegmentsFromLines()` and legacy segmentation functions
-- **websocket.ts**: WebSocket connection setup and message handling
-- **recording.ts**: Audio capture, MediaRecorder setup, and cleanup
-- **index.ts**: Main composable that coordinates all modules
+- **index.ts**: Main composable with HTTP-based transcription, audio capture, and chunk management
 
 ### Audio Processing
-- 2-second audio chunks sent to WebSocket
+- 10-second audio chunks sent via HTTP POST
 - Real-time audio level visualization
-- Session-based timestamps (multiple recordings continue from previous end time)
+- Sequential chunk-based timestamps
+- No complex segmentation or WebSocket handling
 
 ## Usage
 
@@ -44,7 +37,7 @@ import { useAudioRecording } from '@/composables/useAudioRecording'
 
 const {
   state,                    // Recording state (isRecording, audioLevel, etc.)
-  transcriptionSegments,    // Array of timestamped segments
+  transcriptionSegments,    // Array of 10-second timestamped segments
   toggleRecording,          // Start/stop recording
   transcribeFile,          // Upload file for transcription
   clearTranscription,      // Clear all segments
@@ -54,21 +47,16 @@ const {
 
 ## Data Flow
 
-1. **Recording Start**: `toggleRecording()` → WebSocket connection → audio capture setup
-2. **Audio Chunks**: MediaRecorder sends 2s chunks to WebSocket
-3. **Transcription**: Server responds with `lines` containing speaker info and text
-4. **Segmentation**: `buildSegmentsFromLines()` processes silence markers and creates segments
-5. **UI Update**: Reactive `transcriptionSegments` updates the TranscriptionPanel
+1. **Recording Start**: `toggleRecording()` → microphone access → MediaRecorder setup
+2. **Audio Chunks**: MediaRecorder creates 10-second audio blobs
+3. **HTTP Transcription**: Each chunk sent to `/api/transcribe` endpoint
+4. **Simple Segmentation**: Each chunk becomes one segment with 10-second duration
+5. **UI Update**: Reactive `transcriptionSegments` updates the UI
 
-## Backward Compatibility
+## Benefits
 
-The main `useAudioRecording.ts` file now simply re-exports from this modular structure, so existing imports continue to work without changes.
-
-## Legacy Functions
-
-Some functions are kept for compatibility but not currently used:
-- `breakTextIntoSegments()` - Natural language segmentation
-- `detectSilenceBreaks()` - Time-based silence detection
-- `createSegmentsFromBreaks()` - Character-position-based segmentation
-
-These can be removed in future versions once the silence-marker approach is fully validated.
+- **Simpler**: No WebSocket complexity or smart segmentation logic
+- **More Reliable**: HTTP requests are easier to debug and handle errors
+- **Predictable**: Each 10-second chunk = one segment with fixed timing
+- **Scalable**: Can easily adjust chunk duration if needed
+- **Container-Based**: Whisper service runs in separate Docker container

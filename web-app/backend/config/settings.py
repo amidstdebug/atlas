@@ -11,9 +11,7 @@ class Settings(BaseSettings):
     port: int = int(os.environ.get("PORT", "5001"))
 
     # Service URLs
-    audio_server_url: str = os.environ.get("AUDIO_SERVER_URL", "http://simulstreaming:43007")
-    simul_host: str = os.environ.get("SIMUL_HOST", "simulstreaming")
-    simul_port: int = int(os.environ.get("SIMUL_PORT", "43007"))
+    whisper_service_url: str = os.environ.get("WHISPER_SERVICE_URL", "http://whisper_service:8000")
     ollama_server_url: str = os.environ.get("OLLAMA_SERVER_URL", "http://summarization_service:11434")
     llm_uri: str = f"{ollama_server_url}/api/chat"
 

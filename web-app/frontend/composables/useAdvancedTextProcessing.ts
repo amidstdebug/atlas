@@ -18,11 +18,14 @@ export interface ProcessedBlock {
   error?: string
 }
 
+const processedBlocks = ref<Record<number, ProcessedBlock>>({})
+
 export const useAdvancedTextProcessing = () => {
-  const processedBlocks = ref<Map<number, ProcessedBlock>>(new Map())
 
   const processTranscriptionBlock = async (text: string, segmentIndex: number): Promise<ProcessedBlock> => {
     try {
+      console.log(`[AdvancedTextProcessing] 🚀 Starting processing for block ${segmentIndex}:`, text.substring(0, 50) + '...')
+
       // Mark as processing
       const processingBlock: ProcessedBlock = {
         index: segmentIndex,
@@ -33,12 +36,17 @@ export const useAdvancedTextProcessing = () => {
         isProcessing: true,
         isProcessed: false
       }
-      processedBlocks.value.set(segmentIndex, processingBlock)
+      processedBlocks.value[segmentIndex] = processingBlock
+      console.log(`[AdvancedTextProcessing] 📝 Marked block ${segmentIndex} as processing`)
 
       const { $api } = useNuxtApp()
+      console.log(`[AdvancedTextProcessing] 📡 Making API call to /process-block for block ${segmentIndex}`)
+
       const response = await $api.post('/process-block', {
         text: text
       })
+
+      console.log(`[AdvancedTextProcessing] ✅ API response for block ${segmentIndex}:`, response.data)
 
       const processedBlock: ProcessedBlock = {
         index: segmentIndex,
@@ -50,12 +58,18 @@ export const useAdvancedTextProcessing = () => {
         isProcessed: true
       }
 
-      processedBlocks.value.set(segmentIndex, processedBlock)
+      processedBlocks.value[segmentIndex] = processedBlock
+      console.log(`[AdvancedTextProcessing] 🎯 Updated block ${segmentIndex} with processed data:`, {
+        hasCleanedText: !!processedBlock.cleanedText,
+        hasNerText: !!processedBlock.nerText,
+        entitiesCount: processedBlock.entities.length
+      })
+
       return processedBlock
 
     } catch (error: any) {
-      console.error('Block processing failed:', error)
-      
+      console.error(`[AdvancedTextProcessing] ❌ Block ${segmentIndex} processing failed:`, error)
+
       const errorBlock: ProcessedBlock = {
         index: segmentIndex,
         rawText: text,
@@ -67,52 +81,57 @@ export const useAdvancedTextProcessing = () => {
         error: error.response?.data?.detail || 'Processing failed'
       }
 
-      processedBlocks.value.set(segmentIndex, errorBlock)
+      processedBlocks.value[segmentIndex] = errorBlock
+      console.log(`[AdvancedTextProcessing] 🚨 Set error block ${segmentIndex}:`, errorBlock.error)
       return errorBlock
     }
   }
 
   const getDisplayText = (segmentIndex: number, originalText: string): string => {
-    const processed = processedBlocks.value.get(segmentIndex)
-    
+    const processed = processedBlocks.value[segmentIndex]
+
     if (!processed) {
+      console.log(`[getDisplayText] Block ${segmentIndex}: No processed data, returning original`)
       return originalText
     }
 
     if (processed.isProcessing) {
+      console.log(`[getDisplayText] Block ${segmentIndex}: Processing, returning cleaned or original`)
       return processed.cleanedText || originalText
     }
 
     if (processed.isProcessed && processed.nerText) {
+      console.log(`[getDisplayText] Block ${segmentIndex}: Processed with NER, returning nerText`)
       return processed.nerText
     }
 
+    console.log(`[getDisplayText] Block ${segmentIndex}: Processed without NER, returning cleanedText`)
     return processed.cleanedText || originalText
   }
 
   const getRawText = (segmentIndex: number): string => {
-    const processed = processedBlocks.value.get(segmentIndex)
+    const processed = processedBlocks.value[segmentIndex]
     return processed?.rawText || ''
   }
 
   const isBlockProcessing = (segmentIndex: number): boolean => {
-    const processed = processedBlocks.value.get(segmentIndex)
+    const processed = processedBlocks.value[segmentIndex]
     return processed?.isProcessing || false
   }
 
   const isBlockProcessed = (segmentIndex: number): boolean => {
-    const processed = processedBlocks.value.get(segmentIndex)
+    const processed = processedBlocks.value[segmentIndex]
     return processed?.isProcessed || false
   }
 
   const hasNERHighlights = (segmentIndex: number): boolean => {
-    const processed = processedBlocks.value.get(segmentIndex)
+    const processed = processedBlocks.value[segmentIndex]
     return processed?.entities.length > 0 || false
   }
 
   const getProcessingStatus = (segmentIndex: number): 'raw' | 'processing' | 'processed' => {
-    const processed = processedBlocks.value.get(segmentIndex)
-    
+    const processed = processedBlocks.value[segmentIndex]
+
     if (!processed) return 'raw'
     if (processed.isProcessing) return 'processing'
     if (processed.isProcessed) return 'processed'
@@ -120,13 +139,13 @@ export const useAdvancedTextProcessing = () => {
   }
 
   const clearProcessedBlocks = () => {
-    processedBlocks.value.clear()
+    processedBlocks.value = {}
   }
 
   // Get aggregated text for LLM calls (prefer NER text, fallback to cleaned, then raw)
   const getAggregatedProcessedText = (segments: any[]): string => {
     return segments.map((segment, index) => {
-      const processed = processedBlocks.value.get(index)
+      const processed = processedBlocks.value[index]
       if (processed?.nerText) return processed.nerText.replace(/<[^>]*>/g, '') // Strip HTML for LLM
       if (processed?.cleanedText) return processed.cleanedText
       return segment.text

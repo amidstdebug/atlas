@@ -22,6 +22,7 @@ interface RecordingState {
   audioLevel?: number
   isWaitingForTranscription?: boolean
   waitingForStop?: boolean
+  error?: string
 }
 
 interface Props {
@@ -44,15 +45,15 @@ const editingText = ref('')
 const showRawTooltip = ref<number | null>(null)
 
 // Advanced text processing functionality
-const { 
-  processTranscriptionBlock, 
-  getDisplayText, 
+const {
+  processTranscriptionBlock,
+  getDisplayText,
   getRawText,
-  isBlockProcessing, 
+  isBlockProcessing,
   isBlockProcessed,
   hasNERHighlights,
   getProcessingStatus,
-  clearProcessedBlocks 
+  clearProcessedBlocks
 } = useAdvancedTextProcessing()
 
 // Watch for finalized segments to process them
@@ -60,7 +61,7 @@ watch(
   () => props.segments,
   (newSegments, oldSegments) => {
     if (!newSegments) return
-    
+
     // Check if any new segments were added (finalized)
     if (oldSegments && newSegments.length > oldSegments.length) {
       // Process the newly finalized segment (not the last one which might still be live)
@@ -217,10 +218,10 @@ const emit = defineEmits<{
               <p class="text-sm text-muted-foreground">Real-time audio analysis</p>
             </div>
           </div>
-          
+
           <!-- Processing Status Indicator -->
           <div class="flex items-center space-x-2">
-            <div class="h-2 w-2 bg-blue-500 rounded-full"></div>
+            <div class="h-2 w-2 bg-purple-400 rounded-full"></div>
             <span class="text-xs text-muted-foreground">Smart Processing Active</span>
           </div>
         </div>
@@ -325,7 +326,7 @@ const emit = defineEmits<{
                             segment.isLive && !recordingState.waitingForStop,
                           'border-green-500/50 ring-2 ring-green-500/20 animate-pulse bg-green-50/30 dark:bg-green-900/10':
                             isBlockProcessing(index),
-                          'border-purple-500/50 ring-1 ring-purple-500/30 bg-gradient-to-r from-purple-50/30 to-blue-50/30 dark:from-purple-900/10 dark:to-blue-900/10 cursor-pointer hover:ring-2 hover:ring-purple-500/50':
+                          'border-purple-400/50 bg-purple-50/30 dark:bg-purple-900/20 cursor-pointer hover:border-purple-400/70 hover:bg-purple-50/50':
                             isBlockProcessed(index) && hasNERHighlights(index),
                           'border-gray-300/50 bg-gray-50/30 dark:bg-gray-800/30':
                             isBlockProcessed(index) && !hasNERHighlights(index)
@@ -335,8 +336,8 @@ const emit = defineEmits<{
                         <span v-if="segment.text">
                           <!-- Show NER highlighted text if processed, otherwise show original -->
                           <template v-if="isBlockProcessed(index) && hasNERHighlights(index)">
-                            <div 
-                              v-html="getDisplayText(index, segment.text)" 
+                            <div
+                              v-html="getDisplayText(index, segment.text)"
                               class="ner-highlighted-content"
                               @mouseenter="showRawTooltip = index"
                               @mouseleave="showRawTooltip = null"
@@ -350,7 +351,7 @@ const emit = defineEmits<{
                         <span v-if="segment.isLive && isTranscribing" class="text-muted-foreground">...</span>
                       </div>
                     </template>
-                    
+
                     <!-- Raw Text Tooltip -->
                     <Transition
                       enter-active-class="transition-all duration-200 ease-out"
@@ -360,7 +361,7 @@ const emit = defineEmits<{
                       leave-from-class="opacity-100 scale-100"
                       leave-to-class="opacity-0 scale-95"
                     >
-                      <div 
+                      <div
                         v-if="showRawTooltip === index && getRawText(index)"
                         class="absolute z-50 max-w-sm p-3 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded-lg shadow-lg border border-gray-700 dark:border-gray-300 pointer-events-none"
                         style="top: -10px; left: 50%; transform: translateX(-50%) translateY(-100%);"
@@ -400,53 +401,85 @@ const emit = defineEmits<{
 }
 
 /* NER Entity Highlighting */
-.ner-highlighted-content :deep(.ner-important) {
-  background: linear-gradient(135deg, #fef3c7 0%, #fbbf24 100%);
-  color: #92400e;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-weight: 600;
-  border: 1px solid #f59e0b;
-  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.2);
+.ner-highlighted-content :deep(.ner-identifier) {
+  background-color: rgba(250, 204, 21, 0.2); /* Softer yellow */
+  color: #a16207; /* Darker, readable text */
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  box-shadow: none;
 }
 
 .ner-highlighted-content :deep(.ner-weather) {
-  background: linear-gradient(135deg, #dbeafe 0%, #60a5fa 100%);
-  color: #1e40af;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-weight: 600;
-  border: 1px solid #3b82f6;
-  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.2);
+  background-color: rgba(59, 130, 246, 0.15); /* Softer blue */
+  color: #1d4ed8;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  box-shadow: none;
 }
 
 .ner-highlighted-content :deep(.ner-times) {
-  background: linear-gradient(135deg, #f3e8ff 0%, #a855f7 100%);
-  color: #7c2d12;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-weight: 600;
-  border: 1px solid #9333ea;
-  box-shadow: 0 1px 2px rgba(147, 51, 234, 0.2);
+  background-color: rgba(168, 85, 247, 0.15); /* Softer purple */
+  color: #7e22ce;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  box-shadow: none;
+}
+
+.ner-highlighted-content :deep(.ner-location) {
+  background-color: rgba(34, 197, 94, 0.15); /* Softer green */
+  color: #15803d;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  box-shadow: none;
+}
+
+.ner-highlighted-content :deep(.ner-impact) {
+  background-color: rgba(239, 68, 68, 0.15); /* Softer red */
+  color: #dc2626;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  box-shadow: none;
 }
 
 /* Dark mode variants */
-.dark .ner-highlighted-content :deep(.ner-important) {
-  background: linear-gradient(135deg, #451a03 0%, #92400e 100%);
-  color: #fbbf24;
-  border-color: #92400e;
+.dark .ner-highlighted-content :deep(.ner-identifier) {
+  background-color: rgba(250, 204, 21, 0.15);
+  color: #facc15; /* Brighter yellow for dark mode */
+  border-color: rgba(250, 204, 21, 0.3);
 }
 
 .dark .ner-highlighted-content :deep(.ner-weather) {
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-  color: #60a5fa;
-  border-color: #1e40af;
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #93c5fd; /* Brighter blue for dark mode */
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .dark .ner-highlighted-content :deep(.ner-times) {
-  background: linear-gradient(135deg, #581c87 0%, #7c2d12 100%);
-  color: #a855f7;
-  border-color: #7c2d12;
+  background-color: rgba(168, 85, 247, 0.15);
+  color: #c084fc; /* Brighter purple for dark mode */
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.dark .ner-highlighted-content :deep(.ner-location) {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #4ade80; /* Brighter green for dark mode */
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.dark .ner-highlighted-content :deep(.ner-impact) {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #f87171; /* Brighter red for dark mode */
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .segment-enter-from {

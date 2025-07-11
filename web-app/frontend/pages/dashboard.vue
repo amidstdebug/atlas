@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Settings } from 'lucide-vue-next'
 import { useAudioRecording } from '@/composables/useAudioRecording'
 import { useSummaryGeneration } from '@/composables/useSummaryGeneration'
-import { useTextCleaning } from '@/composables/useTextCleaning'
+import { useAdvancedTextProcessing } from '@/composables/useAdvancedTextProcessing'
 import { useTranscriptionStore } from '@/stores/transcription'
 import { useAuthStore } from '@/stores/auth'
 import ConfigPanel from '@/components/ConfigPanel.vue'
@@ -155,8 +155,8 @@ watch(autoReportEnabled, (enabled) => {
 // This watcher is being removed as the logic is moving into the composables themselves.
 
 
-// Text cleaning functionality
-const { isCleanMode, getDisplayText } = useTextCleaning()
+// Advanced text processing functionality
+const { getAggregatedProcessedText } = useAdvancedTextProcessing()
 
 // Computed
 const aggregatedTranscription = computed(() => {
