@@ -16,4 +16,4 @@ RUN mkdir -p /models
 
 EXPOSE 43007
 
-CMD ["python", "simulstreaming_whisper_server.py", "--host", "0.0.0.0", "--port", "43007", "--model_path", "/models/large-v3.pt"]
+CMD ["python3", "simulstreaming_whisper_server.py", "--host", "0.0.0.0", "--port", "43007", "--model_path", "/models/large-v3-turbo.pt"]
