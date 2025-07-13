@@ -13,11 +13,14 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       WHISPER_SERVICE_URL: "http://whisper_service:8000"
+      REDIS_URL: "redis://redis:6379/0"
     depends_on:
       whisper_service:
         condition: service_healthy
       summarization_service:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - auto_transcript_network
 
@@ -75,6 +78,38 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    networks:
+      - auto_transcript_network
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    networks:
+      - auto_transcript_network
+
+  whisper_worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: python -m services.whisper.worker
+    env_file:
+      - ../backend/.env
+    depends_on:
+      - redis
+      - whisper_service
+    networks:
+      - auto_transcript_network
+
+  summary_worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: python -m services.summary.worker
+    env_file:
+      - ../backend/.env
+    depends_on:
+      - redis
+      - summarization_service
     networks:
       - auto_transcript_network
 

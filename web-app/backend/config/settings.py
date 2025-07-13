@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     ollama_server_url: str = os.environ.get("OLLAMA_SERVER_URL", "http://summarization_service:11434")
     llm_uri: str = f"{ollama_server_url}/api/chat"
 
+    # Redis settings
+    redis_url: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
     # Security settings
     jwt_secret: str = os.environ.get("JWT_SECRET", "meeting_minutes_transcription_2024_secure_key")
     jwt_algorithm: str = os.environ.get("JWT_ALGORITHM", "HS256")
