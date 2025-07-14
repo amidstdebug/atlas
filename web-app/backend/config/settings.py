@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = os.environ.get("JWT_ALGORITHM", "HS256")
 
     # Model settings
-    vllm_model: str = os.environ.get("VLLM_MODEL", "meta-llama/Llama-3-8B-Instruct")
+    vllm_model: str = os.environ.get("VLLM_MODEL", "HuggingFaceTB/SmolLM3-3B")
 
     # CORS settings
     cors_origins: list = ["*"]

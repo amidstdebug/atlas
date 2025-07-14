@@ -84,7 +84,6 @@ export const useSummaryGeneration = (reactiveSegments: Ref<any[]>) => {
       ]
 
       const response = await $api.post('/v1/chat/completions', {
-        model: 'local-model',
         messages,
         stream: false
       })

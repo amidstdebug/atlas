@@ -33,6 +33,8 @@ async def chat_completions(
 ):
     """Proxy ChatCompletion requests through a Redis queue"""
     try:
+        if "model" not in request:
+            request["model"] = settings.vllm_model
         summary_result = await generate_completion(request)
         return summary_result
 

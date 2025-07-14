@@ -36,7 +36,7 @@ auto-transcript/
 │   ├── backend/          # Backend Dockerfile and related scripts
 │   ├── frontend/         # Frontend Dockerfile and related scripts
 │   ├── services/         # Services Dockerfile and related scripts
-│   |────── ollama/           # OLLAMA Dockerfile and related scripts
+│   |────── vllm/             # vLLM Dockerfile and related scripts
 │   |────── whisper/         # WHISPER Dockerfile and related scripts
 │   └── docker-compose.yml # Main Docker Compose file
 │

@@ -82,7 +82,7 @@ This document outlines the implementation plan for restructuring the Auto-Transc
 
 ## Dependencies
 
-1. Backend still requires audio_server and ollama for transcription and summarization
+1. Backend still requires audio_server and a vLLM service for transcription and summarization
 2. Frontend requires the backend API to be running
 3. Environment variables need to be properly configured
 
