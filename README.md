@@ -18,7 +18,7 @@ ATLAS is a powerful application designed to transcribe live ATC (Air Traffic Con
 - **File Upload**: Upload recorded meetings for automated transcription and summary.
 
 ### 3. **Customizable Models**
-- Allows users to select the size of the Llama 3.1 LLM model used for transcription and analysis, depending on performance requirements.
+- Allows users to select the size of the SmolLM3-3B model used for transcription and analysis, depending on performance requirements.
 
 ---
 
@@ -32,7 +32,7 @@ ATLAS is a powerful application designed to transcribe live ATC (Air Traffic Con
 
 ### 3. **AI Models**
 - **Whisper**: A fine-tuned `jlvdoorn` Whisper model for highly accurate ATC transcription, with customizable model sizes.
-- **Llama 3.1**: A powerful language model for contextual understanding and SITREP generation, with customizable model sizes.
+- **SmolLM3-3B**: A powerful language model for contextual understanding and SITREP generation, with customizable model sizes.
 
 ### 4. **Containerization**
 - Entire application is encapsulated in **Docker containers** for portability and scalability.
@@ -58,7 +58,7 @@ ATLAS is a powerful application designed to transcribe live ATC (Air Traffic Con
 +---------------------+
 |   AI Models         |
 | - Whisper (ATC)     |
-| - Llama 3.1 (LLM)   |
+| - SmolLM3-3B (LLM)  |
 +---------------------+
           |
           v
@@ -92,21 +92,18 @@ python ./web-app/backend/misc/download_model.py
 Install necessary applications:
 ```bash
    sudo apt update
-   sudo apt install tmux docker ollama
+   sudo apt install tmux docker
 ```
 or if you're using Mac:
 ```bash
    brew update && brew upgrade
-   brew install tmux docker ollama
+   brew install tmux docker
 ```
 Mac users will also have to install the Docker for Mac application at:
 1. [Apple Silicon](https://desktop.docker.com/mac/main/arm64/Docker.dmg?utm_source=docker&utm_medium=webreferral&utm_campaign=docs-driven-download-mac-arm64)
 2. [Apple Intel](https://desktop.docker.com/mac/main/amd64/Docker.dmg?utm_source=docker&utm_medium=webreferral&utm_campaign=docs-driven-download-mac-amd64)
 
-Setup Ollama environment and generation of API key:
-```bash
-bash ./web-app/backend/ollama_serve/serve_ollama.sh
-```
+The vLLM service will automatically download the specified model when the Docker containers start.
 
 Build and start the application:
 ```bash
@@ -130,7 +127,7 @@ Access the application:
    - Upload recorded meetings for automated transcription.
 
 3. **Model Customization**:
-   - Choose the Llama 3.1 model size based on your system's performance capabilities.
+   - Choose the SmolLM3-3B model size based on your system's performance capabilities.
 
 ---
 
@@ -167,7 +164,7 @@ For detailed terms, please refer to the included `LICENSE` file.
 ## Acknowledgments
 
 - **OpenAI's Whisper**: For its robust transcription capabilities.
-- **Llama 3.1**: For its advanced language modeling.
+- **SmolLM3-3B**: For its advanced language modeling.
 - **Vue.js** and **FastAPI**: For providing the framework for frontend and backend development.
 - **Docker**: For simplifying containerization and deployment.
 

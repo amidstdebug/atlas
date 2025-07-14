@@ -4,9 +4,20 @@ import logging
 import json
 
 from models.AuthType import TokenData
-from models.SummaryResponse import SummaryRequest, SummaryResponse, InvestigationRequest, InvestigationResponse, StructuredSummary, SectionWithTimestamps, TranscriptionSegment, StructuredSummaryAppendSuggestions, SectionAppendSuggestion, PendingInformationItem, EmergencyItem
+from models.SummaryResponse import (
+    InvestigationRequest,
+    InvestigationResponse,
+    StructuredSummary,
+    SectionWithTimestamps,
+    TranscriptionSegment,
+    StructuredSummaryAppendSuggestions,
+    SectionAppendSuggestion,
+    PendingInformationItem,
+    EmergencyItem,
+)
 from services.auth.jwt import get_token_data
-from services.summary.ollama_service import generate_summary
+from services.summary.vllm_service import generate_completion
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -15,56 +26,17 @@ router = APIRouter(tags=["Summary"])
 # Store current summaries for users
 current_summaries = {}
 
-@router.post("/summary", response_model=SummaryResponse)
-async def create_summary(
-    request: SummaryRequest,
+@router.post("/v1/chat/completions")
+async def chat_completions(
+    request: Dict[str, Any],
     token_data: TokenData = Depends(get_token_data)
 ):
-    """Generate a summary from transcription text using Ollama service"""
+    """Proxy ChatCompletion requests through a Redis queue"""
     try:
-        # Generate the main summary text
-        summary_result = await generate_summary(
-            request.transcription,
-            request.previous_report,
-            request.summary_mode,
-            request.custom_prompt
-        )
-
-        # Initialize response components
-        structured_summary = None
-        append_suggestions = None
-
-        # --- Structured Summary Generation ---
-        if request.structured and request.summary_mode == "atc":
-            user_id = token_data.user_id
-            existing_summaries = current_summaries.get(user_id, [])
-            previous_structured = existing_summaries[-1].get("structured_summary") if existing_summaries else None
-
-            # Generate structured summary
-            structured_summary = await generate_structured_summary(
-                transcription=request.transcription,
-                transcription_segments=request.transcription_segments or [],
-                custom_prompt=request.custom_prompt
-            )
-
-        # Store the summary for this user
-        user_id = token_data.user_id
-        if user_id not in current_summaries:
-            current_summaries[user_id] = []
-
-        current_summaries[user_id].append({
-            "summary": summary_result.summary,
-            "structured_summary": structured_summary,
-            "metadata": summary_result.metadata,
-            "transcription_preview": request.transcription[:100] + "..." if len(request.transcription) > 100 else request.transcription
-        })
-
-        return SummaryResponse(
-            summary=summary_result.summary,
-            structured_summary=structured_summary,
-            append_suggestions=append_suggestions, # Append suggestions might need to be re-evaluated in this flow
-            metadata=summary_result.metadata
-        )
+        if "model" not in request:
+            request["model"] = settings.vllm_model
+        summary_result = await generate_completion(request)
+        return summary_result
 
     except Exception as e:
         logger.error(f"Error generating summary: {str(e)}")
@@ -146,11 +118,19 @@ RAW TRANSCRIPTION:
 Return only a valid JSON object using double quotes.
 """
         # Call the summarization service once with the combined prompt
-        result = await generate_summary(raw_text, "", "standard", combined_prompt)
+        payload = {
+            "model": settings.vllm_model,
+            "messages": [
+                {"role": "system", "content": combined_prompt},
+                {"role": "user", "content": raw_text},
+            ],
+            "stream": False,
+        }
+        result = await generate_completion(payload)
 
         # Parse the JSON response
         try:
-            json_str = result.summary.strip()
+            json_str = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
             if json_str.startswith("```json"):
                 json_str = json_str[7:]
             if json_str.endswith("```"):
@@ -247,17 +227,20 @@ async def generate_structured_summary(
     """
 
     # Call the summary service with structured prompt
-    summary_result = await generate_summary(
-        transcription,
-        "",
-        "atc",
-        structured_prompt
-    )
+    payload = {
+        "model": settings.vllm_model,
+        "messages": [
+            {"role": "system", "content": structured_prompt},
+            {"role": "user", "content": transcription},
+        ],
+        "stream": False,
+    }
+    summary_result = await generate_completion(payload)
 
     # Parse the JSON response
     try:
         # Clean the response string to ensure it's valid JSON
-        json_response_str = summary_result.summary.strip()
+        json_response_str = summary_result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
         if json_response_str.startswith("```json"):
             json_response_str = json_response_str[7:]
         if json_response_str.endswith("```"):

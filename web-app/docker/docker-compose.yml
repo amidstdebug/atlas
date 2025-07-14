@@ -13,11 +13,14 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       WHISPER_SERVICE_URL: "http://whisper_service:8000"
+      REDIS_URL: "redis://redis:6379/0"
     depends_on:
       whisper_service:
         condition: service_healthy
-      summarization_service:
+      vllm_service:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - auto_transcript_network
 
@@ -49,18 +52,15 @@ services:
     networks:
       - auto_transcript_network
 
-  summarization_service:
-    image: ollama/ollama
-    container_name: ollama
+  vllm_service:
+    image: vllm/vllm-openai:latest
+    container_name: vllm
     runtime: nvidia  # To use GPUs
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all  # Ensures the container can see all GPUs
-      - OLLAMA_KEEP_ALIVE=-1
-    volumes:
-      - ollama_data:/root/.ollama
-      - ./services/ollama:/root/ollama_scripts  # Mount scripts directory to the container
+      - NVIDIA_VISIBLE_DEVICES=all
+      - MODEL_NAME=${VLLM_MODEL}
     ports:
-      - "11434:11434"  # Expose the Ollama service on port 11434
+      - "8000:8000"
     deploy:
       resources:
         reservations:
@@ -68,13 +68,44 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
-    restart: "no"
-    entrypoint: ["bash", "/root/ollama_scripts/run_ollama.sh"]
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "test", "-f", "/tmp/ollama_ready"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 10
+    networks:
+      - auto_transcript_network
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    networks:
+      - auto_transcript_network
+
+  whisper_worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: python -m services.whisper.worker
+    env_file:
+      - ../backend/.env
+    depends_on:
+      - redis
+      - whisper_service
+    networks:
+      - auto_transcript_network
+
+  summary_worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: python -m services.summary.worker
+    env_file:
+      - ../backend/.env
+    depends_on:
+      - redis
+      - vllm_service
     networks:
       - auto_transcript_network
 
@@ -88,10 +119,6 @@ services:
       - backend_api
     networks:
       - auto_transcript_network
-
-volumes:
-  ollama_data:
-    driver: local  # Persistent volume for Ollama
 
 networks:
   auto_transcript_network:

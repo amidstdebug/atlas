@@ -78,28 +78,28 @@ export const useSummaryGeneration = (reactiveSegments: Ref<any[]>) => {
         end: seg.end
       }))
 
-      const response = await $api.post('/summary', {
-        transcription: transcriptionText,
-        transcription_segments: segments || undefined,
-        previous_report: previousReport || '',
-        summary_mode: summaryMode,
-        custom_prompt: customPrompt || undefined,
-        structured: structured && summaryMode === 'atc',
+      const messages = [
+        { role: 'system', content: customPrompt || '' },
+        { role: 'user', content: transcriptionText }
+      ]
+
+      const response = await $api.post('/v1/chat/completions', {
+        messages,
+        stream: false
       })
 
-      if (response.data?.summary) {
-        state.value.lastSummary = response.data.summary
+      if (response.data?.choices) {
+        const summaryText = response.data.choices[0]?.message?.content || ''
+        state.value.lastSummary = summaryText
 
         // Store in transcription store
         const transcriptionStore = useTranscriptionStore()
 
         transcriptionStore.addSummary({
           id: Date.now().toString(),
-          summary: response.data.summary,
-          structured_summary: response.data.structured_summary || undefined,
+          summary: summaryText,
           timestamp: new Date().toISOString()
         })
-
 
         return response.data
       }
