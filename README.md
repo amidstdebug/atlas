@@ -92,21 +92,18 @@ python ./web-app/backend/misc/download_model.py
 Install necessary applications:
 ```bash
    sudo apt update
-   sudo apt install tmux docker ollama
+   sudo apt install tmux docker
 ```
 or if you're using Mac:
 ```bash
    brew update && brew upgrade
-   brew install tmux docker ollama
+   brew install tmux docker
 ```
 Mac users will also have to install the Docker for Mac application at:
 1. [Apple Silicon](https://desktop.docker.com/mac/main/arm64/Docker.dmg?utm_source=docker&utm_medium=webreferral&utm_campaign=docs-driven-download-mac-arm64)
 2. [Apple Intel](https://desktop.docker.com/mac/main/amd64/Docker.dmg?utm_source=docker&utm_medium=webreferral&utm_campaign=docs-driven-download-mac-amd64)
 
-Setup Ollama environment and generation of API key:
-```bash
-bash ./web-app/backend/ollama_serve/serve_ollama.sh
-```
+The vLLM service will automatically download the specified model when the Docker containers start.
 
 Build and start the application:
 ```bash

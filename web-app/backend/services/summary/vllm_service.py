@@ -4,82 +4,38 @@ import httpx
 from fastapi import HTTPException
 
 from config.settings import get_settings, settings
-from models.SummaryResponse import SummaryResponse
 from services.queue.redis_queue import RedisQueue
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 queue = RedisQueue("summary_tasks", settings.redis_url)
 
-async def _call_ollama(
-    transcription: str,
-    previous_report: Optional[str] = None,
-    summary_mode: str = "standard",
-    custom_prompt: Optional[str] = None,
-) -> SummaryResponse:
-    """Directly send transcription text to the Ollama service."""
+async def _call_vllm(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Forward a ChatCompletion request to the vLLM service."""
     try:
-        system_prompt = custom_prompt if custom_prompt else _get_default_prompt(summary_mode)
-        user_message = f"Transcription text:\n{transcription}"
-        if previous_report:
-            user_message += f"\n\nPrevious report:\n{previous_report}"
-
-        payload = {
-            "model": settings.ollama_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            "stream": False,
-        }
-
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(settings.llm_uri, json=payload)
 
         if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail=f"Ollama service error: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=f"vLLM service error: {response.text}")
 
-        result = response.json()
-        summary_text = result.get("message", {}).get("content", "")
-        if not summary_text:
-            raise HTTPException(status_code=500, detail="Empty response from Ollama service")
-
-        return SummaryResponse(
-            summary=summary_text,
-            metadata={
-                "model": settings.ollama_model,
-                "mode": summary_mode,
-                "transcription_length": len(transcription),
-            },
-        )
+        return response.json()
     except httpx.TimeoutException:
-        logger.error("Timeout connecting to Ollama service")
+        logger.error("Timeout connecting to vLLM service")
         raise HTTPException(status_code=504, detail="Summary service timeout")
     except Exception as e:
-        logger.error(f"Error in generate_summary: {str(e)}")
+        logger.error(f"Error in generate_completion: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")
 
 
-async def generate_summary(
-    transcription: str,
-    previous_report: Optional[str] = None,
-    summary_mode: str = "standard",
-    custom_prompt: Optional[str] = None,
-) -> SummaryResponse:
-    """Queue the summarization request and wait for the result."""
+async def generate_completion(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Queue a ChatCompletion request and wait for the result."""
     try:
-        job_id = await queue.enqueue(
-            {
-                "transcription": transcription,
-                "previous_report": previous_report,
-                "summary_mode": summary_mode,
-                "custom_prompt": custom_prompt,
-            }
-        )
+        job_id = await queue.enqueue(payload)
         result = await queue.await_result(job_id)
         if isinstance(result, dict) and result.get("error"):
             raise HTTPException(status_code=500, detail=result["error"])
-        return SummaryResponse(**result)
+        return result
     except Exception as e:
         logger.error(f"Error in generate_summary: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")

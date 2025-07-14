@@ -12,8 +12,8 @@ class Settings(BaseSettings):
 
     # Service URLs
     whisper_service_url: str = os.environ.get("WHISPER_SERVICE_URL", "http://whisper_service:8000")
-    ollama_server_url: str = os.environ.get("OLLAMA_SERVER_URL", "http://summarization_service:11434")
-    llm_uri: str = f"{ollama_server_url}/api/chat"
+    vllm_server_url: str = os.environ.get("VLLM_SERVER_URL", "http://vllm_service:8000")
+    llm_uri: str = f"{vllm_server_url}/v1/chat/completions"
 
     # Redis settings
     redis_url: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = os.environ.get("JWT_ALGORITHM", "HS256")
 
     # Model settings
-    ollama_model: str = os.environ.get("OLLAMA_MODEL", "gemma3:4b-it-qat")
+    vllm_model: str = os.environ.get("VLLM_MODEL", "meta-llama/Llama-3-8B-Instruct")
 
     # CORS settings
     cors_origins: list = ["*"]
