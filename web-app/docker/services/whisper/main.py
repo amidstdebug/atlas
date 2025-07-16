@@ -30,9 +30,15 @@ def load_whisper_model():
     global whisper_model
     if whisper_model is None:
         try:
-            # Check if CUDA is available
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            logger.info(f"Loading Whisper model on device: {device}")
+            # Check if CUDA is available and print GPU info
+            if torch.cuda.is_available():
+                device = "cuda"
+                gpu_name = torch.cuda.get_device_name(0)
+                gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                logger.info(f"CUDA is available. Using GPU: {gpu_name} ({gpu_memory:.1f} GB)")
+            else:
+                device = "cpu"
+                logger.info("CUDA is not available. Using CPU.")
 
             # Load model - use 'base' for faster processing, 'large' for better accuracy
             model_size = os.getenv("WHISPER_MODEL_SIZE", "large-v3-turbo")
