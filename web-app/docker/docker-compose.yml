@@ -60,7 +60,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - MODEL_NAME=${VLLM_MODEL}
     ports:
-      - "8000:8000"
+      - "8001:8000"  # vLLM service exposed on host port 8001, container port 8000
     deploy:
       resources:
         reservations:

@@ -30,14 +30,14 @@ interface _GlobalComponents {
     'NuxtRouteAnnouncer': typeof import("../node_modules/nuxt/dist/app/components/nuxt-route-announcer")['default']
     'NuxtImg': typeof import("../node_modules/nuxt/dist/app/components/nuxt-stubs")['NuxtImg']
     'NuxtPicture': typeof import("../node_modules/nuxt/dist/app/components/nuxt-stubs")['NuxtPicture']
-    'Alert': typeof import("../components/ui/alert/index")['Alert']
-    'AlertDescription': typeof import("../components/ui/alert/index")['AlertDescription']
-    'AlertTitle': typeof import("../components/ui/alert/index")['AlertTitle']
-    'Badge': typeof import("../components/ui/badge/index")['Badge']
     'Accordion': typeof import("../components/ui/accordion/index")['Accordion']
     'AccordionContent': typeof import("../components/ui/accordion/index")['AccordionContent']
     'AccordionItem': typeof import("../components/ui/accordion/index")['AccordionItem']
     'AccordionTrigger': typeof import("../components/ui/accordion/index")['AccordionTrigger']
+    'Badge': typeof import("../components/ui/badge/index")['Badge']
+    'Alert': typeof import("../components/ui/alert/index")['Alert']
+    'AlertDescription': typeof import("../components/ui/alert/index")['AlertDescription']
+    'AlertTitle': typeof import("../components/ui/alert/index")['AlertTitle']
     'Button': typeof import("../components/ui/button/index")['Button']
     'Card': typeof import("../components/ui/card/index")['Card']
     'CardAction': typeof import("../components/ui/card/index")['CardAction']
@@ -60,8 +60,8 @@ interface _GlobalComponents {
     'Input': typeof import("../components/ui/input/index")['Input']
     'Label': typeof import("../components/ui/label/index")['Label']
     'Progress': typeof import("../components/ui/progress/index")['Progress']
-    'Textarea': typeof import("../components/ui/textarea/index")['Textarea']
     'Switch': typeof import("../components/ui/switch/index")['Switch']
+    'Textarea': typeof import("../components/ui/textarea/index")['Textarea']
     'ColorScheme': typeof import("../node_modules/@nuxtjs/color-mode/dist/runtime/component.vue3.vue")['default']
     'NuxtPage': typeof import("../node_modules/nuxt/dist/pages/runtime/page")['default']
     'NoScript': typeof import("../node_modules/nuxt/dist/head/runtime/components")['NoScript']
@@ -93,14 +93,14 @@ interface _GlobalComponents {
     'LazyNuxtRouteAnnouncer': LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-route-announcer")['default']>
     'LazyNuxtImg': LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-stubs")['NuxtImg']>
     'LazyNuxtPicture': LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-stubs")['NuxtPicture']>
-    'LazyAlert': LazyComponent<typeof import("../components/ui/alert/index")['Alert']>
-    'LazyAlertDescription': LazyComponent<typeof import("../components/ui/alert/index")['AlertDescription']>
-    'LazyAlertTitle': LazyComponent<typeof import("../components/ui/alert/index")['AlertTitle']>
-    'LazyBadge': LazyComponent<typeof import("../components/ui/badge/index")['Badge']>
     'LazyAccordion': LazyComponent<typeof import("../components/ui/accordion/index")['Accordion']>
     'LazyAccordionContent': LazyComponent<typeof import("../components/ui/accordion/index")['AccordionContent']>
     'LazyAccordionItem': LazyComponent<typeof import("../components/ui/accordion/index")['AccordionItem']>
     'LazyAccordionTrigger': LazyComponent<typeof import("../components/ui/accordion/index")['AccordionTrigger']>
+    'LazyBadge': LazyComponent<typeof import("../components/ui/badge/index")['Badge']>
+    'LazyAlert': LazyComponent<typeof import("../components/ui/alert/index")['Alert']>
+    'LazyAlertDescription': LazyComponent<typeof import("../components/ui/alert/index")['AlertDescription']>
+    'LazyAlertTitle': LazyComponent<typeof import("../components/ui/alert/index")['AlertTitle']>
     'LazyButton': LazyComponent<typeof import("../components/ui/button/index")['Button']>
     'LazyCard': LazyComponent<typeof import("../components/ui/card/index")['Card']>
     'LazyCardAction': LazyComponent<typeof import("../components/ui/card/index")['CardAction']>
@@ -123,8 +123,8 @@ interface _GlobalComponents {
     'LazyInput': LazyComponent<typeof import("../components/ui/input/index")['Input']>
     'LazyLabel': LazyComponent<typeof import("../components/ui/label/index")['Label']>
     'LazyProgress': LazyComponent<typeof import("../components/ui/progress/index")['Progress']>
-    'LazyTextarea': LazyComponent<typeof import("../components/ui/textarea/index")['Textarea']>
     'LazySwitch': LazyComponent<typeof import("../components/ui/switch/index")['Switch']>
+    'LazyTextarea': LazyComponent<typeof import("../components/ui/textarea/index")['Textarea']>
     'LazyColorScheme': LazyComponent<typeof import("../node_modules/@nuxtjs/color-mode/dist/runtime/component.vue3.vue")['default']>
     'LazyNuxtPage': LazyComponent<typeof import("../node_modules/nuxt/dist/pages/runtime/page")['default']>
     'LazyNoScript': LazyComponent<typeof import("../node_modules/nuxt/dist/head/runtime/components")['NoScript']>
@@ -162,14 +162,14 @@ export const NuxtTime: typeof import("../node_modules/nuxt/dist/app/components/n
 export const NuxtRouteAnnouncer: typeof import("../node_modules/nuxt/dist/app/components/nuxt-route-announcer")['default']
 export const NuxtImg: typeof import("../node_modules/nuxt/dist/app/components/nuxt-stubs")['NuxtImg']
 export const NuxtPicture: typeof import("../node_modules/nuxt/dist/app/components/nuxt-stubs")['NuxtPicture']
-export const Alert: typeof import("../components/ui/alert/index")['Alert']
-export const AlertDescription: typeof import("../components/ui/alert/index")['AlertDescription']
-export const AlertTitle: typeof import("../components/ui/alert/index")['AlertTitle']
-export const Badge: typeof import("../components/ui/badge/index")['Badge']
 export const Accordion: typeof import("../components/ui/accordion/index")['Accordion']
 export const AccordionContent: typeof import("../components/ui/accordion/index")['AccordionContent']
 export const AccordionItem: typeof import("../components/ui/accordion/index")['AccordionItem']
 export const AccordionTrigger: typeof import("../components/ui/accordion/index")['AccordionTrigger']
+export const Badge: typeof import("../components/ui/badge/index")['Badge']
+export const Alert: typeof import("../components/ui/alert/index")['Alert']
+export const AlertDescription: typeof import("../components/ui/alert/index")['AlertDescription']
+export const AlertTitle: typeof import("../components/ui/alert/index")['AlertTitle']
 export const Button: typeof import("../components/ui/button/index")['Button']
 export const Card: typeof import("../components/ui/card/index")['Card']
 export const CardAction: typeof import("../components/ui/card/index")['CardAction']
@@ -192,8 +192,8 @@ export const DialogTrigger: typeof import("../components/ui/dialog/index")['Dial
 export const Input: typeof import("../components/ui/input/index")['Input']
 export const Label: typeof import("../components/ui/label/index")['Label']
 export const Progress: typeof import("../components/ui/progress/index")['Progress']
-export const Textarea: typeof import("../components/ui/textarea/index")['Textarea']
 export const Switch: typeof import("../components/ui/switch/index")['Switch']
+export const Textarea: typeof import("../components/ui/textarea/index")['Textarea']
 export const ColorScheme: typeof import("../node_modules/@nuxtjs/color-mode/dist/runtime/component.vue3.vue")['default']
 export const NuxtPage: typeof import("../node_modules/nuxt/dist/pages/runtime/page")['default']
 export const NoScript: typeof import("../node_modules/nuxt/dist/head/runtime/components")['NoScript']
@@ -225,14 +225,14 @@ export const LazyNuxtTime: LazyComponent<typeof import("../node_modules/nuxt/dis
 export const LazyNuxtRouteAnnouncer: LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-route-announcer")['default']>
 export const LazyNuxtImg: LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-stubs")['NuxtImg']>
 export const LazyNuxtPicture: LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-stubs")['NuxtPicture']>
-export const LazyAlert: LazyComponent<typeof import("../components/ui/alert/index")['Alert']>
-export const LazyAlertDescription: LazyComponent<typeof import("../components/ui/alert/index")['AlertDescription']>
-export const LazyAlertTitle: LazyComponent<typeof import("../components/ui/alert/index")['AlertTitle']>
-export const LazyBadge: LazyComponent<typeof import("../components/ui/badge/index")['Badge']>
 export const LazyAccordion: LazyComponent<typeof import("../components/ui/accordion/index")['Accordion']>
 export const LazyAccordionContent: LazyComponent<typeof import("../components/ui/accordion/index")['AccordionContent']>
 export const LazyAccordionItem: LazyComponent<typeof import("../components/ui/accordion/index")['AccordionItem']>
 export const LazyAccordionTrigger: LazyComponent<typeof import("../components/ui/accordion/index")['AccordionTrigger']>
+export const LazyBadge: LazyComponent<typeof import("../components/ui/badge/index")['Badge']>
+export const LazyAlert: LazyComponent<typeof import("../components/ui/alert/index")['Alert']>
+export const LazyAlertDescription: LazyComponent<typeof import("../components/ui/alert/index")['AlertDescription']>
+export const LazyAlertTitle: LazyComponent<typeof import("../components/ui/alert/index")['AlertTitle']>
 export const LazyButton: LazyComponent<typeof import("../components/ui/button/index")['Button']>
 export const LazyCard: LazyComponent<typeof import("../components/ui/card/index")['Card']>
 export const LazyCardAction: LazyComponent<typeof import("../components/ui/card/index")['CardAction']>
@@ -255,8 +255,8 @@ export const LazyDialogTrigger: LazyComponent<typeof import("../components/ui/di
 export const LazyInput: LazyComponent<typeof import("../components/ui/input/index")['Input']>
 export const LazyLabel: LazyComponent<typeof import("../components/ui/label/index")['Label']>
 export const LazyProgress: LazyComponent<typeof import("../components/ui/progress/index")['Progress']>
-export const LazyTextarea: LazyComponent<typeof import("../components/ui/textarea/index")['Textarea']>
 export const LazySwitch: LazyComponent<typeof import("../components/ui/switch/index")['Switch']>
+export const LazyTextarea: LazyComponent<typeof import("../components/ui/textarea/index")['Textarea']>
 export const LazyColorScheme: LazyComponent<typeof import("../node_modules/@nuxtjs/color-mode/dist/runtime/component.vue3.vue")['default']>
 export const LazyNuxtPage: LazyComponent<typeof import("../node_modules/nuxt/dist/pages/runtime/page")['default']>
 export const LazyNoScript: LazyComponent<typeof import("../node_modules/nuxt/dist/head/runtime/components")['NoScript']>
