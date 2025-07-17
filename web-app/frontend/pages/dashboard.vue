@@ -11,7 +11,8 @@ import ConfigPanel from '@/components/ConfigPanel.vue'
 import HeaderBar from '@/components/HeaderBar.vue'
 import TranscriptionPanel from '@/components/TranscriptionPanel.vue'
 import LiveIncidentPanel from '@/components/LiveIncidentPanel.vue'
-import { watch, computed } from 'vue'
+import AudioUploadPlayer from '@/components/AudioUploadPlayer.vue'
+import { watch, computed, ref } from 'vue'
 
 definePageMeta({
   middleware: 'auth'
@@ -48,8 +49,8 @@ const {
 } = useSummaryGeneration(transcriptionSegments)
 
 
-// File upload
-const audioFileInput = ref<HTMLInputElement>()
+// Upload player state
+const isUploadPlayerOpen = ref(false)
 
 // Configuration state
 const isConfigPanelOpen = ref(false)
@@ -172,23 +173,7 @@ const summaries = computed(() => transcriptionStore.getSummaries)
 
 // Methods
 async function uploadRecording() {
-  audioFileInput.value?.click()
-}
-
-async function handleFileUpload(event: Event) {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-
-  if (file) {
-    try {
-      await transcribeFile(file)
-    } catch (error) {
-      console.error('File upload failed:', error)
-    }
-
-    // Reset file input
-    target.value = ''
-  }
+  isUploadPlayerOpen.value = true
 }
 
 async function handleStartRecording() {
@@ -434,14 +419,9 @@ useHead({
       </Button>
     </div>
 
-    <!-- Hidden file input -->
-    <input
-      ref="audioFileInput"
-      type="file"
-      accept="audio/*"
-      class="hidden"
-      @change="handleFileUpload"
-    />
+
+    <!-- Upload Player -->
+    <AudioUploadPlayer v-model:open="isUploadPlayerOpen" />
 
     <!-- Prompt Configuration Panel -->
     <ConfigPanel
