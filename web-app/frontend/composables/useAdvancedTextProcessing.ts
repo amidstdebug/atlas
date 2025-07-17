@@ -1,12 +1,5 @@
 import { ref, computed } from 'vue'
-
-export interface NEREntity {
-  text: string
-  category: 'IMPORTANT_INFO' | 'WEATHER' | 'TIMES'
-  start_pos: number
-  end_pos: number
-}
-
+import { NEREntity } from './audio-recording/types'
 export interface ProcessedBlock {
   index: number
   rawText: string
