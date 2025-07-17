@@ -125,6 +125,7 @@ Return only a valid JSON object using double quotes.
                 {"role": "user", "content": raw_text},
             ],
             "stream": False,
+            "chat_template_kwargs": {"enable_thinking": False}
         }
         result = await generate_completion(payload)
 
@@ -245,6 +246,7 @@ async def generate_structured_summary(
             {"role": "user", "content": transcription},
         ],
         "stream": False,
+		"chat_template_kwargs": {"enable_thinking": False}
     }
     summary_result = await generate_completion(payload)
 
