@@ -224,6 +224,86 @@ export const useAudioRecording = () => {
     }
   };
 
+  const startRecordingWithStream = async (stream: MediaStream) => {
+    try {
+      state.value.error = null;
+      state.value.isRecording = true;
+      state.value.isTranscribing = false;
+
+      variables.chunkCount = 0;
+      transcriptionSegments.value = [];
+
+      console.log('[Recording] 🎬 Starting recording session from stream');
+
+      variables.audioStream = stream;
+
+      variables.audioContext = new AudioContext();
+      variables.analyser = variables.audioContext.createAnalyser();
+      variables.analyser.fftSize = AUDIO_CONFIG.FFT_SIZE;
+      const bufferLength = variables.analyser.frequencyBinCount;
+      variables.dataArray = new Uint8Array(bufferLength);
+
+      const source = variables.audioContext.createMediaStreamSource(variables.audioStream);
+      source.connect(variables.analyser);
+
+      variables.mediaRecorder = new MediaRecorder(variables.audioStream, {
+        mimeType: AUDIO_CONFIG.MIME_TYPE
+      });
+
+      const audioChunks: Blob[] = [];
+
+      variables.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+
+      variables.mediaRecorder.onstop = async () => {
+        if (audioChunks.length > 0) {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          await sendAudioChunk(audioBlob);
+          variables.chunkCount++;
+        }
+        audioChunks.length = 0;
+      };
+
+      variables.mediaRecorder.start();
+
+      const recordChunk = () => {
+        if (variables.mediaRecorder && variables.mediaRecorder.state === 'recording') {
+          variables.mediaRecorder.stop();
+
+          if (state.value.isRecording) {
+            setTimeout(() => {
+              if (variables.mediaRecorder && state.value.isRecording) {
+                variables.mediaRecorder.start();
+                variables.recordingTimeout = setTimeout(recordChunk, AUDIO_CONFIG.CHUNK_DURATION_SECONDS * 1000);
+              }
+            }, AUDIO_CONFIG.CHUNK_RESTART_DELAY);
+          }
+        }
+      };
+
+      variables.recordingTimeout = setTimeout(recordChunk, AUDIO_CONFIG.CHUNK_DURATION_SECONDS * 1000);
+
+      variables.startTime = Date.now();
+      variables.timerInterval = setInterval(() => {
+        if (variables.startTime) {
+          const elapsed = Math.floor((Date.now() - variables.startTime) / 1000);
+          state.value.duration = elapsed;
+        }
+      }, AUDIO_CONFIG.TIMER_UPDATE_INTERVAL);
+
+      updateAudioLevel();
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      state.value.error = 'Failed to start recording: ' + message;
+      state.value.isRecording = false;
+      state.value.isTranscribing = false;
+    }
+  };
+
   // Stop recording
   const stopRecording = () => {
     state.value.isRecording = false;
@@ -350,6 +430,7 @@ export const useAudioRecording = () => {
     state: computed(() => state.value),
     transcriptionSegments: computed(() => transcriptionSegments.value),
     startRecording,
+    startRecordingWithStream,
     stopRecording,
     toggleRecording,
     transcribeFile,

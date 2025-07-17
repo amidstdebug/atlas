@@ -11,7 +11,7 @@ import ConfigPanel from '@/components/ConfigPanel.vue'
 import HeaderBar from '@/components/HeaderBar.vue'
 import TranscriptionPanel from '@/components/TranscriptionPanel.vue'
 import LiveIncidentPanel from '@/components/LiveIncidentPanel.vue'
-import AudioUploadPlayer from '@/components/AudioUploadPlayer.vue'
+import AudioSimulationPlayer from '@/components/AudioSimulationPlayer.vue'
 import { watch, computed, ref } from 'vue'
 
 definePageMeta({
@@ -48,9 +48,27 @@ const {
   cleanup
 } = useSummaryGeneration(transcriptionSegments)
 
+// Simulate mode state
+const isSimulateMode = ref(false)
 
-// Upload player state
-const isUploadPlayerOpen = ref(false)
+// Watch simulate mode changes to automatically start/stop recording
+watch(isSimulateMode, async (newValue) => {
+  if (newValue) {
+    // When simulate mode is turned on, clear existing transcriptions
+    console.log('[Simulate] 🎬 Simulate mode activated - clearing transcriptions')
+    clearTranscription()
+  } else {
+    // When simulate mode is turned off, simulation will stop automatically
+    console.log('[Simulate] 🛑 Simulate mode deactivated')
+  }
+})
+
+// Handle simulation segments
+function handleSimulationSegmentsUpdated(segments: any[]) {
+  // Replace the existing transcription segments with simulation segments
+  transcriptionSegments.value.splice(0, transcriptionSegments.value.length, ...segments)
+  console.log('[Simulate] 📝 Updated transcription segments from simulation:', segments.length)
+}
 
 // Configuration state
 const isConfigPanelOpen = ref(false)
@@ -172,10 +190,6 @@ const getProcessedTranscription = () => {
 const summaries = computed(() => transcriptionStore.getSummaries)
 
 // Methods
-async function uploadRecording() {
-  isUploadPlayerOpen.value = true
-}
-
 async function handleStartRecording() {
   try {
     await startRecording()
@@ -321,6 +335,12 @@ function handleToggleAutoMode() {
   autoReportEnabled.value = !autoReportEnabled.value
 }
 
+async function uploadRecording() {
+  // This will be handled by the simulate toggle now
+  // The upload functionality is now part of the AudioUploadPlayer
+  isSimulateMode.value = true
+}
+
 
 // Cleanup on unmount
 onUnmounted(() => {
@@ -343,6 +363,7 @@ useHead({
     <HeaderBar
       :username="authStore.user?.username"
       @logout="logout"
+      @open-config="openConfigPanel"
       class="shrink-0"
     />
 
@@ -365,63 +386,63 @@ useHead({
       <div class="flex-1 flex overflow-hidden border border-border rounded-lg">
         <!-- Left Panel - Transcription -->
         <div class="flex border-r border-border flex flex-col" :style="{ width: sidebarWidth + 'px' }">
-        <TranscriptionPanel
-          :segments="transcriptionSegments"
-          :is-transcribing="recordingState.isTranscribing"
-          :is-recording="recordingState.isRecording"
-          :audio-level="recordingState.audioLevel"
-          :is-waiting-for-transcription="recordingState.isWaitingForTranscription"
-          :recording-state="recordingState"
-          :sidebar-width="sidebarWidth"
-          @update-segment="handleUpdateSegment"
-          @upload-recording="uploadRecording"
-          @start-recording="handleToggleRecording"
-          @stop-recording="handleToggleRecording"
-          @toggle-recording="handleToggleRecording"
-          @clear-transcription="handleClearTranscription"
-          class="h-full"
-        />
-      </div>
+          <TranscriptionPanel
+            :segments="transcriptionSegments"
+            :is-transcribing="recordingState.isTranscribing"
+            :is-recording="recordingState.isRecording"
+            :audio-level="recordingState.audioLevel"
+            :is-waiting-for-transcription="recordingState.isWaitingForTranscription"
+            :recording-state="recordingState"
+            :sidebar-width="sidebarWidth"
+            :is-simulate-mode="isSimulateMode"
+            @update-segment="handleUpdateSegment"
+            @update:is-simulate-mode="isSimulateMode = $event"
+            @start-recording="handleToggleRecording"
+            @stop-recording="handleToggleRecording"
+            @toggle-recording="handleToggleRecording"
+            @clear-transcription="handleClearTranscription"
+            @segments-updated="handleSimulationSegmentsUpdated"
+            class="h-full"
+          />
+        </div>
 
         <!-- Resize Handle -->
         <div
           class="w-1 bg-border hover:bg-border/80 cursor-col-resize transition-colors relative"
           @mousedown="handleResizeStart"
         >
-          <div class="absolute inset-y-0 -left-1 -right-1 cursor-col-resize"></div>
+          <div class="absolute inset-y-0 left-0 w-1 bg-transparent hover:bg-primary/20 transition-colors"></div>
         </div>
 
-        <!-- Center Panel - Live Situation Report -->
-        <div class="flex-1 flex flex-col">
-        <LiveIncidentPanel
-          :summaries="summaries"
-          :is-generating="summaryState.isGenerating"
-          :auto-report-enabled="autoReportEnabled"
-          :format-summary-content="formatSummaryContent"
-          @force-analysis="handleForceAnalysis"
-          @toggle-auto-mode="handleToggleAutoMode"
-          class="h-full"
-        />
+        <!-- Right Panel - Summary and Investigation -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+          <LiveIncidentPanel
+            :summaries="summaries"
+            :is-generating="summaryState.isGenerating"
+            :is-auto-summary-enabled="autoSummaryEnabled"
+            :is-auto-report-enabled="autoReportEnabled"
+            :auto-report-interval="autoReportIntervalValue"
+            :transcription-segments="transcriptionSegments"
+            :aggregated-transcription="aggregatedTranscription"
+            :auto-actions-enabled="autoActionsEnabled"
+            :pending-actions="pendingActions"
+            :format-summary-content="formatSummaryContent"
+            @force-analysis="handleForceAnalysis"
+            @toggle-auto-mode="handleToggleAutoMode"
+            class="h-full"
+          />
         </div>
       </div>
     </div>
 
-    <!-- Bottom Panel - Configuration Button -->
-    <div class="shrink-0 border-t border-border px-6 py-2 flex justify-end">
-      <Button
-        @click="openConfigPanel"
-        variant="ghost"
-        size="sm"
-        class="text-xs"
-      >
-        <Settings class="h-3 w-3 mr-1" />
-        Configuration
-      </Button>
-    </div>
+    <!-- Remove AudioUploadPlayer - it's now handled in TranscriptionPanel -->
 
-
-    <!-- Upload Player -->
-    <AudioUploadPlayer v-model:open="isUploadPlayerOpen" />
+    <!-- Floating Audio Simulation Player -->
+    <AudioSimulationPlayer 
+      v-if="isSimulateMode" 
+      @close="isSimulateMode = false"
+      @segments-updated="handleSimulationSegmentsUpdated"
+    />
 
     <!-- Prompt Configuration Panel -->
     <ConfigPanel

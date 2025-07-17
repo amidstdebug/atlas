@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Sun, Moon, User, LogOut } from 'lucide-vue-next'
+import { Sun, Moon, User, LogOut, Settings } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 
 interface Props {
@@ -12,12 +12,17 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   logout: []
+  openConfig: []
 }>()
 
 const { $colorMode } = useNuxtApp()
 
 function handleLogout() {
   emit('logout')
+}
+
+function handleOpenConfig() {
+  emit('openConfig')
 }
 </script>
 
@@ -51,6 +56,17 @@ function handleLogout() {
 
         <!-- Status and Controls -->
         <div class="flex items-center space-x-6">
+          <!-- Configuration Button -->
+          <Button
+            variant="ghost"
+            size="sm"
+            class="text-xs"
+            @click="handleOpenConfig"
+          >
+            <Settings class="h-3 w-3 mr-1" />
+            Configuration
+          </Button>
+
           <!-- Theme Toggle -->
           <Button
             variant="ghost"

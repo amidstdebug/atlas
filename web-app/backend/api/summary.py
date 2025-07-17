@@ -83,46 +83,24 @@ async def process_transcription_block(
         if not raw_text.strip():
             return {"cleaned_text": "", "ner_text": "", "entities": []}
 
-        combined_prompt = f"""
-You are an expert Air Traffic Control text processor. Your task is to process a raw transcription block by first cleaning it and then performing Named Entity Recognition (NER).
+        combined_prompt = f"""Clean ATC transcription and identify entities. Return valid JSON only.
 
-RAW TRANSCRIPTION:
-{raw_text}
+TEXT: {raw_text}
 
-**Instructions:**
+Clean the text factually, then tag entities with HTML spans:
+- IDENTIFIER: <span class="ner-identifier">callsign/name</span>
+- WEATHER: <span class="ner-weather">weather info</span> 
+- TIMES: <span class="ner-times">time reference</span>
+- LOCATION: <span class="ner-location">position/runway</span>
+- IMPACT: <span class="ner-impact">emergency/deviation</span>
 
-1.  **Clean the Text:**
-    *   Transform the conversational `RAW TRANSCRIPTION` into a factual, clean version.
-    *   Keep only clear, informative statements.
-    *   Maintain all technical accuracy and aviation terminology.
-    *   Preserve factual information exactly. Do not add or assume information.
-    *   Maintain the identity of speakers (e.g., "Tower to Speedbird 123").
-
-2.  **Perform NER on Cleaned Text:**
-    *   Analyze the cleaned text you generated.
-    *   Identify entities from the following categories:
-        *   `IDENTIFIER`: Identification, name, or callsign (e.g., "Speedbird 123", "Tower").
-        *   `WEATHER`: Weather information (e.g., "wind 270 at 10 knots", "visibility 10k").
-        *   `TIMES`: Time references (e.g., "at 14:35Z", "in 10 minutes").
-        *   `LOCATION`: Locations (e.g., "runway 27 right", "overhead the field").
-        *   `IMPACT`: Any mentioned impact to mission (e.g., "unable to comply", "declaring an emergency").
-
-3.  **Format the Output:**
-    *   Return a single, valid JSON object. Do not include any other text, explanations, or markdown formatting.
-    *   The JSON object must have three keys: `cleaned_text`, `ner_text`, and `entities`.
-    *   `cleaned_text`: The cleaned version of the transcription.
-    *   `ner_text`: The cleaned text with identified entities wrapped in HTML `<span>` tags. Use these exact class names: `ner-identifier`, `ner-weather`, `ner-times`, `ner-location`, `ner-impact`.
-    *   `entities`: A list of JSON objects, one for each entity found, with `text`, `category`, `start_pos`, and `end_pos`.
-
-**Crucial:** This data is for air incident investigation. Inaccuracies or assumptions could have serious consequences. If you have insufficient information, do not attempt to extrapolate.
-Return only a valid JSON object using double quotes.
-"""
+Return JSON with keys: cleaned_text, ner_text, entities
+Example: {{"cleaned_text": "Tower cleared United 123 to land", "ner_text": "<span class=\"ner-identifier\">Tower</span> cleared <span class=\"ner-identifier\">United 123</span> to land", "entities": []}}"""
         # Call the summarization service once with the combined prompt
         payload = {
             "model": settings.vllm_model,
             "messages": [
-                {"role": "system", "content": combined_prompt},
-                {"role": "user", "content": raw_text},
+                {"role": "user", "content": combined_prompt},
             ],
             "stream": False,
             "chat_template_kwargs": {"enable_thinking": False}
@@ -187,63 +165,21 @@ async def generate_structured_summary(
     timestamped_transcription = create_timestamped_transcription(transcription_segments)
     current_time = datetime.datetime.now()
 
-    structured_prompt = f"""
-    You are an expert Air Traffic Control analyst. Based on the following transcription, categorize information into two main areas:
+    structured_prompt = f"""Analyze ATC transcription. Current time: {current_time.strftime("%H%M")}H
 
-    CURRENT TIME: {current_time.strftime("%H%M")}H
+{timestamped_transcription}
 
-    **PENDING INFORMATION ANALYSIS:**
-    Identify any pending information, requests, or actions that require follow-up, including:
-    - ETAs/ETRs that need to be converted to actual times (e.g., "15 minutes from now" should be calculated as actual clock time)
-    - Pending clearances or requests
-    - Information awaiting response
-    - Coordination requirements
-    - Weather updates pending
-    - Any unresolved operational matters
+{custom_prompt if custom_prompt else ""}
 
-    **EMERGENCY INFORMATION ANALYSIS:**
-    Identify and categorize emergency situations:
-    - MAYDAY_PAN: Emergency distress calls (MAYDAY, PAN-PAN)
-    - CASEVAC: Medical evacuation requests
-    - AIRCRAFT_DIVERSION: Unplanned aircraft diversions
-    - OTHERS: Situations requiring immediate controller attention, threats to life or mission
+Return JSON with pending_information (ETAs, clearances, coordination) and emergency_information (MAYDAY_PAN, CASEVAC, AIRCRAFT_DIVERSION, OTHERS). Include description, priority/severity, timestamps.
 
-    {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}
-
-    Timestamped Transcription:
-    {timestamped_transcription}
-
-    RESPONSE FORMAT: Provide your response as a valid JSON object with this exact structure:
-    {{
-        "pending_information": [
-            {{
-                "description": "Description of pending item",
-                "eta_etr_info": "Original ETA/ETR mentioned if any",
-                "calculated_time": "Actual clock time (HHMM format) if applicable",
-                "priority": "low|medium|high",
-                "timestamps": [relevant timestamp references]
-            }}
-        ],
-        "emergency_information": [
-            {{
-                "category": "MAYDAY_PAN|CASEVAC|AIRCRAFT_DIVERSION|OTHERS",
-                "description": "Description of emergency",
-                "severity": "high",
-                "immediate_action_required": true,
-                "timestamps": [relevant timestamp references]
-            }}
-        ]
-    }}
-
-    If no items exist for a category, return an empty array.
-    """
+Format: {{"pending_information": [{{"description": "", "eta_etr_info": "", "calculated_time": "", "priority": "low|medium|high", "timestamps": []}}], "emergency_information": [{{"category": "MAYDAY_PAN|CASEVAC|AIRCRAFT_DIVERSION|OTHERS", "description": "", "severity": "high", "immediate_action_required": true, "timestamps": []}}]}}"""
 
     # Call the summary service with structured prompt
     payload = {
         "model": settings.vllm_model,
         "messages": [
-            {"role": "system", "content": structured_prompt},
-            {"role": "user", "content": transcription},
+            {"role": "user", "content": structured_prompt},
         ],
         "stream": False,
 		"chat_template_kwargs": {"enable_thinking": False}

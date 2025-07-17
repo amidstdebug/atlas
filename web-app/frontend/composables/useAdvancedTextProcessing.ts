@@ -95,6 +95,9 @@ export const useAdvancedTextProcessing = () => {
 
     if (processed.isProcessed && processed.nerText) {
       console.log(`[getDisplayText] Block ${segmentIndex}: Processed with NER, returning nerText`)
+      console.log(`[getDisplayText] Block ${segmentIndex}: NER Text content:`, processed.nerText)
+      console.log(`[getDisplayText] Block ${segmentIndex}: Entities:`, processed.entities)
+      console.log(`[getDisplayText] Block ${segmentIndex}: Has NER highlights:`, processed.entities.length > 0)
       return processed.nerText
     }
 

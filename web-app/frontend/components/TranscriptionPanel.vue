@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { useAdvancedTextProcessing } from '@/composables/useAdvancedTextProcessing'
 
 interface TranscriptionSegment {
@@ -33,9 +34,20 @@ interface Props {
   isWaitingForTranscription?: boolean
   recordingState: RecordingState
   sidebarWidth?: number
+  isSimulateMode?: boolean
 }
 
 const props = defineProps<Props>()
+
+const emit = defineEmits<{
+  'updateSegment': [index: number, text: string]
+  'uploadRecording': []
+  'startRecording': []
+  'stopRecording': []
+  'toggleRecording': []
+  'clearTranscription': []
+  'update:isSimulateMode': [value: boolean]
+}>()
 
 // Editing state
 const editingSegment = ref<number | null>(null)
@@ -60,21 +72,18 @@ const {
 watch(
   () => props.segments,
   (newSegments, oldSegments) => {
-    if (!newSegments) return
+    if (!newSegments || newSegments.length === 0) return
 
-    // Check if any new segments were added (finalized)
-    if (oldSegments && newSegments.length > oldSegments.length) {
-      // Process the newly finalized segment (not the last one which might still be live)
-      const finalizedIndex = newSegments.length - 2
-      if (finalizedIndex >= 0) {
-        const segment = newSegments[finalizedIndex]
-        if (segment && !segment.isLive) {
-          processTranscriptionBlock(segment.text, finalizedIndex)
-        }
+    // Process all finalized segments that haven't been processed yet
+    newSegments.forEach((segment, index) => {
+      // Only process non-live segments that haven't been processed
+      if (!segment.isLive && segment.text.trim() && getProcessingStatus(index) === 'raw') {
+        console.log(`[TranscriptionPanel] Processing finalized segment ${index}:`, segment.text.substring(0, 50) + '...')
+        processTranscriptionBlock(segment.text, index)
       }
-    }
+    })
   },
-  { deep: true }
+  { deep: true, immediate: true }
 )
 
 function handleTextareaInput(event: Event) {
@@ -99,21 +108,19 @@ function startEditing(index: number, currentText: string) {
     if (container) {
       const textarea = container.querySelector<HTMLTextAreaElement>('textarea')
       if (textarea) {
-        textarea.style.height = 'auto'
-        textarea.style.height = `${textarea.scrollHeight}px`
         textarea.focus()
-        textarea.select()
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length)
       }
     }
   })
 }
 
-function saveEdit() {
-  if (editingSegment.value !== null) {
-    emit('updateSegment', editingSegment.value, editingText.value)
-    editingSegment.value = null
-    editingText.value = ''
+function saveEdit(index: number) {
+  if (editingText.value.trim()) {
+    emit('updateSegment', index, editingText.value.trim())
   }
+  editingSegment.value = null
+  editingText.value = ''
 }
 
 function cancelEdit() {
@@ -121,22 +128,14 @@ function cancelEdit() {
   editingText.value = ''
 }
 
-function handleBlur() {
-  saveEdit()
-}
-
-function handleKeydown(event: KeyboardEvent) {
+function handleKeydown(event: KeyboardEvent, index: number) {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
-    saveEdit()
+    saveEdit(index)
   } else if (event.key === 'Escape') {
     event.preventDefault()
     cancelEdit()
   }
-}
-
-function handleUploadRecording() {
-  emit('uploadRecording')
 }
 
 function handleRecordingToggle() {
@@ -148,18 +147,9 @@ function handleClearTranscription() {
   emit('clearTranscription')
 }
 
-// Emit resize events to parent
-const emit = defineEmits<{
-  updateSegment: [index: number, text: string]
-  uploadRecording: []
-  startRecording: []
-  stopRecording: []
-  toggleRecording: []
-  clearTranscription: []
-  resizeStart: []
-  resizeMove: [event: MouseEvent]
-  resizeEnd: []
-}>()
+function handleSimulateModeToggle(value: boolean) {
+  emit('update:isSimulateMode', value)
+}
 </script>
 
 <template>
@@ -218,12 +208,6 @@ const emit = defineEmits<{
               <p class="text-sm text-muted-foreground">Real-time audio analysis</p>
             </div>
           </div>
-
-          <!-- Processing Status Indicator -->
-          <div class="flex items-center space-x-2">
-            <div class="h-2 w-2 bg-purple-400 rounded-full"></div>
-            <span class="text-xs text-muted-foreground">Smart Processing Active</span>
-          </div>
         </div>
 
         <!-- Error Display -->
@@ -240,18 +224,19 @@ const emit = defineEmits<{
         <!-- Recording Controls -->
         <div class="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
           <div class="flex items-center space-x-2">
-            <Button
-              :disabled="recordingState.isTranscribing || recordingState.isRecording || recordingState.waitingForStop"
-              variant="outline"
-              size="sm"
-              @click="handleUploadRecording"
-            >
-              <Upload class="h-3 w-3 mr-2" />
-              {{ recordingState.isTranscribing ? 'Processing...' : 'Upload' }}
-            </Button>
+            <!-- Simulate toggle (replaces Upload button) -->
+            <div class="flex items-center space-x-2">
+              <Switch 
+                id="simulate-mode" 
+                :checked="props.isSimulateMode" 
+                @update:checked="handleSimulateModeToggle"
+                :disabled="recordingState.isRecording || recordingState.isTranscribing || recordingState.waitingForStop"
+              />
+              <Label for="simulate-mode" class="text-sm">Simulate</Label>
+            </div>
 
             <Button
-              :disabled="recordingState.waitingForStop"
+              :disabled="recordingState.waitingForStop || props.isSimulateMode"
               :variant="recordingState.isRecording ? 'destructive' : 'default'"
               size="sm"
               :class="{ 'animate-pulse': recordingState.isRecording || recordingState.waitingForStop }"
@@ -308,9 +293,9 @@ const emit = defineEmits<{
                       <!-- Edit mode -->
                       <Textarea
                         v-model="editingText"
-                        @keydown="handleKeydown"
+                        @keydown="handleKeydown($event, index)"
                         @input="handleTextareaInput"
-                        @blur="handleBlur"
+                        @blur="saveEdit(index)"
                         class="w-full text-sm leading-relaxed bg-transparent border-0 p-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-muted/30 rounded-lg"
                         placeholder="Edit transcription..."
                         rows="1"
@@ -333,6 +318,11 @@ const emit = defineEmits<{
                         }"
                         @click="startEditing(index, segment.text)"
                       >
+                        <!-- Debug info for processed blocks -->
+                        <div v-if="isBlockProcessed(index)" class="text-xs text-muted-foreground mb-1 opacity-60">
+                          Status: Processed | Has NER: {{ hasNERHighlights(index) ? 'Yes' : 'No' }}
+                        </div>
+
                         <span v-if="segment.text">
                           <!-- Show NER highlighted text if processed, otherwise show original -->
                           <template v-if="isBlockProcessed(index) && hasNERHighlights(index)">
@@ -390,6 +380,8 @@ const emit = defineEmits<{
         </div>
       </div>
     </div>
+
+    <!-- Floating Audio Simulation Player -->
   </div>
 </template>
 

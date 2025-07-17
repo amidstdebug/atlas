@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = os.environ.get("JWT_ALGORITHM", "HS256")
 
     # Model settings
-    vllm_model: str = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-0.6B")
+    vllm_model: str = os.environ.get("VLLM_MODEL", "empty")
+    assert vllm_model != "empty", "VLLM_MODEL is not set"
 
     # CORS settings
     cors_origins: list = ["*"]
