@@ -122,7 +122,9 @@ export const useAdvancedTextProcessing = () => {
 
   const hasNERHighlights = (segmentIndex: number): boolean => {
     const processed = processedBlocks.value[segmentIndex]
-    return processed?.entities.length > 0 || false
+    // Check both entities array and if ner_text contains HTML spans
+    return (processed?.entities.length > 0) || 
+           (processed?.nerText && processed.nerText.includes('<span')) || false
   }
 
   const getProcessingStatus = (segmentIndex: number): 'raw' | 'processing' | 'processed' => {
