@@ -13,6 +13,7 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       WHISPER_SERVICE_URL: "http://whisper_service:8000"
+      VLLM_SERVER_URL: "http://vllm_service:8000"
       REDIS_URL: "redis://redis:6379/0"
     depends_on:
       whisper_service:
@@ -44,11 +45,15 @@ services:
               capabilities: [ gpu ]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
+      test: ["CMD", "python", "healthcheck.py"]
+      interval: 15s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 10
+      start_period: 120s
+    volumes:
+      - ../backend:/usr/src/app  # mount server code for hot reload
+      - ./models:/root/.cache/huggingface  # persist HuggingFace cache
+      - ./models:/models  # persist model files
     networks:
       - auto_transcript_network
 
@@ -56,9 +61,17 @@ services:
     image: vllm/vllm-openai:latest
     container_name: vllm
     runtime: nvidia  # To use GPUs
+    env_file:
+      - ../backend/.env
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-      - MODEL_NAME=${VLLM_MODEL}
+    command: >
+      --model ${VLLM_MODEL:-Qwen/Qwen3-0.6B}
+      --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.7}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-2048}
+      --tensor-parallel-size ${VLLM_TENSOR_PARALLEL_SIZE:-1}
+      --host 0.0.0.0
+      --port 8000
     ports:
       - "8001:8000"  # vLLM service exposed on host port 8001, container port 8000
     deploy:
@@ -71,9 +84,13 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
+    volumes:
+      - ./models:/root/.cache/huggingface  # persist HuggingFace cache
+      - ./models:/models  # persist model files
     networks:
       - auto_transcript_network
 
@@ -123,3 +140,6 @@ services:
 networks:
   auto_transcript_network:
     driver: bridge
+
+volumes:
+  models:

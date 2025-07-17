@@ -128,16 +128,27 @@ Return only a valid JSON object using double quotes.
         }
         result = await generate_completion(payload)
 
-        # Parse the JSON response
-        try:
-            json_str = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-            if json_str.startswith("```json"):
-                json_str = json_str[7:]
-            if json_str.endswith("```"):
-                json_str = json_str[:-3]
-            json_str = json_str.strip()
+        # Robust OpenAI-compatible response parsing
+        if isinstance(result, dict) and "error" in result:
+            logger.error(f"vLLM/OpenAI error: {result['error']}")
+            raise HTTPException(status_code=500, detail=f"vLLM/OpenAI error: {result['error']}")
 
-            data = json.loads(json_str)
+        content = ""
+        try:
+            choices = result.get("choices", [])
+            if choices and "message" in choices[0] and "content" in choices[0]["message"]:
+                content = choices[0]["message"]["content"].strip()
+            else:
+                logger.error(f"No valid content in vLLM/OpenAI response: {result}")
+                raise HTTPException(status_code=500, detail="No valid content in vLLM/OpenAI response.")
+
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+
+            data = json.loads(content)
 
             # Ensure all keys are present, providing sensible defaults
             cleaned_text = data.get("cleaned_text", raw_text) # Fallback to raw_text if not in response
@@ -148,7 +159,7 @@ Return only a valid JSON object using double quotes.
             }
 
         except (json.JSONDecodeError, TypeError) as e:
-            logger.error(f"Failed to parse combined processing JSON: {e}\nRaw response: {result.summary}")
+            logger.error(f"Failed to parse combined processing JSON: {e}\nRaw response: {content}")
             # Fallback - return the raw text if JSON parsing fails
             return {
                 "cleaned_text": raw_text,
@@ -237,18 +248,36 @@ async def generate_structured_summary(
     }
     summary_result = await generate_completion(payload)
 
-    # Parse the JSON response
-    try:
-        # Clean the response string to ensure it's valid JSON
-        json_response_str = summary_result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-        if json_response_str.startswith("```json"):
-            json_response_str = json_response_str[7:]
-        if json_response_str.endswith("```"):
-            json_response_str = json_response_str[:-3]
-        json_response_str = json_response_str.strip()
+    # Robust OpenAI-compatible response parsing
+    if isinstance(summary_result, dict) and "error" in summary_result:
+        logger.error(f"vLLM/OpenAI error: {summary_result['error']}")
+        # Return empty structure on parse failure
+        return StructuredSummary(
+            pending_information=[],
+            emergency_information=[]
+        )
 
-        logger.debug(f"Attempting to parse Kanban JSON response: {json_response_str}")
-        response_data = json.loads(json_response_str)
+    content = ""
+    try:
+        choices = summary_result.get("choices", [])
+        if choices and "message" in choices[0] and "content" in choices[0]["message"]:
+            content = choices[0]["message"]["content"].strip()
+        else:
+            logger.error(f"No valid content in vLLM/OpenAI response: {summary_result}")
+            # Return empty structure on parse failure
+            return StructuredSummary(
+                pending_information=[],
+                emergency_information=[]
+            )
+
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+
+        logger.debug(f"Attempting to parse Kanban JSON response: {content}")
+        response_data = json.loads(content)
 
         # Parse pending information
         pending_items = []
@@ -266,7 +295,7 @@ async def generate_structured_summary(
         )
 
     except (json.JSONDecodeError, TypeError) as e:
-        logger.error(f"Failed to parse Kanban JSON response: {e}\nRaw response: {summary_result.summary}")
+        logger.error(f"Failed to parse Kanban JSON response: {e}\nRaw response: {content}")
         # Return empty structure on parse failure
         return StructuredSummary(
             pending_information=[],

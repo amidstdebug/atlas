@@ -80,16 +80,24 @@ ATLAS is a powerful application designed to transcribe live ATC (Air Traffic Con
 1. Clone the repository:
    ```bash
    git clone https://github.com/amidstdebug/ATLAS.git
-   cd ATLAS
+   cd ATLAS/web-app
    ```
 
-2. Build and start the application:
+2. Set up environment variables:
    ```bash
-   ./run_server.sh
+   cd backend
+   python setup_env.py
+   # Review and customize the .env file as needed
+   cd ..
    ```
 
-3. Access the application:
-   - Navigate to `http://localhost:7860` in your browser.
+3. Build and start the application:
+   ```bash
+   ./start-dev.sh
+   ```
+
+4. Access the application:
+   - Navigate to `http://localhost:8080` in your browser.
 
 ---
 
