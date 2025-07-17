@@ -1,3 +1,4 @@
+import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
@@ -23,7 +24,12 @@ export default defineNuxtConfig({
     ],
     define: {
       global: 'globalThis',
-    }
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
   },
 
   colorMode: {
