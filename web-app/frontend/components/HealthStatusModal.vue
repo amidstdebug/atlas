@@ -32,8 +32,8 @@ function refreshHealth() {
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
     @click.self="closeModal"
   >
-    <Card class="w-full max-w-2xl max-h-[80vh] overflow-hidden border-0 shadow-2xl bg-card/95 backdrop-blur-xl">
-      <CardHeader class="pb-4 border-b border-border/50">
+    <Card class="w-full max-w-2xl overflow-hidden border-0 shadow-2xl bg-card/95 backdrop-blur-xl">
+      <CardHeader class="border-b border-border/50">
         <div class="flex items-center justify-between">
           <div class="flex items-center space-x-3">
             <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
@@ -56,7 +56,7 @@ function refreshHealth() {
         </div>
       </CardHeader>
 
-      <CardContent class="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
+      <CardContent class="overflow-y-auto max-h-[calc(80vh-120px)]">
         <div class="space-y-6">
           <!-- Detailed Health Status -->
           <HealthStatus 
@@ -64,36 +64,6 @@ function refreshHealth() {
             :show-details="true" 
             :auto-refresh="false"
           />
-
-          <!-- Troubleshooting Info -->
-          <Card class="border-border/50">
-            <CardHeader class="pb-3">
-              <CardTitle class="text-sm flex items-center space-x-2">
-                <AlertCircle class="h-4 w-4" />
-                <span>Troubleshooting</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent class="pt-0 space-y-3">
-              <div class="text-sm space-y-2">
-                <div class="font-medium">If services are unhealthy:</div>
-                <ul class="list-disc list-inside space-y-1 text-muted-foreground ml-2">
-                  <li>Check if Docker containers are running</li>
-                  <li>Verify service URLs in environment configuration</li>
-                  <li>Check container logs for error messages</li>
-                  <li>Ensure sufficient system resources (RAM, GPU)</li>
-                </ul>
-              </div>
-              
-              <div class="text-sm space-y-2">
-                <div class="font-medium">Common issues:</div>
-                <ul class="list-disc list-inside space-y-1 text-muted-foreground ml-2">
-                  <li><strong>Whisper Service:</strong> Audio processing may be unavailable</li>
-                  <li><strong>vLLM Service:</strong> AI analysis and summaries may not work</li>
-                  <li><strong>High Response Times:</strong> System may be under heavy load</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </CardContent>
     </Card>

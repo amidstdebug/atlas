@@ -186,7 +186,7 @@ defineExpose({
 
   <!-- Full Mode -->
   <Card v-else class="border-0 shadow-sm">
-    <CardHeader class="pb-3">
+    <CardHeader>
       <div class="flex items-center justify-between">
         <CardTitle class="text-sm font-medium flex items-center space-x-2">
           <component 
