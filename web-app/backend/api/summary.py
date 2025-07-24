@@ -83,9 +83,7 @@ async def process_transcription_block(
         if not raw_text.strip():
             return {"cleaned_text": "", "ner_text": "", "entities": []}
 
-        combined_prompt = f"""Clean ATC transcription and identify entities. Return valid JSON only.
-
-TEXT: {raw_text}
+        system_prompt = f"""Clean ATC transcription and identify entities. Return valid JSON only.
 
 Clean the text factually, then tag entities with HTML spans:
 - IDENTIFIER: <span class="ner-identifier">callsign/name</span>
@@ -100,9 +98,11 @@ Example: {{"cleaned_text": "Tower cleared United 123 to land", "ner_text": "<spa
         payload = {
             "model": settings.vllm_model,
             "messages": [
-                {"role": "user", "content": combined_prompt},
+				{"role": "system", "content": system_prompt},
+                {"role": "user", "content": raw_text},
             ],
             "stream": False,
+            "temperature": 0.0,
             "chat_template_kwargs": {"enable_thinking": False}
         }
         result = await generate_completion(payload)

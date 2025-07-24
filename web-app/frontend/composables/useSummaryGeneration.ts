@@ -83,6 +83,8 @@ export const useSummaryGeneration = (reactiveSegments: Ref<any[]>) => {
         { role: 'user', content: transcriptionText }
       ]
 
+	  console.log('messages', messages)
+
       const response = await $api.post('/v1/chat/completions', {
         messages,
         stream: false

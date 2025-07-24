@@ -35,7 +35,7 @@ This application uses environment variables to configure various services and se
 - `JWT_ALGORITHM`: JWT algorithm (default: HS256)
 
 ### Model Settings
-- `VLLM_MODEL`: vLLM model name (default: Qwen/Qwen3-0.6B)
+- `VLLM_MODEL`: vLLM model name (default: Qwen/Qwen3-4B-GGUF)
 
 ### vLLM Service Configuration
 - `VLLM_GPU_MEMORY_UTILIZATION`: GPU memory usage (0.0-1.0, default: 0.7)

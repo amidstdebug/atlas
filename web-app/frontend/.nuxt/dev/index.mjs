@@ -3,37 +3,37 @@ import { Server } from 'node:http';
 import { resolve, dirname, join } from 'node:path';
 import nodeCrypto from 'node:crypto';
 import { parentPort, threadId } from 'node:worker_threads';
-import { defineEventHandler, handleCacheHeaders, splitCookiesString, createEvent, fetchWithEvent, isEvent, eventHandler, setHeaders, sendRedirect, proxyRequest, getRequestHeader, setResponseHeaders, setResponseStatus, send, getRequestHeaders, setResponseHeader, getRequestURL, getResponseHeader, getQuery as getQuery$1, readBody, createApp, createRouter as createRouter$1, toNodeListener, lazyEventHandler, getResponseStatus, createError, getRouterParam, getResponseStatusText } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/h3/dist/index.mjs';
-import { escapeHtml } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/@vue/shared/dist/shared.cjs.js';
-import { createRenderer, getRequestDependencies, getPreloadLinks, getPrefetchLinks } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/vue-bundle-renderer/dist/runtime.mjs';
-import { parseURL, withoutBase, joinURL, getQuery, withQuery, withTrailingSlash, joinRelativeURL } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/ufo/dist/index.mjs';
-import { renderToString } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/vue/server-renderer/index.mjs';
-import { klona } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/klona/dist/index.mjs';
-import defu, { defuFn } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/defu/dist/defu.mjs';
-import destr, { destr as destr$1 } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/destr/dist/index.mjs';
-import { snakeCase } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/scule/dist/index.mjs';
-import { createHead as createHead$1, propsToString, renderSSRHead } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/unhead/dist/server.mjs';
-import { stringify, uneval } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/devalue/index.js';
-import { isVNode, toValue, isRef } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/vue/index.mjs';
-import { DeprecationsPlugin, PromisesPlugin, TemplateParamsPlugin, AliasSortingPlugin } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/unhead/dist/plugins.mjs';
-import { createHooks } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/hookable/dist/index.mjs';
-import { createFetch, Headers as Headers$1 } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/ofetch/dist/node.mjs';
-import { fetchNodeRequestHandler, callNodeRequestHandler } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/node-mock-http/dist/index.mjs';
-import { createStorage, prefixStorage } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/unstorage/dist/index.mjs';
-import unstorage_47drivers_47fs from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/unstorage/drivers/fs.mjs';
-import { digest } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/ohash/dist/index.mjs';
-import { toRouteMatcher, createRouter } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/radix3/dist/index.mjs';
+import { defineEventHandler, handleCacheHeaders, splitCookiesString, createEvent, fetchWithEvent, isEvent, eventHandler, setHeaders, sendRedirect, proxyRequest, getRequestHeader, setResponseHeaders, setResponseStatus, send, getRequestHeaders, setResponseHeader, getRequestURL, getResponseHeader, getQuery as getQuery$1, readBody, createApp, createRouter as createRouter$1, toNodeListener, lazyEventHandler, getResponseStatus, createError, getRouterParam, getResponseStatusText } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/h3/dist/index.mjs';
+import { escapeHtml } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/@vue/shared/dist/shared.cjs.js';
+import { createRenderer, getRequestDependencies, getPreloadLinks, getPrefetchLinks } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/vue-bundle-renderer/dist/runtime.mjs';
+import { parseURL, withoutBase, joinURL, getQuery, withQuery, withTrailingSlash, joinRelativeURL } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/ufo/dist/index.mjs';
+import { renderToString } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/vue/server-renderer/index.mjs';
+import { klona } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/klona/dist/index.mjs';
+import defu, { defuFn } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/defu/dist/defu.mjs';
+import destr, { destr as destr$1 } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/destr/dist/index.mjs';
+import { snakeCase } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/scule/dist/index.mjs';
+import { createHead as createHead$1, propsToString, renderSSRHead } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/unhead/dist/server.mjs';
+import { stringify, uneval } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/devalue/index.js';
+import { isVNode, toValue, isRef } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/vue/index.mjs';
+import { DeprecationsPlugin, PromisesPlugin, TemplateParamsPlugin, AliasSortingPlugin } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/unhead/dist/plugins.mjs';
+import { createHooks } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/hookable/dist/index.mjs';
+import { createFetch, Headers as Headers$1 } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/ofetch/dist/node.mjs';
+import { fetchNodeRequestHandler, callNodeRequestHandler } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/node-mock-http/dist/index.mjs';
+import { createStorage, prefixStorage } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/unstorage/dist/index.mjs';
+import unstorage_47drivers_47fs from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/unstorage/drivers/fs.mjs';
+import { digest } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/ohash/dist/index.mjs';
+import { toRouteMatcher, createRouter } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/radix3/dist/index.mjs';
 import { readFile } from 'node:fs/promises';
-import consola, { consola as consola$1 } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/consola/dist/index.mjs';
-import { ErrorParser } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/youch-core/build/index.js';
-import { Youch } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/youch/build/index.js';
-import { SourceMapConsumer } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/source-map/source-map.js';
+import consola, { consola as consola$1 } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/consola/dist/index.mjs';
+import { ErrorParser } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/youch-core/build/index.js';
+import { Youch } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/youch/build/index.js';
+import { SourceMapConsumer } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/source-map/source-map.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { getContext } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/unctx/dist/index.mjs';
-import { captureRawStackTrace, parseRawStackTrace } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/errx/dist/index.js';
-import { walkResolver } from 'file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/node_modules/unhead/dist/utils.mjs';
+import { getContext } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/unctx/dist/index.mjs';
+import { captureRawStackTrace, parseRawStackTrace } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/errx/dist/index.js';
+import { walkResolver } from 'file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/node_modules/unhead/dist/utils.mjs';
 
-const serverAssets = [{"baseName":"server","dir":"C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/server/assets"}];
+const serverAssets = [{"baseName":"server","dir":"C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/server/assets"}];
 
 const assets = createStorage();
 
@@ -45,11 +45,11 @@ const storage = createStorage({});
 
 storage.mount('/assets', assets);
 
-storage.mount('root', unstorage_47drivers_47fs({"driver":"fs","readOnly":true,"base":"C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend","watchOptions":{"ignored":[null]}}));
-storage.mount('src', unstorage_47drivers_47fs({"driver":"fs","readOnly":true,"base":"C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/server","watchOptions":{"ignored":[null]}}));
-storage.mount('build', unstorage_47drivers_47fs({"driver":"fs","readOnly":false,"base":"C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/.nuxt"}));
-storage.mount('cache', unstorage_47drivers_47fs({"driver":"fs","readOnly":false,"base":"C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/.nuxt/cache"}));
-storage.mount('data', unstorage_47drivers_47fs({"driver":"fs","base":"C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/.data/kv"}));
+storage.mount('root', unstorage_47drivers_47fs({"driver":"fs","readOnly":true,"base":"C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend","watchOptions":{"ignored":[null]}}));
+storage.mount('src', unstorage_47drivers_47fs({"driver":"fs","readOnly":true,"base":"C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/server","watchOptions":{"ignored":[null]}}));
+storage.mount('build', unstorage_47drivers_47fs({"driver":"fs","readOnly":false,"base":"C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/.nuxt"}));
+storage.mount('cache', unstorage_47drivers_47fs({"driver":"fs","readOnly":false,"base":"C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/.nuxt/cache"}));
+storage.mount('data', unstorage_47drivers_47fs({"driver":"fs","base":"C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/.data/kv"}));
 
 function useStorage(base = "") {
   return base ? prefixStorage(storage, base) : storage;
@@ -1015,13 +1015,13 @@ if (!window.__NUXT_DEVTOOLS_TIME_METRIC__) {
 window.__NUXT_DEVTOOLS_TIME_METRIC__.appInit = Date.now()
 `;
 
-const _3jht6OBVuQnzzMy29iJEW_pru3BdfwfUrQrutudqUs = (function(nitro) {
+const _0lBFE5pkdBNOD8FxhiHt6dD24AdsnOSn5tO7A_ImMc = (function(nitro) {
   nitro.hooks.hook("render:html", (htmlContext) => {
     htmlContext.head.push(`<script>${script$1}<\/script>`);
   });
 });
 
-const rootDir = "C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend";
+const rootDir = "C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend";
 
 const appHead = {"meta":[{"name":"viewport","content":"width=device-width, initial-scale=1"},{"charset":"utf-8"}],"link":[],"style":[],"script":[],"noscript":[]};
 
@@ -1040,7 +1040,7 @@ const devReducers = {
   URL: (data) => data instanceof URL ? data.toString() : void 0
 };
 const asyncContext = getContext("nuxt-dev", { asyncContext: true, AsyncLocalStorage });
-const _5l3DKayy4l6tiFlACIDtk7FFqfcRQcUPRf4pZ52nyzA = (nitroApp) => {
+const _nkFmG_oPVkfc3UanDuM3CXWhv1Jbre_Cki4wUUj8IYs = (nitroApp) => {
   const handler = nitroApp.h3App.handler;
   nitroApp.h3App.handler = (event) => {
     return asyncContext.callAsync({ logs: [], event }, () => handler(event));
@@ -1111,16 +1111,16 @@ function onConsoleLog(callback) {
 
 const script = "\"use strict\";(()=>{const t=window,e=document.documentElement,c=[\"dark\",\"light\"],n=getStorageValue(\"localStorage\",\"nuxt-color-mode\")||\"system\";let i=n===\"system\"?u():n;const r=e.getAttribute(\"data-color-mode-forced\");r&&(i=r),l(i),t[\"__NUXT_COLOR_MODE__\"]={preference:n,value:i,getColorScheme:u,addColorScheme:l,removeColorScheme:d};function l(o){const s=\"\"+o+\"\",a=\"\";e.classList?e.classList.add(s):e.className+=\" \"+s,a&&e.setAttribute(\"data-\"+a,o)}function d(o){const s=\"\"+o+\"\",a=\"\";e.classList?e.classList.remove(s):e.className=e.className.replace(new RegExp(s,\"g\"),\"\"),a&&e.removeAttribute(\"data-\"+a)}function f(o){return t.matchMedia(\"(prefers-color-scheme\"+o+\")\")}function u(){if(t.matchMedia&&f(\"\").media!==\"not all\"){for(const o of c)if(f(\":\"+o).matches)return o}return\"light\"}})();function getStorageValue(t,e){switch(t){case\"localStorage\":return window.localStorage.getItem(e);case\"sessionStorage\":return window.sessionStorage.getItem(e);case\"cookie\":return getCookie(e);default:return null}}function getCookie(t){const c=(\"; \"+window.document.cookie).split(\"; \"+t+\"=\");if(c.length===2)return c.pop()?.split(\";\").shift()}";
 
-const _op8p7ILrFxVF0Loi1ZWbSFflq15qP1Lzl9leUIx_1k4 = (function(nitro) {
+const _Yd6Sd3yyfL0iP5juiJxu73Fc_KV9DYf3aS4MtPGqBs = (function(nitro) {
   nitro.hooks.hook("render:html", (htmlContext) => {
     htmlContext.head.push(`<script>${script}<\/script>`);
   });
 });
 
 const plugins = [
-  _3jht6OBVuQnzzMy29iJEW_pru3BdfwfUrQrutudqUs,
-_5l3DKayy4l6tiFlACIDtk7FFqfcRQcUPRf4pZ52nyzA,
-_op8p7ILrFxVF0Loi1ZWbSFflq15qP1Lzl9leUIx_1k4
+  _0lBFE5pkdBNOD8FxhiHt6dD24AdsnOSn5tO7A_ImMc,
+_nkFmG_oPVkfc3UanDuM3CXWhv1Jbre_Cki4wUUj8IYs,
+_Yd6Sd3yyfL0iP5juiJxu73Fc_KV9DYf3aS4MtPGqBs
 ];
 
 const VueResolver = (_, value) => {
@@ -1195,7 +1195,7 @@ function publicAssetsURL(...path) {
 const APP_ROOT_OPEN_TAG = `<${appRootTag}${propsToString(appRootAttrs)}>`;
 const APP_ROOT_CLOSE_TAG = `</${appRootTag}>`;
 const getServerEntry = () => Promise.resolve().then(function () { return server$1; }).then((r) => r.default || r);
-const getClientManifest = () => import('file://C:/Users/kenne/Documents/GitHub/atlas/web-app/frontend/.nuxt/dist/server/client.manifest.mjs').then((r) => r.default || r).then((r) => typeof r === "function" ? r() : r);
+const getClientManifest = () => import('file://C:/Users/Kenneth/Documents/GitHub/atlas/web-app/frontend/.nuxt/dist/server/client.manifest.mjs').then((r) => r.default || r).then((r) => typeof r === "function" ? r() : r);
 const getSSRRenderer = lazyCachedFunction(async () => {
   const manifest = await getClientManifest();
   if (!manifest) {
@@ -1441,13 +1441,13 @@ async function getIslandContext(event) {
   return ctx;
 }
 
-const _lazy_Podeic = () => Promise.resolve().then(function () { return renderer$1; });
+const _lazy_3LVCdP = () => Promise.resolve().then(function () { return renderer$1; });
 
 const handlers = [
-  { route: '/__nuxt_error', handler: _lazy_Podeic, lazy: true, middleware: false, method: undefined },
+  { route: '/__nuxt_error', handler: _lazy_3LVCdP, lazy: true, middleware: false, method: undefined },
   { route: '/__nuxt_island/**', handler: _SxA8c9, lazy: false, middleware: false, method: undefined },
-  { route: '/_fonts/**', handler: _lazy_Podeic, lazy: true, middleware: false, method: undefined },
-  { route: '/**', handler: _lazy_Podeic, lazy: true, middleware: false, method: undefined }
+  { route: '/_fonts/**', handler: _lazy_3LVCdP, lazy: true, middleware: false, method: undefined },
+  { route: '/**', handler: _lazy_3LVCdP, lazy: true, middleware: false, method: undefined }
 ];
 
 function createNitroApp() {

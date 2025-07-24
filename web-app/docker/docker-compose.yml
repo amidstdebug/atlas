@@ -66,7 +66,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     command: >
-      --model ${VLLM_MODEL:-Qwen/Qwen3-1.7B}
+      --model ${VLLM_MODEL:-Qwen/Qwen3-4B-GGUF}
       --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.85}
       --max-model-len ${VLLM_MAX_MODEL_LEN:-2048}
       --tensor-parallel-size ${VLLM_TENSOR_PARALLEL_SIZE:-1}
@@ -87,7 +87,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 20
-      start_period: 300s
+      start_period: 500s
     volumes:
       - ./models:/root/.cache/huggingface  # persist HuggingFace cache
       - ./models:/models  # persist model files

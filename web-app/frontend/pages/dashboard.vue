@@ -12,7 +12,7 @@ import HeaderBar from '@/components/HeaderBar.vue'
 import TranscriptionPanel from '@/components/TranscriptionPanel.vue'
 import LiveIncidentPanel from '@/components/LiveIncidentPanel.vue'
 import AudioSimulationPlayer from '@/components/AudioSimulationPlayer.vue'
-import { watch, computed, ref } from 'vue'
+import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
 
 definePageMeta({
   middleware: 'auth'
@@ -89,7 +89,10 @@ const maxWidth = 600
 // -------------------------------
 // 1.  Restore & sync on mount
 // -------------------------------
-onMounted(() => {
+onMounted(async () => {
+  // First, validate the authentication token
+  await validateAuthToken()
+
   if (process.client) {
     const savedPrompt             = localStorage.getItem('atlas-custom-prompt')
     const savedReplaceNumbers     = localStorage.getItem('atlas-replace-numbers')
@@ -229,8 +232,7 @@ async function handleGenerateSummary() {
         customPrompt.value || undefined,
         latestSummary, // pass previous report for context
         true, // structured
-        transcriptionSegments.value,
-        false
+        transcriptionSegments.value
       )
     } catch (error) {
       console.error('Summary generation failed:', error)
@@ -267,6 +269,31 @@ function handleApplySettings() {
 function handleClearTranscription() {
   clearTranscription()
   transcriptionStore.clearSummaries()
+}
+
+async function validateAuthToken() {
+  // Check if we have a token
+  const authCookie = useCookie('auth_token')
+  if (!authCookie.value) {
+    console.log('[Auth] No token found, redirecting to login')
+    logout()
+    return
+  }
+
+  // Validate token by making a request to a protected endpoint
+  try {
+    const { $api } = useNuxtApp()
+    await $api.get('/summary/history')
+    console.log('[Auth] Token validation successful')
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      console.log('[Auth] Token expired or invalid, logging out')
+      logout()
+    } else {
+      console.warn('[Auth] Token validation request failed:', error.message)
+      // For network errors, don't logout - user might just be offline
+    }
+  }
 }
 
 function logout() {

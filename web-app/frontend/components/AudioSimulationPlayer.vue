@@ -14,7 +14,6 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore()
 
-
 const audioRef = ref<HTMLAudioElement>()
 const fileInput = ref<HTMLInputElement>()
 const file = ref<File | null>(null)
@@ -24,15 +23,27 @@ const currentTime = ref(0)
 const duration = ref(0)
 const isMinimized = ref(false)
 
-// Simulation state
+// Streaming simulation state
 const isSimulating = ref(false)
 const isTranscribing = ref(false)
 const simulationSegments = ref<any[]>([])
 const currentChunkIndex = ref(0)
 const chunkSize = ref(AUDIO_CONFIG.CHUNK_DURATION_SECONDS || 10) // 10 seconds
-const audioChunks = ref<{ blob: Blob; startTime: number; endTime: number; sent: boolean }[]>([])
-const isPreparingChunks = ref(false)
-let playbackTimer: ReturnType<typeof setTimeout> | null = null
+let mediaRecorder: MediaRecorder | null = null
+let streamingSupported = false
+let audioContext: AudioContext | null = null
+let mediaStreamSource: MediaStreamAudioSourceNode | null = null
+let scriptProcessor: ScriptProcessorNode | null = null
+let recordingBuffer: Float32Array[] = []
+let recordingLength = 0
+let sampleRate = 44100
+
+// Check if streaming is supported on component mount
+if (typeof window !== 'undefined') {
+  streamingSupported = 'captureStream' in HTMLMediaElement.prototype && 
+                      'MediaRecorder' in window &&
+                      'AudioContext' in window
+}
 
 function openFileDialog() {
   fileInput.value?.click()
@@ -44,8 +55,6 @@ function handleFileChange(event: Event) {
   if (f) {
     file.value = f
     audioUrl.value = URL.createObjectURL(f)
-    // Clear any existing chunks
-    clearAudioChunks()
     nextTick(() => {
       if (audioRef.value) {
         audioRef.value.load()
@@ -62,15 +71,8 @@ async function togglePlay() {
     stopSimulation()
   } else {
     try {
-      // Prepare chunks before playing if not already done
-      if (audioChunks.value.length === 0 && !isPreparingChunks.value) {
-        await prepareAudioChunks()
-      }
-      
       await audioRef.value.play()
-      if (!isSimulating.value) {
-        startSimulation()
-      }
+      startSimulation()
     } catch (error) {
       console.error('Error playing audio:', error)
     }
@@ -78,90 +80,135 @@ async function togglePlay() {
   isPlaying.value = !isPlaying.value
 }
 
-async function prepareAudioChunks() {
-  if (!file.value || !duration.value || isPreparingChunks.value) return
-  
-  console.log('[Simulation] 🔧 Preparing audio chunks...')
-  isPreparingChunks.value = true
-  
-  try {
-    const totalChunks = Math.ceil(duration.value / chunkSize.value)
-    const chunks: { blob: Blob; startTime: number; endTime: number; sent: boolean }[] = []
-    
-    // Pre-slice all audio chunks
-    for (let i = 0; i < totalChunks; i++) {
-      const startTime = i * chunkSize.value
-      const endTime = Math.min(startTime + chunkSize.value, duration.value)
-      
-      console.log(`[Simulation] ✂️ Slicing chunk ${i}: ${startTime}s - ${endTime}s`)
-      const blob = await sliceAudioFile(file.value, startTime, endTime)
-      
-      chunks.push({
-        blob,
-        startTime,
-        endTime,
-        sent: false
-      })
-    }
-    
-    audioChunks.value = chunks
-    console.log(`[Simulation] ✅ Prepared ${chunks.length} audio chunks`)
-  } catch (error) {
-    console.error('[Simulation] ❌ Error preparing chunks:', error)
-  } finally {
-    isPreparingChunks.value = false
-  }
-}
-
-async function startSimulation() {
-  if (!audioRef.value || audioChunks.value.length === 0) return
+function startSimulation() {
+  if (!audioRef.value) return
   
   console.log('[Simulation] 🎬 Starting audio simulation')
   isSimulating.value = true
   simulationSegments.value = []
   currentChunkIndex.value = 0
   
-  // Reset all chunks to unsent
-  audioChunks.value.forEach(chunk => chunk.sent = false)
-  
-  // Start monitoring playback
-  monitorPlayback()
+  if (streamingSupported) {
+    startStreamingCapture()
+  } else {
+    console.warn('[Simulation] ⚠️ Streaming not supported, falling back to chunk-on-demand')
+    startFallbackSimulation()
+  }
 }
 
-function monitorPlayback() {
-  if (!isSimulating.value || !audioRef.value) return
-  
-  const currentTime = audioRef.value.currentTime
-  
-  // Check if we need to send any chunks
-  for (let i = 0; i < audioChunks.value.length; i++) {
-    const chunk = audioChunks.value[i]
+function startStreamingCapture() {
+  try {
+    // Capture the audio stream from the playing element
+    const stream = (audioRef.value as any).captureStream()
     
-    // Send chunk when playback reaches the END of its time range (after N seconds)
-    if (!chunk.sent && currentTime >= chunk.endTime) {
-      console.log(`[Simulation] 📤 Sending chunk ${i} at playback time ${currentTime.toFixed(1)}s (chunk completed)`)
-      sendChunkToBackend(chunk, i)
-      chunk.sent = true
-      currentChunkIndex.value = i + 1
+    // Instead of using MediaRecorder with WebM fragments, 
+    // we'll use Web Audio API to capture PCM data and convert to WAV
+    audioContext = new AudioContext({ sampleRate: 44100 })
+    sampleRate = audioContext.sampleRate
+    mediaStreamSource = audioContext.createMediaStreamSource(stream)
+    
+    // Use ScriptProcessorNode for older browser support, or AudioWorkletNode for modern browsers
+    const bufferSize = 4096
+    scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1)
+    
+    recordingBuffer = []
+    recordingLength = 0
+    let chunkStartTime = performance.now()
+    
+    scriptProcessor.onaudioprocess = (event) => {
+      if (!isSimulating.value) return
       
-      // Clean up previous chunk to prevent memory leak
-      if (i > 0) {
-        const prevChunk = audioChunks.value[i - 1]
-        // Create a new object without the blob to allow garbage collection
-        audioChunks.value[i - 1] = {
-          blob: null as any, // Release blob reference
-          startTime: prevChunk.startTime,
-          endTime: prevChunk.endTime,
-          sent: prevChunk.sent
-        }
-        console.log(`[Simulation] 🗑️ Released memory for chunk ${i - 1}`)
+      const inputBuffer = event.inputBuffer
+      const inputData = inputBuffer.getChannelData(0)
+      
+      // Copy the data to our recording buffer
+      const bufferCopy = new Float32Array(inputData.length)
+      bufferCopy.set(inputData)
+      recordingBuffer.push(bufferCopy)
+      recordingLength += inputData.length
+      
+      // Check if we've recorded enough for a chunk (based on sample rate and time)
+      const recordedDuration = recordingLength / sampleRate
+      if (recordedDuration >= chunkSize.value) {
+        // Create WAV blob from the recorded data
+        const wavBlob = createWavBlob(recordingBuffer, recordingLength, sampleRate)
+        
+        const chunkStartTimeSeconds = currentChunkIndex.value * chunkSize.value
+        const chunkEndTimeSeconds = Math.min(chunkStartTimeSeconds + chunkSize.value, duration.value)
+        
+        console.log(`[Simulation] 📤 Streaming chunk ${currentChunkIndex.value}: ${chunkStartTimeSeconds}s - ${chunkEndTimeSeconds}s`)
+        
+        // Send the chunk
+        sendChunkToBackend({
+          blob: wavBlob,
+          startTime: chunkStartTimeSeconds,
+          endTime: chunkEndTimeSeconds
+        }, currentChunkIndex.value)
+        
+        // Reset buffer for next chunk
+        recordingBuffer = []
+        recordingLength = 0
+        currentChunkIndex.value++
+        chunkStartTime = performance.now()
       }
     }
+    
+    // Connect the audio processing chain
+    mediaStreamSource.connect(scriptProcessor)
+    scriptProcessor.connect(audioContext.destination)
+    
+    console.log('[Simulation] 🎙️ Started streaming capture with WAV conversion')
+    
+  } catch (error) {
+    console.error('[Simulation] ❌ Failed to start streaming:', error)
+    // Fall back to chunk-on-demand if streaming fails
+    startFallbackSimulation()
+  }
+}
+
+let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+
+function startFallbackSimulation() {
+  if (!file.value || !audioRef.value) return
+  
+  console.log('[Simulation] 🔄 Using fallback chunk-on-demand method')
+  monitorPlaybackFallback()
+}
+
+function monitorPlaybackFallback() {
+  if (!isSimulating.value || !audioRef.value || !file.value) return
+  
+  const currentTime = audioRef.value.currentTime
+  const expectedChunkEndTime = currentChunkIndex.value * chunkSize.value + chunkSize.value
+  
+  // Check if we've crossed into the next chunk
+  if (currentTime >= expectedChunkEndTime && currentTime <= duration.value) {
+    const chunkStartTime = currentChunkIndex.value * chunkSize.value
+    const chunkEndTime = Math.min(expectedChunkEndTime, duration.value)
+    
+    console.log(`[Simulation] ✂️ Creating chunk ${currentChunkIndex.value} on-demand: ${chunkStartTime}s - ${chunkEndTime}s`)
+    
+    // Create chunk on-demand and send immediately
+    sliceAndSendChunk(file.value, chunkStartTime, chunkEndTime, currentChunkIndex.value)
+    currentChunkIndex.value++
   }
   
   // Continue monitoring
-  if (isSimulating.value) {
-    playbackTimer = setTimeout(monitorPlayback, 100) // Check every 100ms
+  if (isSimulating.value && currentTime < duration.value) {
+    fallbackTimer = setTimeout(monitorPlaybackFallback, 100)
+  }
+}
+
+async function sliceAndSendChunk(file: File, startTime: number, endTime: number, chunkIndex: number) {
+  try {
+    const blob = await sliceAudioFile(file, startTime, endTime)
+    await sendChunkToBackend({
+      blob,
+      startTime,
+      endTime
+    }, chunkIndex)
+  } catch (error) {
+    console.error(`[Simulation] ❌ Failed to slice and send chunk ${chunkIndex}:`, error)
   }
 }
 
@@ -174,7 +221,7 @@ async function sendChunkToBackend(chunk: { blob: Blob; startTime: number; endTim
     formData.append('replace_numbers', 'true')
     formData.append('use_icao_callsigns', 'true')
     
-    const baseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:5002' : ''
+    const baseUrl = import.meta.env.DEV ? 'http://localhost:5002' : ''
     const response = await fetch(`${baseUrl}/transcribe`, {
       method: 'POST',
       headers: {
@@ -189,7 +236,7 @@ async function sendChunkToBackend(chunk: { blob: Blob; startTime: number; endTim
     
     const data = await response.json()
     
-    // Process the transcription response similar to the recording system
+    // Process the transcription response
     if (data.segments && data.segments.length > 0) {
       const allText = data.segments.map((seg: any) => seg.text.trim()).join(' ').trim()
       
@@ -200,13 +247,10 @@ async function sendChunkToBackend(chunk: { blob: Blob; startTime: number; endTim
           end: chunk.endTime,
         }
         
-        const segmentIndex = simulationSegments.value.length
         simulationSegments.value.push(chunkSegment)
         
         // Emit the updated segments to parent
         emit('segments-updated', simulationSegments.value)
-        
-        // Note: Process-block will be automatically triggered by TranscriptionPanel watching segments
       }
     }
     
@@ -221,16 +265,36 @@ async function sendChunkToBackend(chunk: { blob: Blob; startTime: number; endTim
 function stopSimulation() {
   console.log('[Simulation] 🛑 Stopping simulation')
   isSimulating.value = false
-  if (playbackTimer) {
-    clearTimeout(playbackTimer)
-    playbackTimer = null
+  
+  // Stop MediaRecorder if it's running
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop()
+    mediaRecorder = null
   }
-}
-
-function clearAudioChunks() {
-  console.log('[Simulation] 🧹 Clearing audio chunks')
-  audioChunks.value = []
-  currentChunkIndex.value = 0
+  
+  // Clean up Web Audio API resources
+  if (scriptProcessor) {
+    scriptProcessor.disconnect()
+    scriptProcessor = null
+  }
+  if (mediaStreamSource) {
+    mediaStreamSource.disconnect()
+    mediaStreamSource = null
+  }
+  if (audioContext && audioContext.state !== 'closed') {
+    audioContext.close()
+    audioContext = null
+  }
+  
+  // Clear fallback timer
+  if (fallbackTimer) {
+    clearTimeout(fallbackTimer)
+    fallbackTimer = null
+  }
+  
+  // Reset recording state
+  recordingBuffer = []
+  recordingLength = 0
 }
 
 async function sliceAudioFile(file: File, startTime: number, endTime: number): Promise<Blob> {
@@ -309,13 +373,58 @@ function audioBufferToWav(buffer: AudioBuffer): Blob {
   view.setUint32(40, length * numberOfChannels * 2, true)
   
   // Convert audio data
-  let offset = 44
+  let audioOffset = 44
   for (let i = 0; i < length; i++) {
     for (let channel = 0; channel < numberOfChannels; channel++) {
       const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]))
-      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true)
-      offset += 2
+      view.setInt16(audioOffset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true)
+      audioOffset += 2
     }
+  }
+  
+  return new Blob([arrayBuffer], { type: 'audio/wav' })
+}
+
+function createWavBlob(buffers: Float32Array[], length: number, sampleRate: number): Blob {
+  // Create a single buffer with all the data
+  const result = new Float32Array(length)
+  let offset = 0
+  for (const buffer of buffers) {
+    result.set(buffer, offset)
+    offset += buffer.length
+  }
+  
+  // Convert to 16-bit PCM
+  const arrayBuffer = new ArrayBuffer(44 + length * 2)
+  const view = new DataView(arrayBuffer)
+  
+  // WAV header
+  const writeString = (offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i))
+    }
+  }
+  
+  writeString(0, 'RIFF')
+  view.setUint32(4, 36 + length * 2, true)
+  writeString(8, 'WAVE')
+  writeString(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true) // PCM format
+  view.setUint16(22, 1, true) // mono
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeString(36, 'data')
+  view.setUint32(40, length * 2, true)
+  
+  // Convert float samples to 16-bit PCM
+  let dataOffset = 44
+  for (let i = 0; i < length; i++) {
+    const sample = Math.max(-1, Math.min(1, result[i]))
+    view.setInt16(dataOffset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true)
+    dataOffset += 2
   }
   
   return new Blob([arrayBuffer], { type: 'audio/wav' })
@@ -419,6 +528,7 @@ onBeforeUnmount(cleanup)
           </div>
           <div class="text-xs text-muted-foreground mt-1">
             {{ (file.size / 1024 / 1024).toFixed(1) }} MB
+            <span v-if="!streamingSupported" class="text-orange-500 ml-1">(Fallback mode)</span>
           </div>
         </div>
         
@@ -459,16 +569,13 @@ onBeforeUnmount(cleanup)
           </div>
         </div>
         
-        <!-- Chunk preparation status -->
-        <div v-if="isPreparingChunks" class="flex items-center justify-center space-x-2 text-xs text-orange-600 bg-orange-50 dark:bg-orange-950/20 rounded-md p-1">
-          <div class="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"></div>
-          <span class="font-medium">Preparing chunks...</span>
-        </div>
-        
         <!-- Simulation status -->
-        <div v-else-if="isSimulating" class="flex items-center justify-center space-x-2 text-xs text-blue-600 bg-blue-50 dark:bg-blue-950/20 rounded-md p-1">
+        <div v-if="isSimulating" class="flex items-center justify-center space-x-2 text-xs text-blue-600 bg-blue-50 dark:bg-blue-950/20 rounded-md p-1">
           <div class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-          <span class="font-medium">Simulating ({{ currentChunkIndex }}/{{ audioChunks.length }})</span>
+          <span class="font-medium">
+            {{ streamingSupported ? 'Streaming' : 'Simulating' }} 
+            ({{ currentChunkIndex }}/{{ Math.ceil(duration / chunkSize) }})
+          </span>
         </div>
         
         <!-- Transcription status -->
