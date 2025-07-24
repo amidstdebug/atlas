@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Sun, Moon, User, LogOut, Settings } from 'lucide-vue-next'
+import { Sun, Moon, User, LogOut, Settings, Activity } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
+import HealthStatus from './HealthStatus.vue'
 
 interface Props {
   username?: string
@@ -12,7 +13,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   logout: []
-  openConfig: []
+  'open-config': []
+  'open-health-modal': []
 }>()
 
 const { $colorMode } = useNuxtApp()
@@ -22,7 +24,11 @@ function handleLogout() {
 }
 
 function handleOpenConfig() {
-  emit('openConfig')
+  emit('open-config')
+}
+
+function handleOpenHealthModal() {
+  emit('open-health-modal')
 }
 </script>
 
@@ -56,6 +62,11 @@ function handleOpenConfig() {
 
         <!-- Status and Controls -->
         <div class="flex items-center space-x-6">
+          <!-- System Health Status -->
+          <div class="cursor-pointer" @click="handleOpenHealthModal">
+            <HealthStatus :show-details="false" :auto-refresh="true" :refresh-interval="60000" :compact="true" />
+          </div>
+
           <!-- Configuration Button -->
           <Button
             variant="ghost"

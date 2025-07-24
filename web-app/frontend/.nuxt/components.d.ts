@@ -16,9 +16,14 @@ interface _GlobalComponents {
     'AudioUploadPlayer': typeof import("../components/AudioUploadPlayer.vue")['default']
     'ConfigPanel': typeof import("../components/ConfigPanel.vue")['default']
     'HeaderBar': typeof import("../components/HeaderBar.vue")['default']
+    'HealthCheckOverlay': typeof import("../components/HealthCheckOverlay.vue")['default']
+    'HealthStatus': typeof import("../components/HealthStatus.vue")['default']
+    'HealthStatusModal': typeof import("../components/HealthStatusModal.vue")['default']
     'InvestigationPanel': typeof import("../components/InvestigationPanel.vue")['default']
     'LiveIncidentPanel': typeof import("../components/LiveIncidentPanel.vue")['default']
     'Main': typeof import("../components/Main.vue")['default']
+    'NERLegend': typeof import("../components/NERLegend.vue")['default']
+    'NERLegendModal': typeof import("../components/NERLegendModal.vue")['default']
     'TranscriptionPanel': typeof import("../components/TranscriptionPanel.vue")['default']
     'NuxtWelcome': typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']
     'NuxtLayout': typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']
@@ -36,10 +41,10 @@ interface _GlobalComponents {
     'AccordionContent': typeof import("../components/ui/accordion/index")['AccordionContent']
     'AccordionItem': typeof import("../components/ui/accordion/index")['AccordionItem']
     'AccordionTrigger': typeof import("../components/ui/accordion/index")['AccordionTrigger']
-    'Badge': typeof import("../components/ui/badge/index")['Badge']
     'Alert': typeof import("../components/ui/alert/index")['Alert']
     'AlertDescription': typeof import("../components/ui/alert/index")['AlertDescription']
     'AlertTitle': typeof import("../components/ui/alert/index")['AlertTitle']
+    'Badge': typeof import("../components/ui/badge/index")['Badge']
     'Button': typeof import("../components/ui/button/index")['Button']
     'Card': typeof import("../components/ui/card/index")['Card']
     'CardAction': typeof import("../components/ui/card/index")['CardAction']
@@ -81,9 +86,14 @@ interface _GlobalComponents {
     'LazyAudioUploadPlayer': LazyComponent<typeof import("../components/AudioUploadPlayer.vue")['default']>
     'LazyConfigPanel': LazyComponent<typeof import("../components/ConfigPanel.vue")['default']>
     'LazyHeaderBar': LazyComponent<typeof import("../components/HeaderBar.vue")['default']>
+    'LazyHealthCheckOverlay': LazyComponent<typeof import("../components/HealthCheckOverlay.vue")['default']>
+    'LazyHealthStatus': LazyComponent<typeof import("../components/HealthStatus.vue")['default']>
+    'LazyHealthStatusModal': LazyComponent<typeof import("../components/HealthStatusModal.vue")['default']>
     'LazyInvestigationPanel': LazyComponent<typeof import("../components/InvestigationPanel.vue")['default']>
     'LazyLiveIncidentPanel': LazyComponent<typeof import("../components/LiveIncidentPanel.vue")['default']>
     'LazyMain': LazyComponent<typeof import("../components/Main.vue")['default']>
+    'LazyNERLegend': LazyComponent<typeof import("../components/NERLegend.vue")['default']>
+    'LazyNERLegendModal': LazyComponent<typeof import("../components/NERLegendModal.vue")['default']>
     'LazyTranscriptionPanel': LazyComponent<typeof import("../components/TranscriptionPanel.vue")['default']>
     'LazyNuxtWelcome': LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']>
     'LazyNuxtLayout': LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']>
@@ -101,10 +111,10 @@ interface _GlobalComponents {
     'LazyAccordionContent': LazyComponent<typeof import("../components/ui/accordion/index")['AccordionContent']>
     'LazyAccordionItem': LazyComponent<typeof import("../components/ui/accordion/index")['AccordionItem']>
     'LazyAccordionTrigger': LazyComponent<typeof import("../components/ui/accordion/index")['AccordionTrigger']>
-    'LazyBadge': LazyComponent<typeof import("../components/ui/badge/index")['Badge']>
     'LazyAlert': LazyComponent<typeof import("../components/ui/alert/index")['Alert']>
     'LazyAlertDescription': LazyComponent<typeof import("../components/ui/alert/index")['AlertDescription']>
     'LazyAlertTitle': LazyComponent<typeof import("../components/ui/alert/index")['AlertTitle']>
+    'LazyBadge': LazyComponent<typeof import("../components/ui/badge/index")['Badge']>
     'LazyButton': LazyComponent<typeof import("../components/ui/button/index")['Button']>
     'LazyCard': LazyComponent<typeof import("../components/ui/card/index")['Card']>
     'LazyCardAction': LazyComponent<typeof import("../components/ui/card/index")['CardAction']>
@@ -152,9 +162,14 @@ export const AudioSimulationPlayer: typeof import("../components/AudioSimulation
 export const AudioUploadPlayer: typeof import("../components/AudioUploadPlayer.vue")['default']
 export const ConfigPanel: typeof import("../components/ConfigPanel.vue")['default']
 export const HeaderBar: typeof import("../components/HeaderBar.vue")['default']
+export const HealthCheckOverlay: typeof import("../components/HealthCheckOverlay.vue")['default']
+export const HealthStatus: typeof import("../components/HealthStatus.vue")['default']
+export const HealthStatusModal: typeof import("../components/HealthStatusModal.vue")['default']
 export const InvestigationPanel: typeof import("../components/InvestigationPanel.vue")['default']
 export const LiveIncidentPanel: typeof import("../components/LiveIncidentPanel.vue")['default']
 export const Main: typeof import("../components/Main.vue")['default']
+export const NERLegend: typeof import("../components/NERLegend.vue")['default']
+export const NERLegendModal: typeof import("../components/NERLegendModal.vue")['default']
 export const TranscriptionPanel: typeof import("../components/TranscriptionPanel.vue")['default']
 export const NuxtWelcome: typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']
 export const NuxtLayout: typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']
@@ -172,10 +187,10 @@ export const Accordion: typeof import("../components/ui/accordion/index")['Accor
 export const AccordionContent: typeof import("../components/ui/accordion/index")['AccordionContent']
 export const AccordionItem: typeof import("../components/ui/accordion/index")['AccordionItem']
 export const AccordionTrigger: typeof import("../components/ui/accordion/index")['AccordionTrigger']
-export const Badge: typeof import("../components/ui/badge/index")['Badge']
 export const Alert: typeof import("../components/ui/alert/index")['Alert']
 export const AlertDescription: typeof import("../components/ui/alert/index")['AlertDescription']
 export const AlertTitle: typeof import("../components/ui/alert/index")['AlertTitle']
+export const Badge: typeof import("../components/ui/badge/index")['Badge']
 export const Button: typeof import("../components/ui/button/index")['Button']
 export const Card: typeof import("../components/ui/card/index")['Card']
 export const CardAction: typeof import("../components/ui/card/index")['CardAction']
@@ -217,9 +232,14 @@ export const LazyAudioSimulationPlayer: LazyComponent<typeof import("../componen
 export const LazyAudioUploadPlayer: LazyComponent<typeof import("../components/AudioUploadPlayer.vue")['default']>
 export const LazyConfigPanel: LazyComponent<typeof import("../components/ConfigPanel.vue")['default']>
 export const LazyHeaderBar: LazyComponent<typeof import("../components/HeaderBar.vue")['default']>
+export const LazyHealthCheckOverlay: LazyComponent<typeof import("../components/HealthCheckOverlay.vue")['default']>
+export const LazyHealthStatus: LazyComponent<typeof import("../components/HealthStatus.vue")['default']>
+export const LazyHealthStatusModal: LazyComponent<typeof import("../components/HealthStatusModal.vue")['default']>
 export const LazyInvestigationPanel: LazyComponent<typeof import("../components/InvestigationPanel.vue")['default']>
 export const LazyLiveIncidentPanel: LazyComponent<typeof import("../components/LiveIncidentPanel.vue")['default']>
 export const LazyMain: LazyComponent<typeof import("../components/Main.vue")['default']>
+export const LazyNERLegend: LazyComponent<typeof import("../components/NERLegend.vue")['default']>
+export const LazyNERLegendModal: LazyComponent<typeof import("../components/NERLegendModal.vue")['default']>
 export const LazyTranscriptionPanel: LazyComponent<typeof import("../components/TranscriptionPanel.vue")['default']>
 export const LazyNuxtWelcome: LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']>
 export const LazyNuxtLayout: LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']>
@@ -237,10 +257,10 @@ export const LazyAccordion: LazyComponent<typeof import("../components/ui/accord
 export const LazyAccordionContent: LazyComponent<typeof import("../components/ui/accordion/index")['AccordionContent']>
 export const LazyAccordionItem: LazyComponent<typeof import("../components/ui/accordion/index")['AccordionItem']>
 export const LazyAccordionTrigger: LazyComponent<typeof import("../components/ui/accordion/index")['AccordionTrigger']>
-export const LazyBadge: LazyComponent<typeof import("../components/ui/badge/index")['Badge']>
 export const LazyAlert: LazyComponent<typeof import("../components/ui/alert/index")['Alert']>
 export const LazyAlertDescription: LazyComponent<typeof import("../components/ui/alert/index")['AlertDescription']>
 export const LazyAlertTitle: LazyComponent<typeof import("../components/ui/alert/index")['AlertTitle']>
+export const LazyBadge: LazyComponent<typeof import("../components/ui/badge/index")['Badge']>
 export const LazyButton: LazyComponent<typeof import("../components/ui/button/index")['Button']>
 export const LazyCard: LazyComponent<typeof import("../components/ui/card/index")['Card']>
 export const LazyCardAction: LazyComponent<typeof import("../components/ui/card/index")['CardAction']>

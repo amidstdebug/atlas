@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { useAdvancedTextProcessing } from '@/composables/useAdvancedTextProcessing'
+import NERLegend from './NERLegend.vue'
 
 interface TranscriptionSegment {
   text: string
@@ -47,6 +48,7 @@ const emit = defineEmits<{
   'toggleRecording': []
   'clearTranscription': []
   'update:isSimulateMode': [value: boolean]
+  'open-ner-legend': []
 }>()
 
 // Editing state
@@ -153,12 +155,9 @@ function handleSimulateModeToggle(value: boolean) {
 </script>
 
 <template>
-  <div class="h-[700px] flex border-0 shadow-xl bg-card/50 backdrop-blur-sm overflow-hidden rounded-lg">
-    <!-- Resizable Sidebar -->
-        <div
-      class="flex flex-col bg-card border-r border-border relative"
-      :style="{ width: (props.sidebarWidth || 300) + 'px' }"
-    >
+  <div class="h-[700px] border-0 shadow-xl bg-card/50 backdrop-blur-sm overflow-hidden rounded-lg">
+    <!-- Main Transcription Panel -->
+    <div class="h-full flex flex-col bg-card relative">
       <!-- Status Indicator -->
       <div v-if="props.isRecording || props.isWaitingForTranscription || props.recordingState.waitingForStop" class="absolute top-2 right-4 z-10">
         <div class="flex items-center space-x-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
@@ -208,6 +207,8 @@ function handleSimulateModeToggle(value: boolean) {
               <p class="text-sm text-muted-foreground">Real-time audio analysis</p>
             </div>
           </div>
+          <!-- NER Legend Button -->
+          <NERLegend @open-ner-legend="$emit('open-ner-legend')" />
         </div>
 
         <!-- Error Display -->
@@ -261,6 +262,8 @@ function handleSimulateModeToggle(value: boolean) {
           </div>
         </div>
       </div>
+
+	  
 
       <!-- Sidebar Content -->
       <div class="flex-1 overflow-hidden p-4">

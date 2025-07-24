@@ -87,8 +87,6 @@ export const useAudioRecording = () => {
 
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.webm');
-      formData.append('replace_numbers', 'true');
-      formData.append('use_icao_callsigns', 'true');
 
       const baseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:5002' : '';
       const response = await fetch(`${baseUrl}/transcribe`, {
@@ -382,8 +380,6 @@ export const useAudioRecording = () => {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('replace_numbers', 'true');
-      formData.append('use_icao_callsigns', 'true');
 
       const baseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:5002' : '';
       const response = await fetch(`${baseUrl}/transcribe`, {

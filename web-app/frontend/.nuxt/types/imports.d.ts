@@ -175,6 +175,7 @@ declare global {
   const useAttrs: typeof import('vue')['useAttrs']
   const useAudioRecording: typeof import('../../composables/audio-recording/index')['useAudioRecording']
   const useAuthStore: typeof import('../../stores/auth')['useAuthStore']
+  const useBackendHealth: typeof import('../../composables/useBackendHealth')['useBackendHealth']
   const useBase64: typeof import('@vueuse/core')['useBase64']
   const useBattery: typeof import('@vueuse/core')['useBattery']
   const useBluetooth: typeof import('@vueuse/core')['useBluetooth']
@@ -230,6 +231,7 @@ declare global {
   const useGeolocation: typeof import('@vueuse/core')['useGeolocation']
   const useHead: typeof import('../../node_modules/nuxt/dist/app/composables/head')['useHead']
   const useHeadSafe: typeof import('../../node_modules/nuxt/dist/app/composables/head')['useHeadSafe']
+  const useHealthCheck: typeof import('../../composables/useHealthCheck')['useHealthCheck']
   const useHydration: typeof import('../../node_modules/nuxt/dist/app/composables/hydrate')['useHydration']
   const useId: typeof import('vue')['useId']
   const useIdle: typeof import('@vueuse/core')['useIdle']
@@ -416,8 +418,11 @@ declare global {
   export type { TranscriptionSegment, NEREntity, TranscriptionResponse, CleanTextResponse, ProcessBlockResponse, RecordingState, AudioRecordingVariables } from '../../composables/audio-recording/types'
   import('../../composables/audio-recording/types')
   // @ts-ignore
-  export type { SummaryState, AutoReportConfig } from '../../composables/useSummaryGeneration'
-  import('../../composables/useSummaryGeneration')
+  export type { BackendHealthState } from '../../composables/useBackendHealth'
+  import('../../composables/useBackendHealth')
+  // @ts-ignore
+  export type { ServiceHealth, HealthStatus } from '../../composables/useHealthCheck'
+  import('../../composables/useHealthCheck')
   // @ts-ignore
   export type { User, AuthState } from '../../stores/auth'
   import('../../stores/auth')
@@ -603,6 +608,7 @@ declare module 'vue' {
     readonly useAttrs: UnwrapRef<typeof import('vue')['useAttrs']>
     readonly useAudioRecording: UnwrapRef<typeof import('../../composables/audio-recording/index')['useAudioRecording']>
     readonly useAuthStore: UnwrapRef<typeof import('../../stores/auth')['useAuthStore']>
+    readonly useBackendHealth: UnwrapRef<typeof import('../../composables/useBackendHealth')['useBackendHealth']>
     readonly useBase64: UnwrapRef<typeof import('@vueuse/core')['useBase64']>
     readonly useBattery: UnwrapRef<typeof import('@vueuse/core')['useBattery']>
     readonly useBluetooth: UnwrapRef<typeof import('@vueuse/core')['useBluetooth']>
@@ -658,6 +664,7 @@ declare module 'vue' {
     readonly useGeolocation: UnwrapRef<typeof import('@vueuse/core')['useGeolocation']>
     readonly useHead: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/head')['useHead']>
     readonly useHeadSafe: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/head')['useHeadSafe']>
+    readonly useHealthCheck: UnwrapRef<typeof import('../../composables/useHealthCheck')['useHealthCheck']>
     readonly useHydration: UnwrapRef<typeof import('../../node_modules/nuxt/dist/app/composables/hydrate')['useHydration']>
     readonly useId: UnwrapRef<typeof import('vue')['useId']>
     readonly useIdle: UnwrapRef<typeof import('@vueuse/core')['useIdle']>

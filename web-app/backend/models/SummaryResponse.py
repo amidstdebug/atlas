@@ -14,6 +14,7 @@ class SummaryRequest(BaseModel):
     summary_mode: str = "standard"
     custom_prompt: Optional[str] = None
     structured: bool = False
+    format_template: Optional[str] = None  # JSON format template for structured summaries
 
 class SectionWithTimestamps(BaseModel):
     content: str

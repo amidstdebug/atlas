@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, Settings, RotateCcw } from 'lucide-vue-next'
+import { X, Settings, RotateCcw, MessageSquare, Tag, Code } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
@@ -9,20 +9,16 @@ import { Input } from '@/components/ui/input'
 
 interface Props {
   isOpen: boolean
-  customPrompt: string
-  replaceNumbers: boolean
-  useIcaoCallsigns: boolean
-  autoReportEnabled: boolean
-  autoReportInterval: number
+  customSummaryPrompt: string
+  customNerPrompt: string
+  customFormatTemplate: string
 }
 
 interface Emits {
   (e: 'update:isOpen', value: boolean): void
-  (e: 'update:customPrompt', value: string): void
-  (e: 'update:replaceNumbers', value: boolean): void
-  (e: 'update:useIcaoCallsigns', value: boolean): void
-  (e: 'update:autoReportEnabled', value: boolean): void
-  (e: 'update:autoReportInterval', value: number): void
+  (e: 'update:customSummaryPrompt', value: string): void
+  (e: 'update:customNerPrompt', value: string): void
+  (e: 'update:customFormatTemplate', value: string): void
   (e: 'reset'): void
   (e: 'apply'): void
 }
@@ -30,91 +26,81 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const defaultPrompt = `You are an expert Air Traffic Control incident analyst. You will be provided with ATC transmission transcripts and optionally a previous incident report.
+const defaultSummaryPrompt = `ATC incident analyst. Analyze transcripts for issues, incidents, and noteworthy events.
 
-**CRITICAL: Your response must be a structured text report, NOT JSON, NOT an array, NOT code blocks.**
+Compare with previous report (if provided) to identify changes. Correct transcription errors.
 
-**PREVIOUS REPORT CONTEXT:**
+**PREVIOUS REPORT:**
 {PREVIOUS_SUMMARY}
 
-**TEMPLATE VARIABLE INFO:** The {PREVIOUS_SUMMARY} variable above will be automatically replaced with the previous incident report if one exists, or with "No previous report available" for the first analysis. You can use this variable in custom prompts to access previous report context.
+**OUTPUT FORMAT:**
 
-Your task:
-1. Analyze the new ATC transcript for any issues, incidents, or noteworthy events
-2. Compare with the previous report (if provided) to identify what has changed
-3. Correct any obvious transcription errors (wrong frequencies, callsigns, etc.)
-4. Provide an updated incident analysis report that tracks the evolving situation
+**INCIDENT REPORT - [TIMESTAMP]**
 
-**OUTPUT FORMAT - Return your response in this exact structure:**
+**Aircraft:** [Primary callsign]
+**Event:** [Brief description]
+**Location:** [Current position]
 
-**INCIDENT ANALYSIS REPORT - [TIMESTAMP]**
+**Updates:**
+• [New developments since last report]
+• [Status changes]
 
-**Aircraft Callsign:** [Primary aircraft involved]
-**Event Summary:** [Brief description of what happened]
-**Current Location:** [Latest position, runway, airspace, etc.]
+**Details:**
+• [Key facts - current state]
+• [Additional details]
 
-**Situation Update:**
-• [What has changed since the last report - NEW DEVELOPMENTS]
-• [Current status vs previous status - CHANGES IN SITUATION]
-• [Any progression or resolution of issues - EVOLUTION]
+**Actions:**
+• [Recent actions taken]
 
-**Current Situation Details:**
-• [Key factual detail 1 - current state]
-• [Key factual detail 2 - current state]
-• [Additional current details as needed]
+**Status:** [Current state vs previous]
+**Changes:** [Summary of changes or "No changes"]
 
-**Recent Actions Taken:**
-• [New action 1 with specifics since last report]
-• [New action 2 with specifics since last report]
-• [Additional recent actions as needed]
+Rules:
+- Focus on CHANGES since previous report
+- Include timestamps, frequencies, headings, altitudes
+- Use plain text, bullet points, headings only
+- No JSON or code blocks`
 
-**Overall Status:** [Current state - improved/worsened/unchanged from previous report]
+const defaultNerPrompt = `Clean ATC text and tag entities. Return JSON only.
 
-**Change Summary:** [Brief summary of what has changed since the previous report, or "No significant changes" if applicable]
+Entity tags:
+- IDENTIFIER: <span class="ner-identifier">callsign</span>
+- WEATHER: <span class="ner-weather">weather</span> 
+- TIMES: <span class="ner-times">time</span>
+- LOCATION: <span class="ner-location">location</span>
+- IMPACT: <span class="ner-impact">emergency</span>
 
-**IMPORTANT RULES:**
-- Focus on CHANGES and UPDATES since the previous report
-- If this is the first report (no previous report), focus on current situation
-- Always include a "Situation Update" section highlighting what's new or different
-- Be specific about what has changed vs what remains the same
-- Include timestamps, frequencies, headings, altitudes, distances with changes
-- Use plain text formatting with bullet points and headings as shown above
-- Do not use JSON, code blocks, or array formatting
-- Write as a professional ATC incident report focused on tracking situation evolution`
+Format: {"cleaned_text": "text", "ner_text": "tagged_text", "entities": []}`
 
-const localCustomPrompt = ref(props.customPrompt)
-const localReplaceNumbers = ref(props.replaceNumbers)
-const localUseIcaoCallsigns = ref(props.useIcaoCallsigns)
-const localAutoReportEnabled = ref(props.autoReportEnabled)
-const localAutoReportInterval = ref(props.autoReportInterval)
+// Local state for form inputs
+const localCustomSummaryPrompt = ref(props.customSummaryPrompt || '')
+const localCustomNerPrompt = ref(props.customNerPrompt || '')
+const localCustomFormatTemplate = ref(props.customFormatTemplate || '')
+
+// Current tab (summary, ner, or format)
+const activeTab = ref<'summary' | 'ner' | 'format'>('summary')
 
 // Watch for prop changes and sync local state
-watch(() => props.customPrompt, (newVal) => {
-  localCustomPrompt.value = newVal
+watch(() => props.customSummaryPrompt, (newVal) => {
+  localCustomSummaryPrompt.value = newVal || ''
 })
 
-watch(() => props.replaceNumbers, (newVal) => {
-  localReplaceNumbers.value = newVal
+watch(() => props.customNerPrompt, (newVal) => {
+  localCustomNerPrompt.value = newVal || ''
 })
 
-watch(() => props.useIcaoCallsigns, (newVal) => {
-  localUseIcaoCallsigns.value = newVal
-})
-
-watch(() => props.autoReportEnabled, (newVal) => {
-  localAutoReportEnabled.value = newVal
-})
-
-watch(() => props.autoReportInterval, (newVal) => {
-  localAutoReportInterval.value = newVal
+watch(() => props.customFormatTemplate, (newVal) => {
+  localCustomFormatTemplate.value = newVal || ''
 })
 
 const hasCustomChanges = computed(() => {
-  return localCustomPrompt.value !== '' ||
-         !localReplaceNumbers.value ||
-         !localUseIcaoCallsigns.value ||
-         localAutoReportEnabled.value ||
-         localAutoReportInterval.value !== 0.166
+  return localCustomSummaryPrompt.value !== '' ||
+         localCustomNerPrompt.value !== '' ||
+         localCustomFormatTemplate.value !== ''
+})
+
+const hasRequiredFields = computed(() => {
+  return localCustomSummaryPrompt.value.trim() !== ''
 })
 
 function closePanel() {
@@ -122,41 +108,65 @@ function closePanel() {
 }
 
 function applyChanges() {
-  emit('update:customPrompt', localCustomPrompt.value)
-  emit('update:replaceNumbers', localReplaceNumbers.value)
-  emit('update:useIcaoCallsigns', localUseIcaoCallsigns.value)
-  emit('update:autoReportEnabled', localAutoReportEnabled.value)
-  emit('update:autoReportInterval', localAutoReportInterval.value)
-  emit('apply') // Emit apply event for toast handling
+  if (!hasRequiredFields.value) {
+    return // Don't apply if required fields are missing
+  }
+  
+  emit('update:customSummaryPrompt', localCustomSummaryPrompt.value)
+  emit('update:customNerPrompt', localCustomNerPrompt.value)
+  emit('update:customFormatTemplate', localCustomFormatTemplate.value)
+  emit('apply')
   closePanel()
 }
 
 function resetToDefaults() {
-  localCustomPrompt.value = ''
-  localReplaceNumbers.value = true
-  localUseIcaoCallsigns.value = true
-  localAutoReportEnabled.value = false
-  localAutoReportInterval.value = 30
+  localCustomSummaryPrompt.value = defaultSummaryPrompt  // Set to default instead of empty
+  localCustomNerPrompt.value = ''
+  localCustomFormatTemplate.value = ''
   emit('reset')
 }
 
-async function loadDefaultPrompt() {
-  try {
-    const { $api } = useNuxtApp()
-    const response = await $api.get('/summary/default-prompt')
-
-    if (response.data?.default_prompt) {
-      localCustomPrompt.value = response.data.default_prompt
-    } else {
-      // Fallback to hardcoded default if API fails
-      localCustomPrompt.value = defaultPrompt
-    }
-  } catch (error) {
-    console.error('Failed to load default prompt:', error)
-    // Fallback to hardcoded default
-    localCustomPrompt.value = defaultPrompt
-  }
+function loadDefaultSummaryPrompt() {
+  localCustomSummaryPrompt.value = defaultSummaryPrompt
 }
+
+function loadDefaultNerPrompt() {
+  localCustomNerPrompt.value = defaultNerPrompt
+}
+
+function loadDefaultFormatTemplate() {
+  localCustomFormatTemplate.value = JSON.stringify({
+    "pending_information": [
+      {
+        "description": "",
+        "eta_etr_info": "",
+        "calculated_time": "",
+        "priority": "low|medium|high",
+        "timestamps": []
+      }
+    ],
+    "emergency_information": [
+      {
+        "category": "MAYDAY_PAN|CASEVAC|AIRCRAFT_DIVERSION|OTHERS",
+        "description": "",
+        "severity": "high",
+        "immediate_action_required": true,
+        "timestamps": []
+      }
+    ]
+  }, null, 2)
+}
+
+// Validate JSON format
+const isValidJson = computed(() => {
+  if (!localCustomFormatTemplate.value.trim()) return true // Empty is valid (will use default)
+  try {
+    JSON.parse(localCustomFormatTemplate.value)
+    return true
+  } catch {
+    return false
+  }
+})
 </script>
 
 <template>
@@ -165,7 +175,7 @@ async function loadDefaultPrompt() {
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
     @click.self="closePanel"
   >
-    <Card class="w-full max-w-2xl max-h-[80vh] overflow-hidden border-0 shadow-2xl bg-card/95 backdrop-blur-xl">
+    <Card class="w-full max-w-4xl max-h-[85vh] overflow-hidden border-0 shadow-2xl bg-card/95 backdrop-blur-xl">
       <CardHeader class="pb-4 border-b border-border/50">
         <div class="flex items-center justify-between">
           <div class="flex items-center space-x-3">
@@ -173,8 +183,8 @@ async function loadDefaultPrompt() {
               <Settings class="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <CardTitle class="text-lg">Analysis Configuration</CardTitle>
-              <p class="text-sm text-muted-foreground">Customize transcription processing and AI instructions</p>
+              <CardTitle class="text-lg">Configuration</CardTitle>
+              <p class="text-sm text-muted-foreground">Customize AI prompts and processing settings</p>
             </div>
           </div>
           <Button variant="ghost" size="icon" @click="closePanel">
@@ -183,117 +193,56 @@ async function loadDefaultPrompt() {
         </div>
       </CardHeader>
 
-      <CardContent class="p-6 space-y-6 overflow-y-auto max-h-[60vh]">
-        <!-- Transcription Processing Options -->
-        <div class="space-y-4">
-          <div>
-            <h3 class="font-semibold text-sm text-foreground mb-3">Transcription Processing</h3>
-            <p class="text-xs text-muted-foreground mb-4">These options modify the transcription text before analysis</p>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Replace Numbers Toggle -->
-            <div class="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border/50">
-              <div class="space-y-1">
-                <Label class="text-sm font-medium">Replace Numbers</Label>
-                <p class="text-xs text-muted-foreground">Convert spoken numbers to digits<br>("twenty three" → "23")</p>
-              </div>
-              <button
-                @click="localReplaceNumbers = !localReplaceNumbers"
-                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                :class="localReplaceNumbers ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-700'"
-              >
-                <span
-                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-                  :class="localReplaceNumbers ? 'translate-x-6' : 'translate-x-1'"
-                />
-              </button>
-            </div>
-
-            <!-- ICAO Callsigns Toggle -->
-            <div class="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border/50">
-              <div class="space-y-1">
-                <Label class="text-sm font-medium">ICAO Callsigns</Label>
-                <p class="text-xs text-muted-foreground">Convert airline names to ICAO codes<br>("American 123" → "AAL123")</p>
-              </div>
-              <button
-                @click="localUseIcaoCallsigns = !localUseIcaoCallsigns"
-                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                :class="localUseIcaoCallsigns ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-700'"
-              >
-                <span
-                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-                  :class="localUseIcaoCallsigns ? 'translate-x-6' : 'translate-x-1'"
-                />
-              </button>
-            </div>
-          </div>
+      <!-- Tab Navigation -->
+      <div class="border-b border-border/50 bg-muted/20">
+        <div class="flex">
+          <button
+            @click="activeTab = 'summary'"
+            class="flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-colors"
+            :class="activeTab === 'summary' 
+              ? 'bg-background text-foreground border-b-2 border-blue-500' 
+              : 'text-muted-foreground hover:text-foreground'"
+          >
+            <MessageSquare class="h-4 w-4" />
+            <span>Summary Prompt</span>
+          </button>
+          <button
+            @click="activeTab = 'ner'"
+            class="flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-colors"
+            :class="activeTab === 'ner' 
+              ? 'bg-background text-foreground border-b-2 border-blue-500' 
+              : 'text-muted-foreground hover:text-foreground'"
+          >
+            <Tag class="h-4 w-4" />
+            <span>NER Prompt</span>
+          </button>
+          <button
+            @click="activeTab = 'format'"
+            class="flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-colors"
+            :class="activeTab === 'format' 
+              ? 'bg-background text-foreground border-b-2 border-blue-500' 
+              : 'text-muted-foreground hover:text-foreground'"
+          >
+            <Code class="h-4 w-4" />
+            <span>Format Template</span>
+          </button>
         </div>
+      </div>
 
-        <!-- Auto Report Settings -->
-        <div class="space-y-4">
-          <div>
-            <h3 class="font-semibold text-sm text-foreground mb-3">Auto Report Settings</h3>
-            <p class="text-xs text-muted-foreground mb-4">Configure automatic incident report generation</p>
-          </div>
-
-          <div class="space-y-4">
-            <!-- Auto Report Toggle -->
-            <div class="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border/50">
-              <div class="space-y-1">
-                <Label class="text-sm font-medium">Auto Report</Label>
-                <p class="text-xs text-muted-foreground">Generate reports automatically when<br>transcription updates</p>
-              </div>
-              <button
-                @click="localAutoReportEnabled = !localAutoReportEnabled"
-                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                :class="localAutoReportEnabled ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-700'"
-              >
-                <span
-                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-                  :class="localAutoReportEnabled ? 'translate-x-6' : 'translate-x-1'"
-                />
-              </button>
-            </div>
-
-            <!-- Minimum Interval Setting -->
-            <div class="p-4 rounded-lg bg-muted/30 border border-border/50">
-              <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                  <Label class="text-sm font-medium">Minimum Interval</Label>
-                  <span class="text-xs text-muted-foreground">{{ localAutoReportInterval }} seconds</span>
-                </div>
-                <p class="text-xs text-muted-foreground">Minimum time between automatic reports</p>
-                <div class="space-y-2">
-                  <Input
-                    v-model.number="localAutoReportInterval"
-                    type="number"
-                    min="10"
-                    max="300"
-                    step="5"
-                    class="bg-background/50 border-border/50"
-                    :disabled="!localAutoReportEnabled"
-                  />
-                  <p class="text-xs text-muted-foreground">
-                    Range: 10-300 seconds (recommended: 30-60 seconds)
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Custom AI Instructions -->
-        <div class="space-y-4">
+      <CardContent class="p-6 space-y-6 overflow-y-auto max-h-[55vh]">
+        <!-- Summary Prompt Tab -->
+        <div v-if="activeTab === 'summary'" class="space-y-4">
           <div class="flex items-center justify-between">
             <div>
-              <h3 class="font-semibold text-sm text-foreground">Custom AI Instructions</h3>
-              <p class="text-xs text-muted-foreground mt-1">Override the default system prompt for analysis</p>
+              <h3 class="font-semibold text-sm text-foreground">Summary Generation Prompt</h3>
+              <p class="text-xs text-muted-foreground mt-1">
+                <span class="text-red-500">*Required:</span> Instructions for AI to generate incident reports and summaries
+              </p>
             </div>
             <Button
               variant="outline"
               size="sm"
-              @click="loadDefaultPrompt"
+              @click="loadDefaultSummaryPrompt"
               class="text-xs"
             >
               Load Default
@@ -301,18 +250,28 @@ async function loadDefaultPrompt() {
           </div>
 
           <div class="space-y-2">
-            <Label for="custom-prompt" class="text-sm">System Prompt</Label>
+            <Label for="summary-prompt" class="text-sm">System Prompt <span class="text-red-500">*</span></Label>
             <Textarea
-              id="custom-prompt"
-              v-model="localCustomPrompt"
-              placeholder="Enter custom instructions for the AI analysis... (leave empty to use default)"
-              class="min-h-[200px] resize-none bg-background/50 border-border/50"
-              :class="{ 'border-blue-300 dark:border-blue-600': localCustomPrompt }"
+              id="summary-prompt"
+              v-model="localCustomSummaryPrompt"
+              placeholder="Enter instructions for summary generation... (required field)"
+              class="min-h-[300px] resize-none bg-background/50 border-border/50"
+              :class="{ 
+                'border-blue-300 dark:border-blue-600': localCustomSummaryPrompt,
+                'border-red-300 dark:border-red-600': !localCustomSummaryPrompt.trim()
+              }"
+              required
             />
             <div class="space-y-2">
-              <p class="text-xs text-muted-foreground">
-                {{ localCustomPrompt ? `${localCustomPrompt.length} characters` : 'Using default prompt' }}
-              </p>
+              <div class="flex items-center justify-between">
+                <p class="text-xs text-muted-foreground">
+                  {{ localCustomSummaryPrompt ? `${localCustomSummaryPrompt.length} characters` : 'Prompt required' }}
+                </p>
+                <div class="flex items-center space-x-1" v-if="!localCustomSummaryPrompt.trim()">
+                  <div class="h-2 w-2 bg-red-500 rounded-full"></div>
+                  <span class="text-xs text-red-600 dark:text-red-400">Required field</span>
+                </div>
+              </div>
 
               <!-- Template Variable Help -->
               <div class="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
@@ -331,6 +290,122 @@ async function loadDefaultPrompt() {
             </div>
           </div>
         </div>
+
+        <!-- NER Prompt Tab -->
+        <div v-if="activeTab === 'ner'" class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-semibold text-sm text-foreground">Named Entity Recognition Prompt</h3>
+              <p class="text-xs text-muted-foreground mt-1">Customize how AI identifies and highlights entities in transcriptions</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              @click="loadDefaultNerPrompt"
+              class="text-xs"
+            >
+              Load Default
+            </Button>
+          </div>
+
+          <div class="space-y-2">
+            <Label for="ner-prompt" class="text-sm">NER System Prompt</Label>
+            <Textarea
+              id="ner-prompt"
+              v-model="localCustomNerPrompt"
+              placeholder="Enter custom instructions for entity recognition... (leave empty to use default)"
+              class="min-h-[250px] resize-none bg-background/50 border-border/50"
+              :class="{ 'border-purple-300 dark:border-purple-600': localCustomNerPrompt }"
+            />
+            <div class="space-y-2">
+              <p class="text-xs text-muted-foreground">
+                {{ localCustomNerPrompt ? `${localCustomNerPrompt.length} characters` : 'Using default NER prompt' }}
+              </p>
+
+              <!-- NER Categories Help -->
+              <div class="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+                <div class="flex items-start space-x-2">
+                  <Tag class="h-4 w-4 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+                  <div class="space-y-1">
+                    <p class="text-xs font-medium text-purple-900 dark:text-purple-100">Available Entity Categories</p>
+                    <div class="text-xs text-purple-700 dark:text-purple-300 space-y-1">
+                      <div><code class="bg-purple-100 dark:bg-purple-900 px-1 rounded">IDENTIFIER</code> - Aircraft callsigns, controller names</div>
+                      <div><code class="bg-purple-100 dark:bg-purple-900 px-1 rounded">WEATHER</code> - Weather conditions and information</div>
+                      <div><code class="bg-purple-100 dark:bg-purple-900 px-1 rounded">TIMES</code> - Time references and schedules</div>
+                      <div><code class="bg-purple-100 dark:bg-purple-900 px-1 rounded">LOCATION</code> - Positions, runways, waypoints</div>
+                      <div><code class="bg-purple-100 dark:bg-purple-900 px-1 rounded">IMPACT</code> - Emergencies, deviations, critical events</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Format Template Tab -->
+        <div v-if="activeTab === 'format'" class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-semibold text-sm text-foreground">JSON Format Template</h3>
+              <p class="text-xs text-muted-foreground mt-1">Customize the JSON structure for structured summary generation</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              @click="loadDefaultFormatTemplate"
+              class="text-xs"
+            >
+              Load Default
+            </Button>
+          </div>
+
+          <div class="space-y-2">
+            <Label for="format-template" class="text-sm">JSON Format Template</Label>
+            <Textarea
+              id="format-template"
+              v-model="localCustomFormatTemplate"
+              placeholder="Enter custom JSON format template... (leave empty to use default)"
+              class="min-h-[300px] resize-none bg-background/50 border-border/50 font-mono text-sm"
+              :class="{ 
+                'border-green-300 dark:border-green-600': localCustomFormatTemplate && isValidJson,
+                'border-red-300 dark:border-red-600': localCustomFormatTemplate && !isValidJson
+              }"
+            />
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <p class="text-xs text-muted-foreground">
+                  {{ localCustomFormatTemplate ? `${localCustomFormatTemplate.length} characters` : 'Using default format' }}
+                </p>
+                <div class="flex items-center space-x-2">
+                  <div class="flex items-center space-x-1">
+                    <div :class="isValidJson ? 'h-2 w-2 bg-green-500 rounded-full' : 'h-2 w-2 bg-red-500 rounded-full'"></div>
+                    <span class="text-xs" :class="isValidJson ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                      {{ isValidJson ? 'Valid JSON' : 'Invalid JSON' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Format Template Help -->
+              <div class="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                <div class="flex items-start space-x-2">
+                  <Code class="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                  <div class="space-y-1">
+                    <p class="text-xs font-medium text-green-900 dark:text-green-100">Format Template Instructions</p>
+                    <div class="text-xs text-green-700 dark:text-green-300 space-y-1">
+                      <p>• Define the exact JSON structure the AI should output</p>
+                      <p>• Use placeholder values to show expected data types</p>
+                      <p>• The AI will replace placeholders with actual analysis results</p>
+                      <p>• Empty string means use the default template</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
       </CardContent>
 
       <!-- Footer Actions -->
@@ -350,8 +425,13 @@ async function loadDefaultPrompt() {
             <Button variant="outline" @click="closePanel">
               Cancel
             </Button>
-            <Button @click="applyChanges" class="bg-blue-600 hover:bg-blue-700">
-              Apply Settings
+            <Button 
+              @click="applyChanges" 
+              class="bg-blue-600 hover:bg-blue-700" 
+              :disabled="!isValidJson || !hasRequiredFields"
+            >
+              <span v-if="!hasRequiredFields">Missing Required Fields</span>
+              <span v-else>Apply Settings</span>
             </Button>
           </div>
         </div>
@@ -359,3 +439,67 @@ async function loadDefaultPrompt() {
     </Card>
   </div>
 </template>
+
+<style scoped>
+/* Apply the same NER highlighting styles */
+.ner-identifier {
+  background-color: rgba(250, 204, 21, 0.2);
+  color: #a16207;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+}
+
+.ner-weather {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #1d4ed8;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.ner-times {
+  background-color: rgba(168, 85, 247, 0.15);
+  color: #7e22ce;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.ner-location {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.ner-impact {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Dark mode variants */
+.dark .ner-identifier {
+  background-color: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+  border-color: rgba(250, 204, 21, 0.3);
+}
+
+.dark .ner-weather {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.dark .ner-times {
+  background-color: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.dark .ner-location {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.dark .ner-impact {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+</style>

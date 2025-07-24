@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import { Progress } from '@/components/ui/progress'
-import { Button } from '@/components/ui/button'
-import { Settings } from 'lucide-vue-next'
 import { useAudioRecording } from '@/composables/useAudioRecording'
 import { useSummaryGeneration } from '@/composables/useSummaryGeneration'
 import { useAdvancedTextProcessing } from '@/composables/useAdvancedTextProcessing'
@@ -12,15 +9,29 @@ import HeaderBar from '@/components/HeaderBar.vue'
 import TranscriptionPanel from '@/components/TranscriptionPanel.vue'
 import LiveIncidentPanel from '@/components/LiveIncidentPanel.vue'
 import AudioSimulationPlayer from '@/components/AudioSimulationPlayer.vue'
+import HealthStatusModal from '@/components/HealthStatusModal.vue'
+import NERLegendModal from '@/components/NERLegendModal.vue'
+import HealthCheckOverlay from '@/components/HealthCheckOverlay.vue'
+import { useBackendHealth } from '@/composables/useBackendHealth'
 import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
 
-definePageMeta({
-  middleware: 'auth'
-})
+// definePageMeta({
+//   middleware: 'auth'
+// })
 
-let pollingLogInterval: NodeJS.Timeout | null = null
+let pollingLogInterval: any = null
 
+// Authentication store
 const authStore = useAuthStore()
+
+// Backend health state
+const {
+  isCheckingBackendHealth,
+  backendHealthy,
+  backendError,
+  isDashboardDisabled,
+  retryBackendConnection
+} = useBackendHealth()
 
 // Stores and composables
 const transcriptionStore = useTranscriptionStore()
@@ -40,10 +51,10 @@ const {
   autoReportConfig,
   generateSummary,
   generateAutoReport,
-  toggleAutoSummary,
   toggleAutoReport,
   updateAutoReportConfig,
   setCustomPrompt,
+  setFormatTemplate,
   formatSummaryContent,
   cleanup
 } = useSummaryGeneration(transcriptionSegments)
@@ -52,29 +63,35 @@ const {
 const isSimulateMode = ref(false)
 
 // Watch simulate mode changes to automatically start/stop recording
-watch(isSimulateMode, async (newValue) => {
-  if (newValue) {
-    // When simulate mode is turned on, clear existing transcriptions
-    console.log('[Simulate] 🎬 Simulate mode activated - clearing transcriptions')
-    clearTranscription()
+watch(isSimulateMode, (newValue) => {
+  console.log(`[Simulate] Mode changed to: ${newValue}`)
+  if (!newValue) {
+    // Stopped simulating - could clear transcription or leave it
+    console.log('[Simulate] 🛑 Simulation mode stopped')
   } else {
-    // When simulate mode is turned off, simulation will stop automatically
-    console.log('[Simulate] 🛑 Simulate mode deactivated')
+    console.log('[Simulate] ▶️ Simulation mode started')
+    // Clear existing transcription when simulation starts
+    clearTranscription()
+    console.log('[Simulate] 🧹 Cleared existing transcription for simulation')
   }
 })
 
-// Handle simulation segments
-function handleSimulationSegmentsUpdated(segments: any[]) {
+const handleSimulationSegmentsUpdated = (segments: any[]) => {
+  console.log('[Simulate] 📝 Updated transcription segments from simulation:', segments.length)
+  
   // Replace the existing transcription segments with simulation segments
   transcriptionSegments.value.splice(0, transcriptionSegments.value.length, ...segments)
-  console.log('[Simulate] 📝 Updated transcription segments from simulation:', segments.length)
+  
+  console.log('[Simulate] ✅ Transcription segments updated in UI:', transcriptionSegments.value.length)
 }
 
 // Configuration state
 const isConfigPanelOpen = ref(false)
-const customPrompt = ref('')
-const replaceNumbers = ref(true)
-const useIcaoCallsigns = ref(true)
+const isHealthModalOpen = ref(false)
+const isNerLegendModalOpen = ref(false)
+const customPrompt = ref('Extract pending items and emergencies from transcription. Focus on safety issues and required actions.')
+const customNerPrompt = ref('')
+const customFormatTemplate = ref('')
 const autoReportEnabled = ref(false) // UI state only, copies from composable
 const autoReportIntervalValue = ref(30)
 
@@ -90,24 +107,24 @@ const maxWidth = 600
 // 1.  Restore & sync on mount
 // -------------------------------
 onMounted(async () => {
-  // First, validate the authentication token
+  // Validate the authentication token
   await validateAuthToken()
 
   if (process.client) {
     const savedPrompt             = localStorage.getItem('atlas-custom-prompt')
-    const savedReplaceNumbers     = localStorage.getItem('atlas-replace-numbers')
-    const savedUseIcaoCallsigns   = localStorage.getItem('atlas-use-icao-callsigns')
+    const savedNerPrompt          = localStorage.getItem('atlas-custom-ner-prompt')
+    const savedFormatTemplate     = localStorage.getItem('atlas-custom-format-template')
     const savedAutoReportEnabled  = localStorage.getItem('atlas-auto-report-enabled')
     const savedAutoReportInterval = localStorage.getItem('atlas-auto-report-interval')
 
     if (savedPrompt) {
       customPrompt.value = savedPrompt
     }
-    if (savedReplaceNumbers !== null) {
-      replaceNumbers.value = savedReplaceNumbers === 'true'
+    if (savedNerPrompt) {
+      customNerPrompt.value = savedNerPrompt
     }
-    if (savedUseIcaoCallsigns !== null) {
-      useIcaoCallsigns.value = savedUseIcaoCallsigns === 'true'
+    if (savedFormatTemplate) {
+      customFormatTemplate.value = savedFormatTemplate
     }
     if (savedAutoReportEnabled !== null) {
       autoReportEnabled.value = savedAutoReportEnabled === 'true'
@@ -119,7 +136,8 @@ onMounted(async () => {
     // Update composable config
     updateAutoReportConfig({
       enabled: autoReportEnabled.value,
-      customPrompt: customPrompt.value
+      customPrompt: customPrompt.value,
+      formatTemplate: customFormatTemplate.value
     })
   }
 
@@ -137,15 +155,16 @@ watch(customPrompt, (newValue) => {
   }
 })
 
-watch(replaceNumbers, (newValue) => {
+watch(customNerPrompt, (newValue) => {
   if (process.client) {
-    localStorage.setItem('atlas-replace-numbers', newValue.toString())
+    localStorage.setItem('atlas-custom-ner-prompt', newValue)
   }
 })
 
-watch(useIcaoCallsigns, (newValue) => {
+watch(customFormatTemplate, (newValue) => {
   if (process.client) {
-    localStorage.setItem('atlas-use-icao-callsigns', newValue.toString())
+    localStorage.setItem('atlas-custom-format-template', newValue)
+    setFormatTemplate(newValue)
   }
 })
 
@@ -179,6 +198,21 @@ watch(autoReportEnabled, (enabled) => {
 
 // Advanced text processing functionality
 const { getAggregatedProcessedText } = useAdvancedTextProcessing()
+
+// Get auto report enabled state - single source of truth
+const autoSummaryEnabled = computed(() => autoReportConfig.value.enabled)
+
+// Mock investigation composable for now
+const actionsState = ref({ isGenerating: false })
+const pendingActions = ref([])
+const autoActionsEnabled = ref(false)
+const generateActions = () => {
+  console.log('Generate actions called')
+}
+const completeAction = () => {
+  console.log('Complete action called')
+}
+const toggleAutoActions = () => {}
 
 // Computed
 const aggregatedTranscription = computed(() => {
@@ -244,17 +278,26 @@ function openConfigPanel() {
   isConfigPanelOpen.value = true
 }
 
+function openHealthModal() {
+  isHealthModalOpen.value = true
+}
+
+function openNerLegendModal() {
+  isNerLegendModalOpen.value = true
+}
+
 function resetConfig() {
-  customPrompt.value = ''
-  replaceNumbers.value = true
-  useIcaoCallsigns.value = true
+  customPrompt.value = 'Extract pending items and emergencies from transcription. Focus on safety issues and required actions.'
+  customNerPrompt.value = ''
+  customFormatTemplate.value = ''
   autoReportEnabled.value = false
   autoReportIntervalValue.value = 30
 
   // Reset composable state
   updateAutoReportConfig({
     enabled: false,
-    customPrompt: ''
+    customPrompt: customPrompt.value,
+    formatTemplate: ''
   })
 }
 
@@ -262,7 +305,8 @@ function handleApplySettings() {
   // Update all auto-report configuration
   updateAutoReportConfig({
     enabled: autoReportEnabled.value,
-    customPrompt: customPrompt.value
+    customPrompt: customPrompt.value,
+    formatTemplate: customFormatTemplate.value
   })
 }
 
@@ -325,32 +369,6 @@ function handleResizeEnd() {
   document.removeEventListener('mouseup', handleResizeEnd)
 }
 
-// Right panel resize handlers
-
-
-
-// Action handlers for suggested actions
-async function handleRefreshActions() {
-  if (aggregatedTranscription.value) {
-    try {
-      await generateActions(
-        aggregatedTranscription.value,
-        transcriptionSegments.value,
-        pendingActions.value
-      )
-    } catch (error) {
-      console.error('Actions generation failed:', error)
-    }
-  }
-}
-
-function handleCompleteAction(actionId: string) {
-  completeAction(actionId)
-}
-
-function handleToggleAutoActions() {
-  toggleAutoActions()
-}
 
 function handleForceAnalysis() {
   if (aggregatedTranscription.value) {
@@ -362,12 +380,15 @@ function handleToggleAutoMode() {
   autoReportEnabled.value = !autoReportEnabled.value
 }
 
-async function uploadRecording() {
-  // This will be handled by the simulate toggle now
-  // The upload functionality is now part of the AudioUploadPlayer
-  isSimulateMode.value = true
-}
-
+// Create computed property to convert recordingState for TranscriptionPanel
+const transcriptionPanelRecordingState = computed(() => ({
+  isRecording: recordingState.value.isRecording,
+  isTranscribing: recordingState.value.isTranscribing,
+  audioLevel: recordingState.value.audioLevel,
+  isWaitingForTranscription: recordingState.value.isWaitingForTranscription,
+  waitingForStop: recordingState.value.waitingForStop,
+  error: recordingState.value.error || undefined // Convert null to undefined
+}))
 
 // Cleanup on unmount
 onUnmounted(() => {
@@ -386,40 +407,53 @@ useHead({
 
 <template>
   <div class="h-screen bg-background flex flex-col">
-    <!-- Header -->
-    <HeaderBar
-      :username="authStore.user?.username"
-      @logout="logout"
-      @open-config="openConfigPanel"
-      class="shrink-0"
+    <!-- Backend Health Check Overlay -->
+    <HealthCheckOverlay
+      :is-checking="isCheckingBackendHealth"
+      :is-healthy="backendHealthy"
+      :error="backendError"
+      @retry="retryBackendConnection"
     />
 
-    <!-- Progress Indicators -->
-    <div v-if="recordingState.isTranscribing || summaryState.isGenerating" class="shrink-0 border-b border-border">
-      <div class="px-4 py-2 space-y-2">
-        <div v-if="recordingState.isTranscribing" class="flex items-center space-x-2">
-          <div class="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
-          <span class="text-sm text-muted-foreground">Processing audio transcription...</span>
-        </div>
-        <div v-if="summaryState.isGenerating" class="flex items-center space-x-2">
-          <div class="w-4 h-4 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin"></div>
-          <span class="text-sm text-muted-foreground">Generating situation report...</span>
+    <!-- Main Dashboard Content (disabled when backend unhealthy) -->
+    <div class="flex-1 flex flex-col" :class="{ 'pointer-events-none opacity-50': isDashboardDisabled }">
+      <!-- Header -->
+      <HeaderBar
+        :username="authStore.user?.username"
+        @logout="logout"
+        @open-config="openConfigPanel"
+        @open-health-modal="openHealthModal"
+        class="shrink-0"
+      />
+
+      <!-- Progress Indicators -->
+      <div v-if="recordingState.isTranscribing || summaryState.isGenerating" class="shrink-0 border-b border-border">
+        <div class="px-4 py-2 space-y-2">
+          <div v-if="recordingState.isTranscribing" class="flex items-center space-x-2">
+            <div class="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
+            <span class="text-sm text-muted-foreground">Processing audio transcription...</span>
+          </div>
+          <div v-if="summaryState.isGenerating" class="flex items-center space-x-2">
+            <div class="w-4 h-4 rounded-full border-2 border-green-500 border-t-transparent animate-spin"></div>
+            <span class="text-sm text-muted-foreground">Generating incident analysis...</span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Main IDE-style Layout -->
-    <div class="flex-1 flex overflow-hidden p-6 pt-0">
-      <div class="flex-1 flex overflow-hidden border border-border rounded-lg">
+      <!-- Main Content -->
+      <div class="flex-1 flex overflow-hidden m-3 border border-gray-100 rounded-lg">
         <!-- Left Panel - Transcription -->
-        <div class="flex border-r border-border flex flex-col" :style="{ width: sidebarWidth + 'px' }">
+        <div 
+          class="flex-shrink-0 flex flex-col overflow-hidden"
+          :style="{ width: `${sidebarWidth}px` }"
+        >
           <TranscriptionPanel
             :segments="transcriptionSegments"
             :is-transcribing="recordingState.isTranscribing"
             :is-recording="recordingState.isRecording"
             :audio-level="recordingState.audioLevel"
             :is-waiting-for-transcription="recordingState.isWaitingForTranscription"
-            :recording-state="recordingState"
+            :recording-state="transcriptionPanelRecordingState"
             :sidebar-width="sidebarWidth"
             :is-simulate-mode="isSimulateMode"
             @update-segment="handleUpdateSegment"
@@ -429,6 +463,7 @@ useHead({
             @toggle-recording="handleToggleRecording"
             @clear-transcription="handleClearTranscription"
             @segments-updated="handleSimulationSegmentsUpdated"
+            @open-ner-legend="openNerLegendModal"
             class="h-full"
           />
         </div>
@@ -446,13 +481,7 @@ useHead({
           <LiveIncidentPanel
             :summaries="summaries"
             :is-generating="summaryState.isGenerating"
-            :is-auto-summary-enabled="autoSummaryEnabled"
-            :is-auto-report-enabled="autoReportEnabled"
-            :auto-report-interval="autoReportIntervalValue"
-            :transcription-segments="transcriptionSegments"
-            :aggregated-transcription="aggregatedTranscription"
-            :auto-actions-enabled="autoActionsEnabled"
-            :pending-actions="pendingActions"
+            :auto-report-enabled="autoReportEnabled"
             :format-summary-content="formatSummaryContent"
             @force-analysis="handleForceAnalysis"
             @toggle-auto-mode="handleToggleAutoMode"
@@ -462,23 +491,29 @@ useHead({
       </div>
     </div>
 
-    <!-- Remove AudioUploadPlayer - it's now handled in TranscriptionPanel -->
-
     <!-- Floating Audio Simulation Player -->
     <AudioSimulationPlayer 
-      v-if="isSimulateMode" 
+      v-if="isSimulateMode && backendHealthy" 
       @close="isSimulateMode = false"
       @segments-updated="handleSimulationSegmentsUpdated"
+    />
+
+    <!-- Health Status Modal -->
+    <HealthStatusModal
+      v-model:is-open="isHealthModalOpen"
+    />
+
+    <!-- NER Legend Modal -->
+    <NERLegendModal
+      v-model:is-open="isNerLegendModalOpen"
     />
 
     <!-- Prompt Configuration Panel -->
     <ConfigPanel
       v-model:is-open="isConfigPanelOpen"
-      v-model:custom-prompt="customPrompt"
-      v-model:replace-numbers="replaceNumbers"
-      v-model:use-icao-callsigns="useIcaoCallsigns"
-      v-model:auto-report-enabled="autoReportEnabled"
-      v-model:auto-report-interval="autoReportIntervalValue"
+      v-model:custom-summary-prompt="customPrompt"
+      v-model:custom-ner-prompt="customNerPrompt"
+      v-model:custom-format-template="customFormatTemplate"
       @apply="handleApplySettings"
       @reset="resetConfig"
     />

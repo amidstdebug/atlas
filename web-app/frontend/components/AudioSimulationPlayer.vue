@@ -218,8 +218,6 @@ async function sendChunkToBackend(chunk: { blob: Blob; startTime: number; endTim
     
     const formData = new FormData()
     formData.append('file', chunk.blob, `simulation_chunk_${chunkIndex}.wav`)
-    formData.append('replace_numbers', 'true')
-    formData.append('use_icao_callsigns', 'true')
     
     const baseUrl = import.meta.env.DEV ? 'http://localhost:5002' : ''
     const response = await fetch(`${baseUrl}/transcribe`, {
