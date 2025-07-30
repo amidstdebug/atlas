@@ -36,6 +36,7 @@ interface Props {
   recordingState: RecordingState
   sidebarWidth?: number
   isSimulateMode?: boolean
+  customNerPrompt?: string
 }
 
 const props = defineProps<Props>()
@@ -81,7 +82,7 @@ watch(
       // Only process non-live segments that haven't been processed
       if (!segment.isLive && segment.text.trim() && getProcessingStatus(index) === 'raw') {
         console.log(`[TranscriptionPanel] Processing finalized segment ${index}:`, segment.text.substring(0, 50) + '...')
-        processTranscriptionBlock(segment.text, index)
+        processTranscriptionBlock(segment.text, index, props.customNerPrompt)
       }
     })
   },
@@ -155,9 +156,9 @@ function handleSimulateModeToggle(value: boolean) {
 </script>
 
 <template>
-  <div class="h-[700px] border-0 shadow-xl bg-card/50 backdrop-blur-sm overflow-hidden rounded-lg">
+  <div class="h-full border-0 shadow-xl bg-card/50 backdrop-blur-sm overflow-hidden rounded-lg min-h-0">
     <!-- Main Transcription Panel -->
-    <div class="h-full flex flex-col bg-card relative">
+    <div class="h-full flex flex-col bg-card relative min-h-0">
       <!-- Status Indicator -->
       <div v-if="props.isRecording || props.isWaitingForTranscription || props.recordingState.waitingForStop" class="absolute top-2 right-4 z-10">
         <div class="flex items-center space-x-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
@@ -266,16 +267,16 @@ function handleSimulateModeToggle(value: boolean) {
 	  
 
       <!-- Sidebar Content -->
-      <div class="flex-1 overflow-hidden p-4">
-        <div v-if="segments.length > 0" class="h-full">
+      <div class="flex-1 overflow-hidden p-4 min-h-0">
+        <div v-if="segments.length > 0" class="h-full min-h-0">
           <!-- Transcription Timeline -->
-          <div class="h-full overflow-y-auto pr-4">
-            <div class="relative z-10">
+          <div class="h-full overflow-y-auto overflow-x-hidden pr-2 min-h-0">
+            <div class="relative z-10 min-h-full">
               <div class="absolute top-4 bottom-4 w-0.5 bg-blue-500/10" style="left: 40px;"></div>
               <TransitionGroup
                 name="segment"
                 tag="div"
-                class="space-y-4 py-4"
+                class="space-y-4 py-4 min-h-full"
               >
                 <div
                   v-for="(segment, index) in segments"
@@ -371,12 +372,12 @@ function handleSimulateModeToggle(value: boolean) {
             </div>
           </div>
         </div>
-        <div v-else class="h-full flex items-center justify-center">
-          <div class="text-center space-y-3">
+        <div v-else class="h-full flex items-center justify-center min-h-0 overflow-hidden">
+          <div class="text-center space-y-3 max-w-xs px-4">
             <div class="w-16 h-16 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
               <FileAudio class="h-8 w-8 text-muted-foreground" />
             </div>
-            <p class="text-muted-foreground max-w-xs text-sm">
+            <p class="text-muted-foreground text-sm">
               Upload an audio recording (MP3, WAV, or other formats) or start live recording to begin transcription
             </p>
           </div>

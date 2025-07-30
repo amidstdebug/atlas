@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue';
+import { ref, computed, Ref } from 'vue';
 import type { RecordingState, TranscriptionSegment, TranscriptionResponse } from './types';
 import { useAuthStore } from '@/stores/auth';
 import { useAdvancedTextProcessing } from '@/composables/useAdvancedTextProcessing';
@@ -19,7 +19,7 @@ interface RecordingVariables {
   chunkCount: number;
 }
 
-export const useAudioRecording = () => {
+export const useAudioRecording = (customNerPrompt?: Ref<string>) => {
   const state = ref<RecordingState>({
     isRecording: false,
     isProcessing: false,
@@ -73,7 +73,7 @@ export const useAudioRecording = () => {
 
     try {
       console.log(`[Auto-Processing] 🚀 Starting processing for block ${segmentIndex}`);
-      await processAdvancedBlock(segment.text, segmentIndex);
+      await processAdvancedBlock(segment.text, segmentIndex, customNerPrompt?.value);
       console.log(`[Auto-Processing] ✅ Block ${segmentIndex} processed successfully`);
     } catch (error) {
       console.error(`[Auto-Processing] ❌ Block ${segmentIndex} processing failed:`, error);

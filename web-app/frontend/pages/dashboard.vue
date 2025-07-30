@@ -35,29 +35,6 @@ const {
 
 // Stores and composables
 const transcriptionStore = useTranscriptionStore()
-const {
-  state: recordingState,
-  transcriptionSegments,
-  startRecording,
-  stopRecording,
-  toggleRecording,
-  transcribeFile,
-  clearTranscription,
-  updateSegment
-} = useAudioRecording()
-
-const {
-  state: summaryState,
-  autoReportConfig,
-  generateSummary,
-  generateAutoReport,
-  toggleAutoReport,
-  updateAutoReportConfig,
-  setCustomPrompt,
-  setFormatTemplate,
-  formatSummaryContent,
-  cleanup
-} = useSummaryGeneration(transcriptionSegments)
 
 // Simulate mode state
 const isSimulateMode = ref(false)
@@ -94,6 +71,31 @@ const customNerPrompt = ref('')
 const customFormatTemplate = ref('')
 const autoReportEnabled = ref(false) // UI state only, copies from composable
 const autoReportIntervalValue = ref(30)
+
+// Audio recording setup (after configuration variables are declared)
+const {
+  state: recordingState,
+  transcriptionSegments,
+  startRecording,
+  stopRecording,
+  toggleRecording,
+  transcribeFile,
+  clearTranscription,
+  updateSegment
+} = useAudioRecording(customNerPrompt)
+
+const {
+  state: summaryState,
+  autoReportConfig,
+  generateSummary,
+  generateAutoReport,
+  toggleAutoReport,
+  updateAutoReportConfig,
+  setCustomPrompt,
+  setFormatTemplate,
+  formatSummaryContent,
+  cleanup
+} = useSummaryGeneration(transcriptionSegments)
 
 // Sidebar resizing state
 const sidebarWidth = ref(320)
@@ -324,19 +326,13 @@ async function validateAuthToken() {
     return
   }
 
-  // Validate token by making a request to a protected endpoint
-  try {
-    const { $api } = useNuxtApp()
-    await $api.get('/summary/history')
-    console.log('[Auth] Token validation successful')
-  } catch (error: any) {
-    if (error.response?.status === 401) {
-      console.log('[Auth] Token expired or invalid, logging out')
-      logout()
-    } else {
-      console.warn('[Auth] Token validation request failed:', error.message)
-      // For network errors, don't logout - user might just be offline
-    }
+  // Validate token by attempting to refresh it
+  const refreshSuccessful = await authStore.refreshToken()
+  if (!refreshSuccessful) {
+    console.log('[Auth] Token refresh failed, user will be redirected to login')
+    // The refreshToken method already handles logout and redirect on failure
+  } else {
+    console.log('[Auth] Token validation/refresh successful')
   }
 }
 
@@ -456,6 +452,7 @@ useHead({
             :recording-state="transcriptionPanelRecordingState"
             :sidebar-width="sidebarWidth"
             :is-simulate-mode="isSimulateMode"
+            :custom-ner-prompt="customNerPrompt"
             @update-segment="handleUpdateSegment"
             @update:is-simulate-mode="isSimulateMode = $event"
             @start-recording="handleToggleRecording"

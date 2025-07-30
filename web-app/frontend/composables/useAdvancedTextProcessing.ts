@@ -15,9 +15,10 @@ const processedBlocks = ref<Record<number, ProcessedBlock>>({})
 
 export const useAdvancedTextProcessing = () => {
 
-  const processTranscriptionBlock = async (text: string, segmentIndex: number): Promise<ProcessedBlock> => {
+  const processTranscriptionBlock = async (text: string, segmentIndex: number, customNerPrompt?: string): Promise<ProcessedBlock> => {
     try {
       console.log(`[AdvancedTextProcessing] 🚀 Starting processing for block ${segmentIndex}:`, text.substring(0, 50) + '...')
+      console.log(`[AdvancedTextProcessing] 🎨 Using custom NER prompt:`, customNerPrompt ? 'Yes' : 'No (using default)')
 
       // Mark as processing
       const processingBlock: ProcessedBlock = {
@@ -36,7 +37,8 @@ export const useAdvancedTextProcessing = () => {
       console.log(`[AdvancedTextProcessing] 📡 Making API call to /process-block for block ${segmentIndex}`)
 
       const response = await $api.post('/process-block', {
-        text: text
+        text: text,
+        ner_prompt: customNerPrompt || ''
       })
 
       console.log(`[AdvancedTextProcessing] ✅ API response for block ${segmentIndex}:`, response.data)

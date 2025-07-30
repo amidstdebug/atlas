@@ -51,14 +51,6 @@ async def chat_completions(
         logger.error(f"Error generating summary: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Summary generation failed: {str(e)}")
 
-@router.get("/summary/history")
-async def get_summary_history(
-    token_data: TokenData = Depends(get_token_data)
-):
-    """Get summary history for the current user"""
-    user_id = token_data.user_id
-    return current_summaries.get(user_id, [])
-
 @router.get("/summary/default-prompt")
 async def get_default_prompt(
     token_data: TokenData = Depends(get_token_data)
@@ -204,7 +196,7 @@ Format: {"cleaned_text": "text", "ner_text": "tagged_text", "entities": []}"""
         payload = {
             "model": settings.vllm_model,
             "messages": [
-				{"role": "system", "content": system_prompt},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": raw_text},
             ],
             "stream": False,
@@ -212,7 +204,11 @@ Format: {"cleaned_text": "text", "ner_text": "tagged_text", "entities": []}"""
             "max_tokens": 256,  # Limit output for efficiency
             "chat_template_kwargs": {"enable_thinking": False}
         }
+        print("payload:", payload)
+
         result = await generate_completion(payload)
+
+        print("result:", result)
 
         # Robust OpenAI-compatible response parsing
         if isinstance(result, dict) and "error" in result:
@@ -238,6 +234,7 @@ Format: {"cleaned_text": "text", "ner_text": "tagged_text", "entities": []}"""
 
             # Ensure all keys are present, providing sensible defaults
             cleaned_text = data.get("cleaned_text", raw_text) # Fallback to raw_text if not in response
+
             return {
                 "cleaned_text": cleaned_text,
                 "ner_text": data.get("ner_text", cleaned_text),
