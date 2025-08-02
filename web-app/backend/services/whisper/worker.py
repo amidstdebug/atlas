@@ -16,7 +16,12 @@ async def main() -> None:
         data = job["data"]
         try:
             content = base64.b64decode(data["file_content"])
-            segments = await _send_to_whisper(content, data["filename"], data["content_type"])
+            segments = await _send_to_whisper(
+                content,
+                data["filename"],
+                data["content_type"],
+                data.get("prompt"),
+            )
             await queue.send_result(job["id"], [seg.dict() for seg in segments])
         except Exception as e:
             logger.error(f"Whisper worker error: {e}")

@@ -19,7 +19,7 @@ interface RecordingVariables {
   chunkCount: number;
 }
 
-export const useAudioRecording = (customNerPrompt?: Ref<string>) => {
+export const useAudioRecording = (customWhisperPrompt?: Ref<string>) => {
   const state = ref<RecordingState>({
     isRecording: false,
     isProcessing: false,
@@ -73,7 +73,7 @@ export const useAudioRecording = (customNerPrompt?: Ref<string>) => {
 
     try {
       console.log(`[Auto-Processing] 🚀 Starting processing for block ${segmentIndex}`);
-      await processAdvancedBlock(segment.text, segmentIndex, customNerPrompt?.value);
+      await processAdvancedBlock(segment.text, segmentIndex);
       console.log(`[Auto-Processing] ✅ Block ${segmentIndex} processed successfully`);
     } catch (error) {
       console.error(`[Auto-Processing] ❌ Block ${segmentIndex} processing failed:`, error);
@@ -87,6 +87,9 @@ export const useAudioRecording = (customNerPrompt?: Ref<string>) => {
 
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.webm');
+      if (customWhisperPrompt?.value) {
+        formData.append('prompt', customWhisperPrompt.value);
+      }
 
       const baseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:5002' : '';
       const response = await fetch(`${baseUrl}/transcribe`, {

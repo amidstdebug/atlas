@@ -36,7 +36,6 @@ interface Props {
   recordingState: RecordingState
   sidebarWidth?: number
   isSimulateMode?: boolean
-  customNerPrompt?: string
 }
 
 const props = defineProps<Props>()
@@ -82,7 +81,7 @@ watch(
       // Only process non-live segments that haven't been processed
       if (!segment.isLive && segment.text.trim() && getProcessingStatus(index) === 'raw') {
         console.log(`[TranscriptionPanel] Processing finalized segment ${index}:`, segment.text.substring(0, 50) + '...')
-        processTranscriptionBlock(segment.text, index, props.customNerPrompt)
+        processTranscriptionBlock(segment.text, index)
       }
     })
   },

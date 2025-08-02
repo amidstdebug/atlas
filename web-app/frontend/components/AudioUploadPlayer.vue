@@ -7,6 +7,7 @@ import AudioSimulationPlayer from './AudioSimulationPlayer.vue'
 interface Props {
   isRecording: boolean
   isSimulateMode: boolean
+  customWhisperPrompt?: string
 }
 
 const props = defineProps<Props>()
@@ -38,5 +39,9 @@ watch(isSimulating, (val) => {
     <Label for="simulate-mode">Simulate</Label>
   </div>
 
-  <AudioSimulationPlayer v-if="isSimulating" @close="isSimulating = false" />
+  <AudioSimulationPlayer
+    v-if="isSimulating"
+    @close="isSimulating = false"
+    :custom-whisper-prompt="props.customWhisperPrompt"
+  />
 </template>
