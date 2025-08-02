@@ -70,7 +70,7 @@ Entity tags:
 - LOCATION: <span class="ner-location">location</span>
 - IMPACT: <span class="ner-impact">emergency</span>
 
-Format: {"cleaned_text": "text", "ner_text": "tagged_text", "entities": []}`
+Format: {"cleaned_text": "text", "ner_text": "tagged_text"}`
 
 // Local state for form inputs
 const localCustomSummaryPrompt = ref(props.customSummaryPrompt || '')

@@ -155,7 +155,7 @@ Entity tags:
 - LOCATION: <span class="ner-location">location</span>
 - IMPACT: <span class="ner-impact">emergency</span>
 
-Format: {"cleaned_text": "text", "ner_text": "tagged_text", "entities": []}"""
+Format: {"cleaned_text": "text", "ner_text": "tagged_text"}"""
 
         return {"default_ner_prompt": default_ner_prompt}
 
@@ -174,7 +174,7 @@ async def process_transcription_block(
         custom_ner_prompt = request.get("ner_prompt", "")  # Accept custom NER prompt
         
         if not raw_text.strip():
-            return {"cleaned_text": "", "ner_text": "", "entities": []}
+            return {"cleaned_text": "", "ner_text": ""}
 
         # Use custom prompt if provided, otherwise use optimized default
         if custom_ner_prompt.strip():
@@ -190,7 +190,7 @@ Entity tags:
 - LOCATION: <span class="ner-location">location</span>
 - IMPACT: <span class="ner-impact">emergency</span>
 
-Format: {"cleaned_text": "text", "ner_text": "tagged_text", "entities": []}"""
+Format: {"cleaned_text": "text", "ner_text": "tagged_text"}"""
         
         # Call the summarization service once with the combined prompt
         payload = {
@@ -200,15 +200,18 @@ Format: {"cleaned_text": "text", "ner_text": "tagged_text", "entities": []}"""
                 {"role": "user", "content": raw_text},
             ],
             "stream": False,
-            "temperature": 0.0,
-            "max_tokens": 256,  # Limit output for efficiency
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20,
+            "min_p": 0,
+            "max_tokens": 512,  # Limit output length for efficiency
             "chat_template_kwargs": {"enable_thinking": False}
         }
         print("payload:", payload)
 
         result = await generate_completion(payload)
 
-        print("result:", result)
+        print("system prompt:", system_prompt, "result:", result)
 
         # Robust OpenAI-compatible response parsing
         if isinstance(result, dict) and "error" in result:
@@ -237,8 +240,7 @@ Format: {"cleaned_text": "text", "ner_text": "tagged_text", "entities": []}"""
 
             return {
                 "cleaned_text": cleaned_text,
-                "ner_text": data.get("ner_text", cleaned_text),
-                "entities": data.get("entities", [])
+                "ner_text": data.get("ner_text", cleaned_text)
             }
 
         except (json.JSONDecodeError, TypeError) as e:
@@ -246,8 +248,7 @@ Format: {"cleaned_text": "text", "ner_text": "tagged_text", "entities": []}"""
             # Fallback - return the raw text if JSON parsing fails
             return {
                 "cleaned_text": raw_text,
-                "ner_text": raw_text,
-                "entities": []
+                "ner_text": raw_text
             }
 
     except Exception as e:
@@ -310,8 +311,11 @@ Return only valid JSON."""
             {"role": "user", "content": user_prompt},
         ],
         "stream": False,
-        "temperature": 0.0,  # Lower temperature for more consistent output
-        "max_tokens": 512,   # Limit output length for efficiency
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0,
+        "max_tokens": 512,  # Limit output length for efficiency
         "chat_template_kwargs": {"enable_thinking": False}
     }
     summary_result = await generate_completion(payload)

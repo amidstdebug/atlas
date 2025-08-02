@@ -253,7 +253,7 @@ export const useSummaryGeneration = (reactiveSegments: Ref<any[]>) => {
   }
 
   const cleanup = () => {
-    state.value.isGenerating = false
+    state.statevalue.isGenerating = false
     state.value.error = null
   }
 

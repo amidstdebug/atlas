@@ -10,7 +10,6 @@ export interface TranscriptionSegment {
   // Enhanced content
   cleanedText?: string;
   nerText?: string;
-  entities?: NEREntity[];
   processingError?: string;
 }
 
@@ -37,7 +36,6 @@ export interface CleanTextResponse {
 export interface ProcessBlockResponse {
   cleaned_text: string;
   ner_text: string;
-  entities: NEREntity[];
 }
 
 export interface RecordingState {
