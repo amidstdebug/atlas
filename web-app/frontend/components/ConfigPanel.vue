@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, Settings, RotateCcw, MessageSquare, Tag, Code } from 'lucide-vue-next'
+import { X, Settings, RotateCcw, MessageSquare, Mic, Code } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
@@ -10,14 +10,14 @@ import { Input } from '@/components/ui/input'
 interface Props {
   isOpen: boolean
   customSummaryPrompt: string
-  customNerPrompt: string
+  customWhisperPrompt: string
   customFormatTemplate: string
 }
 
 interface Emits {
   (e: 'update:isOpen', value: boolean): void
   (e: 'update:customSummaryPrompt', value: string): void
-  (e: 'update:customNerPrompt', value: string): void
+  (e: 'update:customWhisperPrompt', value: string): void
   (e: 'update:customFormatTemplate', value: string): void
   (e: 'reset'): void
   (e: 'apply'): void
@@ -61,32 +61,23 @@ Rules:
 - Use plain text, bullet points, headings only
 - No JSON or code blocks`
 
-const defaultNerPrompt = `Clean ATC text and tag entities. Return JSON only.
-
-Entity tags:
-- IDENTIFIER: <span class="ner-identifier">callsign</span>
-- WEATHER: <span class="ner-weather">weather</span> 
-- TIMES: <span class="ner-times">time</span>
-- LOCATION: <span class="ner-location">location</span>
-- IMPACT: <span class="ner-impact">emergency</span>
-
-Format: {"cleaned_text": "text", "ner_text": "tagged_text"}`
+const defaultWhisperPrompt = ''
 
 // Local state for form inputs
 const localCustomSummaryPrompt = ref(props.customSummaryPrompt || '')
-const localCustomNerPrompt = ref(props.customNerPrompt || '')
+const localCustomWhisperPrompt = ref(props.customWhisperPrompt || '')
 const localCustomFormatTemplate = ref(props.customFormatTemplate || '')
 
 // Current tab (summary, ner, or format)
-const activeTab = ref<'summary' | 'ner' | 'format'>('summary')
+const activeTab = ref<'summary' | 'whisper' | 'format'>('summary')
 
 // Watch for prop changes and sync local state
 watch(() => props.customSummaryPrompt, (newVal) => {
   localCustomSummaryPrompt.value = newVal || ''
 })
 
-watch(() => props.customNerPrompt, (newVal) => {
-  localCustomNerPrompt.value = newVal || ''
+watch(() => props.customWhisperPrompt, (newVal) => {
+  localCustomWhisperPrompt.value = newVal || ''
 })
 
 watch(() => props.customFormatTemplate, (newVal) => {
@@ -95,7 +86,7 @@ watch(() => props.customFormatTemplate, (newVal) => {
 
 const hasCustomChanges = computed(() => {
   return localCustomSummaryPrompt.value !== '' ||
-         localCustomNerPrompt.value !== '' ||
+         localCustomWhisperPrompt.value !== '' ||
          localCustomFormatTemplate.value !== ''
 })
 
@@ -113,7 +104,7 @@ function applyChanges() {
   }
   
   emit('update:customSummaryPrompt', localCustomSummaryPrompt.value)
-  emit('update:customNerPrompt', localCustomNerPrompt.value)
+  emit('update:customWhisperPrompt', localCustomWhisperPrompt.value)
   emit('update:customFormatTemplate', localCustomFormatTemplate.value)
   emit('apply')
   closePanel()
@@ -121,7 +112,7 @@ function applyChanges() {
 
 function resetToDefaults() {
   localCustomSummaryPrompt.value = defaultSummaryPrompt  // Set to default instead of empty
-  localCustomNerPrompt.value = ''
+  localCustomWhisperPrompt.value = ''
   localCustomFormatTemplate.value = ''
   emit('reset')
 }
@@ -130,8 +121,8 @@ function loadDefaultSummaryPrompt() {
   localCustomSummaryPrompt.value = defaultSummaryPrompt
 }
 
-function loadDefaultNerPrompt() {
-  localCustomNerPrompt.value = defaultNerPrompt
+function loadDefaultWhisperPrompt() {
+  localCustomWhisperPrompt.value = defaultWhisperPrompt
 }
 
 function loadDefaultFormatTemplate() {
@@ -207,14 +198,14 @@ const isValidJson = computed(() => {
             <span>Summary Prompt</span>
           </button>
           <button
-            @click="activeTab = 'ner'"
+            @click="activeTab = 'whisper'"
             class="flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-colors"
-            :class="activeTab === 'ner' 
+            :class="activeTab === 'whisper' 
               ? 'bg-background text-foreground border-b-2 border-blue-500' 
               : 'text-muted-foreground hover:text-foreground'"
           >
-            <Tag class="h-4 w-4" />
-            <span>NER Prompt</span>
+            <Mic class="h-4 w-4" />
+            <span>Whisper Prompt</span>
           </button>
           <button
             @click="activeTab = 'format'"
@@ -291,17 +282,17 @@ const isValidJson = computed(() => {
           </div>
         </div>
 
-        <!-- NER Prompt Tab -->
-        <div v-if="activeTab === 'ner'" class="space-y-4">
+        <!-- Whisper Prompt Tab -->
+        <div v-if="activeTab === 'whisper'" class="space-y-4">
           <div class="flex items-center justify-between">
             <div>
-              <h3 class="font-semibold text-sm text-foreground">Named Entity Recognition Prompt</h3>
-              <p class="text-xs text-muted-foreground mt-1">Customize how AI identifies and highlights entities in transcriptions</p>
+              <h3 class="font-semibold text-sm text-foreground">Whisper Prompt</h3>
+              <p class="text-xs text-muted-foreground mt-1">Provide optional context to guide transcription</p>
             </div>
             <Button
               variant="outline"
               size="sm"
-              @click="loadDefaultNerPrompt"
+              @click="loadDefaultWhisperPrompt"
               class="text-xs"
             >
               Load Default
@@ -309,35 +300,18 @@ const isValidJson = computed(() => {
           </div>
 
           <div class="space-y-2">
-            <Label for="ner-prompt" class="text-sm">NER System Prompt</Label>
+            <Label for="whisper-prompt" class="text-sm">Prompt</Label>
             <Textarea
-              id="ner-prompt"
-              v-model="localCustomNerPrompt"
-              placeholder="Enter custom instructions for entity recognition... (leave empty to use default)"
+              id="whisper-prompt"
+              v-model="localCustomWhisperPrompt"
+              placeholder="Enter context or leave empty for none"
               class="min-h-[250px] resize-none bg-background/50 border-border/50"
-              :class="{ 'border-purple-300 dark:border-purple-600': localCustomNerPrompt }"
+              :class="{ 'border-purple-300 dark:border-purple-600': localCustomWhisperPrompt }"
             />
             <div class="space-y-2">
               <p class="text-xs text-muted-foreground">
-                {{ localCustomNerPrompt ? `${localCustomNerPrompt.length} characters` : 'Using default NER prompt' }}
+                {{ localCustomWhisperPrompt ? `${localCustomWhisperPrompt.length} characters` : 'Using default whisper prompt' }}
               </p>
-
-              <!-- NER Categories Help -->
-              <div class="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
-                <div class="flex items-start space-x-2">
-                  <Tag class="h-4 w-4 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
-                  <div class="space-y-1">
-                    <p class="text-xs font-medium text-purple-900 dark:text-purple-100">Available Entity Categories</p>
-                    <div class="text-xs text-purple-700 dark:text-purple-300 space-y-1">
-                      <div><code class="bg-purple-100 dark:bg-purple-900 px-1 rounded">IDENTIFIER</code> - Aircraft callsigns, controller names</div>
-                      <div><code class="bg-purple-100 dark:bg-purple-900 px-1 rounded">WEATHER</code> - Weather conditions and information</div>
-                      <div><code class="bg-purple-100 dark:bg-purple-900 px-1 rounded">TIMES</code> - Time references and schedules</div>
-                      <div><code class="bg-purple-100 dark:bg-purple-900 px-1 rounded">LOCATION</code> - Positions, runways, waypoints</div>
-                      <div><code class="bg-purple-100 dark:bg-purple-900 px-1 rounded">IMPACT</code> - Emergencies, deviations, critical events</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>

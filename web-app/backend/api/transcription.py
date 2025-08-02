@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Form
 from typing import Dict, List, Optional
 import json
 import logging
@@ -21,6 +21,7 @@ transcription_history = {}
 @router.post("/transcribe", response_model=TranscriptionResponse)
 async def transcribe_audio(
     file: UploadFile = File(...),
+    prompt: Optional[str] = Form(None),
     token_data: TokenData = Depends(get_token_data)
 ):
     """Transcribe audio from an uploaded file"""
@@ -28,8 +29,13 @@ async def transcribe_audio(
         # Read file content
         file_content = await file.read()
 
-        # Call the transcription service
-        segments = await transcribe_audio_file(file_content, file.filename, file.content_type)
+        # Call the transcription service with optional prompt
+        segments = await transcribe_audio_file(
+            file_content,
+            file.filename,
+            file.content_type,
+            prompt,
+        )
         print("Transcription Segments:", segments)
 
         # Extract text for processing

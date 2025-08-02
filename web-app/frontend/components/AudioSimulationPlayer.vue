@@ -12,6 +12,10 @@ const emit = defineEmits<{
   'segments-updated': [segments: any[]]
 }>()
 
+const props = defineProps<{
+  customWhisperPrompt?: string
+}>()
+
 const authStore = useAuthStore()
 
 const audioRef = ref<HTMLAudioElement>()
@@ -218,6 +222,9 @@ async function sendChunkToBackend(chunk: { blob: Blob; startTime: number; endTim
     
     const formData = new FormData()
     formData.append('file', chunk.blob, `simulation_chunk_${chunkIndex}.wav`)
+    if (props.customWhisperPrompt) {
+      formData.append('prompt', props.customWhisperPrompt)
+    }
     
     const baseUrl = import.meta.env.DEV ? 'http://localhost:5002' : ''
     const response = await fetch(`${baseUrl}/transcribe`, {

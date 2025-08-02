@@ -1,6 +1,6 @@
 import logging
 import base64
-from typing import List
+from typing import List, Optional
 import requests
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -14,13 +14,24 @@ settings = get_settings()
 queue = RedisQueue("whisper_tasks", settings.redis_url)
 
 
-async def _send_to_whisper(file_content: bytes, filename: str, content_type: str) -> List[TranscriptionSegment]:
+async def _send_to_whisper(
+    file_content: bytes,
+    filename: str,
+    content_type: str,
+    prompt: Optional[str] = None,
+) -> List[TranscriptionSegment]:
     """Directly send audio file to the Whisper service."""
     whisper_service_url = settings.whisper_service_url
     files = {"file": (filename, file_content, content_type)}
+    data = {"prompt": prompt} if prompt else {}
     logger.info(f"Sending transcription request to Whisper service: {whisper_service_url}")
     response = await run_in_threadpool(
-        lambda: requests.post(f"{whisper_service_url}/transcribe", files=files, timeout=300)
+        lambda: requests.post(
+            f"{whisper_service_url}/transcribe",
+            files=files,
+            data=data,
+            timeout=300,
+        )
     )
     if response.status_code != 200:
         logger.error(f"Whisper service error: {response.status_code} - {response.text}")
@@ -30,7 +41,12 @@ async def _send_to_whisper(file_content: bytes, filename: str, content_type: str
     segments_data = result.get("segments", [])
     return [TranscriptionSegment(text=seg["text"], start=float(seg["start"]), end=float(seg["end"])) for seg in segments_data]
 
-async def transcribe_audio_file(file_content: bytes, filename: str, content_type: str) -> List[TranscriptionSegment]:
+async def transcribe_audio_file(
+    file_content: bytes,
+    filename: str,
+    content_type: str,
+    prompt: Optional[str] = None,
+) -> List[TranscriptionSegment]:
     """Queue the transcription request and wait for the result."""
     try:
         encoded = base64.b64encode(file_content).decode("utf-8")
@@ -38,6 +54,7 @@ async def transcribe_audio_file(file_content: bytes, filename: str, content_type
             "file_content": encoded,
             "filename": filename,
             "content_type": content_type,
+            "prompt": prompt,
         })
         result = await queue.await_result(job_id)
         if isinstance(result, dict) and result.get("error"):

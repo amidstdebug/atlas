@@ -67,7 +67,7 @@ const isConfigPanelOpen = ref(false)
 const isHealthModalOpen = ref(false)
 const isNerLegendModalOpen = ref(false)
 const customPrompt = ref('Extract pending items and emergencies from transcription. Focus on safety issues and required actions.')
-const customNerPrompt = ref('')
+const customWhisperPrompt = ref('')
 const customFormatTemplate = ref('')
 const autoReportEnabled = ref(false) // UI state only, copies from composable
 const autoReportIntervalValue = ref(30)
@@ -82,7 +82,7 @@ const {
   transcribeFile,
   clearTranscription,
   updateSegment
-} = useAudioRecording(customNerPrompt)
+} = useAudioRecording(customWhisperPrompt)
 
 const {
   state: summaryState,
@@ -114,7 +114,7 @@ onMounted(async () => {
 
   if (process.client) {
     const savedPrompt             = localStorage.getItem('atlas-custom-prompt')
-    const savedNerPrompt          = localStorage.getItem('atlas-custom-ner-prompt')
+    const savedWhisperPrompt      = localStorage.getItem('atlas-custom-whisper-prompt')
     const savedFormatTemplate     = localStorage.getItem('atlas-custom-format-template')
     const savedAutoReportEnabled  = localStorage.getItem('atlas-auto-report-enabled')
     const savedAutoReportInterval = localStorage.getItem('atlas-auto-report-interval')
@@ -122,8 +122,8 @@ onMounted(async () => {
     if (savedPrompt) {
       customPrompt.value = savedPrompt
     }
-    if (savedNerPrompt) {
-      customNerPrompt.value = savedNerPrompt
+    if (savedWhisperPrompt) {
+      customWhisperPrompt.value = savedWhisperPrompt
     }
     if (savedFormatTemplate) {
       customFormatTemplate.value = savedFormatTemplate
@@ -157,9 +157,9 @@ watch(customPrompt, (newValue) => {
   }
 })
 
-watch(customNerPrompt, (newValue) => {
+watch(customWhisperPrompt, (newValue) => {
   if (process.client) {
-    localStorage.setItem('atlas-custom-ner-prompt', newValue)
+    localStorage.setItem('atlas-custom-whisper-prompt', newValue)
   }
 })
 
@@ -290,7 +290,7 @@ function openNerLegendModal() {
 
 function resetConfig() {
   customPrompt.value = 'Extract pending items and emergencies from transcription. Focus on safety issues and required actions.'
-  customNerPrompt.value = ''
+  customWhisperPrompt.value = ''
   customFormatTemplate.value = ''
   autoReportEnabled.value = false
   autoReportIntervalValue.value = 30
@@ -452,14 +452,12 @@ useHead({
             :recording-state="transcriptionPanelRecordingState"
             :sidebar-width="sidebarWidth"
             :is-simulate-mode="isSimulateMode"
-            :custom-ner-prompt="customNerPrompt"
             @update-segment="handleUpdateSegment"
             @update:is-simulate-mode="isSimulateMode = $event"
             @start-recording="handleToggleRecording"
             @stop-recording="handleToggleRecording"
             @toggle-recording="handleToggleRecording"
             @clear-transcription="handleClearTranscription"
-            @segments-updated="handleSimulationSegmentsUpdated"
             @open-ner-legend="openNerLegendModal"
             class="h-full"
           />
@@ -489,10 +487,11 @@ useHead({
     </div>
 
     <!-- Floating Audio Simulation Player -->
-    <AudioSimulationPlayer 
-      v-if="isSimulateMode && backendHealthy" 
+    <AudioSimulationPlayer
+      v-if="isSimulateMode && backendHealthy"
       @close="isSimulateMode = false"
       @segments-updated="handleSimulationSegmentsUpdated"
+      :custom-whisper-prompt="customWhisperPrompt"
     />
 
     <!-- Health Status Modal -->
@@ -509,7 +508,7 @@ useHead({
     <ConfigPanel
       v-model:is-open="isConfigPanelOpen"
       v-model:custom-summary-prompt="customPrompt"
-      v-model:custom-ner-prompt="customNerPrompt"
+      v-model:custom-whisper-prompt="customWhisperPrompt"
       v-model:custom-format-template="customFormatTemplate"
       @apply="handleApplySettings"
       @reset="resetConfig"

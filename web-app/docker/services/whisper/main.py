@@ -7,10 +7,10 @@ Transformers Whisper model.
 import tempfile
 import os
 import logging
-from typing import List, Dict, Any
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from typing import List, Dict, Any, Optional
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse
-from transformers import pipeline
+from transformers import pipeline, WhisperProcessor
 import torch
 
 # Configure logging
@@ -23,12 +23,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Global variable to store the loaded pipeline
+# Global variables to store the loaded pipeline and processor
 asr_pipeline = None
+asr_processor = None
 
 def load_whisper_pipeline():
     """Load the Whisper pipeline on startup"""
-    global asr_pipeline
+    global asr_pipeline, asr_processor
     if asr_pipeline is None:
         try:
             # Check if CUDA is available and print GPU info
@@ -51,6 +52,12 @@ def load_whisper_pipeline():
                 device=device,
             )
 
+            # Disable forced decoder ids so custom prompts are respected
+            asr_pipeline.model.generation_config.forced_decoder_ids = None
+
+            # Load processor for prompt tokenization
+            asr_processor = WhisperProcessor.from_pretrained(model_name)
+
             logger.info(f"Whisper model '{model_name}' loaded successfully on {device}")
         except Exception as e:
             logger.error(f"Failed to load Whisper model: {str(e)}")
@@ -68,7 +75,7 @@ async def health_check():
     return {"status": "healthy", "service": "whisper-transcription"}
 
 @app.post("/transcribe")
-async def transcribe_audio(file: UploadFile = File(...)):
+async def transcribe_audio(file: UploadFile = File(...), prompt: Optional[str] = Form(None)):
     """
     Transcribe audio file using Whisper
     """
@@ -93,8 +100,18 @@ async def transcribe_audio(file: UploadFile = File(...)):
             # Get the pipeline
             asr = load_whisper_pipeline()
 
+            kwargs: Dict[str, Any] = {"return_timestamps": True}
+            if prompt:
+                prompt_ids = asr_processor.tokenizer.get_prompt_ids(
+                    prompt, return_tensors="pt"
+                ).to(asr.model.device)
+                kwargs["generate_kwargs"] = {
+                    "prompt_ids": prompt_ids,
+                    "prompt_condition_type": "first-segment",
+                }
+
             # Transcribe the audio
-            result = asr(temp_file_path, return_timestamps=True)
+            result = asr(temp_file_path, **kwargs)
 
             # Extract segments
             segments = []
