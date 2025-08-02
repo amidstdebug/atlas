@@ -1,6 +1,7 @@
 # Whisper Transcription Service
 
-A standalone FastAPI service for audio transcription using OpenAI Whisper.
+A standalone FastAPI service for audio transcription using a Hugging Face
+Transformers Whisper model.
 
 ## Features
 
@@ -9,7 +10,16 @@ A standalone FastAPI service for audio transcription using OpenAI Whisper.
 - GPU acceleration support (CUDA)
 - Docker containerized
 - Health check endpoint
-- Configurable Whisper model size
+- Configurable Whisper model ID
+
+## Framework Versions
+
+The service is tested with the following library versions:
+
+- Transformers 4.35.0
+- PyTorch 2.0.1+cu117
+- Datasets 2.12.0
+- Tokenizers 0.14.1
 
 ## Endpoints
 
@@ -24,7 +34,8 @@ A standalone FastAPI service for audio transcription using OpenAI Whisper.
 ## Configuration
 
 Environment variables:
-- `WHISPER_MODEL_SIZE`: Model size (tiny, base, small, medium, large, large-v2, large-v3)
+- `WHISPER_MODEL_ID`: Hugging Face model identifier (default:
+  `jlvdoorn/whisper-large-v3-atco2-asr`)
 - `CUDA_VISIBLE_DEVICES`: GPU device ID for CUDA acceleration
 
 ## Docker Usage
