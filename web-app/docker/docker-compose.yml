@@ -66,7 +66,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     command: >
-      --model ${VLLM_MODEL:-Qwen/Qwen3-8B-FP8}
+      --model ${VLLM_MODEL:-Qwen/Qwen3-0.6B}
       --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.7}
       --max-model-len ${VLLM_MAX_MODEL_LEN:-2048}
       --tensor-parallel-size ${VLLM_TENSOR_PARALLEL_SIZE:-1}
