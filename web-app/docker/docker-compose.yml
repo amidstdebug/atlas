@@ -34,7 +34,7 @@ services:
       - "8000:8000"  # Whisper service port
     environment:
       PYTHONUNBUFFERED: 1
-      WHISPER_MODEL_SIZE: "large-v3-turbo"  # Options: tiny, base, small, medium, large
+      WHISPER_MODEL_ID: "jlvdoorn/whisper-large-v3-atco2-asr"
       CUDA_VISIBLE_DEVICES: 0
     deploy:
       resources:
