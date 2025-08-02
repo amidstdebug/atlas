@@ -67,8 +67,8 @@ interface _GlobalComponents {
     'Input': typeof import("../components/ui/input/index")['Input']
     'Label': typeof import("../components/ui/label/index")['Label']
     'Progress': typeof import("../components/ui/progress/index")['Progress']
-    'Switch': typeof import("../components/ui/switch/index")['Switch']
     'Textarea': typeof import("../components/ui/textarea/index")['Textarea']
+    'Switch': typeof import("../components/ui/switch/index")['Switch']
     'ColorScheme': typeof import("../node_modules/@nuxtjs/color-mode/dist/runtime/component.vue3.vue")['default']
     'NuxtPage': typeof import("../node_modules/nuxt/dist/pages/runtime/page")['default']
     'NoScript': typeof import("../node_modules/nuxt/dist/head/runtime/components")['NoScript']
@@ -137,8 +137,8 @@ interface _GlobalComponents {
     'LazyInput': LazyComponent<typeof import("../components/ui/input/index")['Input']>
     'LazyLabel': LazyComponent<typeof import("../components/ui/label/index")['Label']>
     'LazyProgress': LazyComponent<typeof import("../components/ui/progress/index")['Progress']>
-    'LazySwitch': LazyComponent<typeof import("../components/ui/switch/index")['Switch']>
     'LazyTextarea': LazyComponent<typeof import("../components/ui/textarea/index")['Textarea']>
+    'LazySwitch': LazyComponent<typeof import("../components/ui/switch/index")['Switch']>
     'LazyColorScheme': LazyComponent<typeof import("../node_modules/@nuxtjs/color-mode/dist/runtime/component.vue3.vue")['default']>
     'LazyNuxtPage': LazyComponent<typeof import("../node_modules/nuxt/dist/pages/runtime/page")['default']>
     'LazyNoScript': LazyComponent<typeof import("../node_modules/nuxt/dist/head/runtime/components")['NoScript']>
@@ -213,8 +213,8 @@ export const DialogTrigger: typeof import("../components/ui/dialog/index")['Dial
 export const Input: typeof import("../components/ui/input/index")['Input']
 export const Label: typeof import("../components/ui/label/index")['Label']
 export const Progress: typeof import("../components/ui/progress/index")['Progress']
-export const Switch: typeof import("../components/ui/switch/index")['Switch']
 export const Textarea: typeof import("../components/ui/textarea/index")['Textarea']
+export const Switch: typeof import("../components/ui/switch/index")['Switch']
 export const ColorScheme: typeof import("../node_modules/@nuxtjs/color-mode/dist/runtime/component.vue3.vue")['default']
 export const NuxtPage: typeof import("../node_modules/nuxt/dist/pages/runtime/page")['default']
 export const NoScript: typeof import("../node_modules/nuxt/dist/head/runtime/components")['NoScript']
@@ -283,8 +283,8 @@ export const LazyDialogTrigger: LazyComponent<typeof import("../components/ui/di
 export const LazyInput: LazyComponent<typeof import("../components/ui/input/index")['Input']>
 export const LazyLabel: LazyComponent<typeof import("../components/ui/label/index")['Label']>
 export const LazyProgress: LazyComponent<typeof import("../components/ui/progress/index")['Progress']>
-export const LazySwitch: LazyComponent<typeof import("../components/ui/switch/index")['Switch']>
 export const LazyTextarea: LazyComponent<typeof import("../components/ui/textarea/index")['Textarea']>
+export const LazySwitch: LazyComponent<typeof import("../components/ui/switch/index")['Switch']>
 export const LazyColorScheme: LazyComponent<typeof import("../node_modules/@nuxtjs/color-mode/dist/runtime/component.vue3.vue")['default']>
 export const LazyNuxtPage: LazyComponent<typeof import("../node_modules/nuxt/dist/pages/runtime/page")['default']>
 export const LazyNoScript: LazyComponent<typeof import("../node_modules/nuxt/dist/head/runtime/components")['NoScript']>
