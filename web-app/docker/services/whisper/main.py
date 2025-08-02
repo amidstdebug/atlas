@@ -7,100 +7,101 @@ Transformers Whisper model.
 import tempfile
 import os
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse
-from transformers import pipeline, WhisperProcessor
+
 import torch
+import numpy as np
+
+# Optional import of torchaudio for audio loading and resampling
+try:
+    import torchaudio
+    _HAVE_TORCHAUDIO = True
+except Exception:
+    _HAVE_TORCHAUDIO = False
+
+from transformers import AutoProcessor, WhisperForConditionalGeneration
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(
-    title="Whisper Transcription Service",
-    description="Standalone audio transcription service using Hugging Face Whisper",
-    version="1.0.0"
-)
-
-# Global variables to store the loaded pipeline and processor
-asr_pipeline = None
+# Global variables to store the loaded model and processor
+asr_model = None
 asr_processor = None
 
 def load_whisper_pipeline():
-    """Load the Whisper pipeline on startup"""
-    global asr_pipeline, asr_processor
-    if asr_pipeline is None:
-        try:
-            # Check if CUDA is available and print GPU info
-            if torch.cuda.is_available():
-                device = 0
-                gpu_name = torch.cuda.get_device_name(0)
-                gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
-                logger.info(f"CUDA is available. Using GPU: {gpu_name} ({gpu_memory:.1f} GB)")
-            else:
-                device = "cpu"
-                logger.info("CUDA is not available. Using CPU.")
+    """
+    Load Whisper model and processor once.
+    Uses openai/whisper-large-v3-turbo by default, controllable via WHISPER_MODEL_ID.
+    """
+    global asr_model, asr_processor
+    if asr_model is not None and asr_processor is not None:
+        return asr_model
 
-            model_name = os.getenv(
-                "WHISPER_MODEL_ID", "jlvdoorn/whisper-large-v3-atco2-asr"
-            )
+    try:
+        if torch.cuda.is_available():
+            device = "cuda"
+            torch_dtype = torch.float16
+            logger.info(f"CUDA is available. Using GPU: {torch.cuda.get_device_name(0)}")
+        else:
+            device = "cpu"
+            torch_dtype = torch.float32
+            logger.info("CUDA is not available. Using CPU.")
 
-            logger.info(f"Loading Whisper model: {model_name}")
+        model_name = os.getenv("WHISPER_MODEL_ID", "openai/whisper-large-v3-turbo")
+        logger.info(f"Loading Whisper model: {model_name}")
 
-            # Load the pipeline with error handling
-            asr_pipeline = pipeline(
-                "automatic-speech-recognition",
-                model=model_name,
-                chunk_length_s=30,
-                device=device,
-                return_timestamps=True,  # Ensure timestamps are always returned
-            )
+        # Load processor and model
+        asr_processor = AutoProcessor.from_pretrained(model_name)
+        asr_model = WhisperForConditionalGeneration.from_pretrained(
+            model_name,
+            torch_dtype=torch_dtype,
+            device_map="auto" if device == "cuda" else None,
+            attn_implementation="sdpa",
+        )
+        if device == "cuda":
+            asr_model.to(device)
 
-            if asr_pipeline is None:
-                raise Exception("Pipeline initialization returned None")
+        # Quick sanity check using 0.1 s of silence
+        silence = np.zeros(int(16000 * 0.1), dtype=np.float32)
+        feats = asr_processor(silence, sampling_rate=16000, return_tensors="pt").input_features
+        feats = feats.to(device, dtype=torch_dtype)
+        _ = asr_model.generate(feats, max_new_tokens=1)
 
-            # Disable forced decoder ids so custom prompts are respected
-            if hasattr(asr_pipeline, 'model') and hasattr(asr_pipeline.model, 'generation_config'):
-                asr_pipeline.model.generation_config.forced_decoder_ids = []
+        logger.info("Whisper model and processor loaded successfully")
+        return asr_model
 
-            # Load processor for prompt tokenization with error handling
-            try:
-                asr_processor = WhisperProcessor.from_pretrained(model_name)
-                logger.info("Whisper processor loaded successfully")
-            except Exception as processor_error:
-                logger.warning(f"Failed to load processor (prompts will be disabled): {processor_error}")
-                asr_processor = None
+    except Exception as e:
+        logger.error(f"Failed to load Whisper model: {e}")
+        asr_model = None
+        asr_processor = None
+        raise
 
-            logger.info(f"Whisper model '{model_name}' loaded successfully on {device}")
-
-            # Test the pipeline with a small sample to ensure it works
-            try:
-                # Create a small test audio file (silence)
-                import numpy as np
-                sample_rate = 16000
-                duration = 0.1  # 0.1 seconds
-                silence = np.zeros(int(sample_rate * duration), dtype=np.float32)
-
-                # Test transcription (this should not fail)
-                test_result = asr_pipeline(silence)
-                logger.info("Pipeline test successful")
-
-            except Exception as test_error:
-                logger.warning(f"Pipeline test failed, but continuing: {test_error}")
-
-        except Exception as e:
-            logger.error(f"Failed to load Whisper model: {str(e)}")
-            # Reset global variables on failure
-            asr_pipeline = None
-            asr_processor = None
-            raise
-    return asr_pipeline
-
-@app.on_event("startup")
-async def startup_event():
-    """Load the Whisper model on startup"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
     load_whisper_pipeline()
+    yield
+    # shutdown
+    try:
+        global asr_model, asr_processor
+        asr_model = None
+        asr_processor = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception as e:
+        logger.warning(f"Shutdown cleanup warning: {e}")
+
+app = FastAPI(
+    title="Whisper Transcription Service",
+    description="Standalone audio transcription service using Hugging Face Whisper",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 @app.get("/health")
 async def health_check():
@@ -110,7 +111,7 @@ async def health_check():
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...), prompt: Optional[str] = Form(None)):
     """
-    Transcribe audio file using Whisper
+    Transcribe audio file using Whisper large v3 turbo
     """
     try:
         # Validate file
@@ -152,62 +153,45 @@ async def transcribe_audio(file: UploadFile = File(...), prompt: Optional[str] =
             temp_file_path = temp_file.name
 
         try:
-            # Load pipeline
-            asr = load_whisper_pipeline()
-            if asr is None:
-                raise HTTPException(status_code=500, detail="Failed to load ASR pipeline")
+            # Ensure model is loaded
+            model = load_whisper_pipeline()
+            if model is None or asr_processor is None:
+                raise HTTPException(status_code=500, detail="Failed to load ASR model")
 
-            # Prepare kwargs
-            kwargs: Dict[str, Any] = {"return_timestamps": True}
-            if prompt and asr_processor:
-                try:
-                    prompt_ids = asr_processor.tokenizer.get_prompt_ids(
-                        prompt, return_tensors="pt"
-                    ).to(asr.model.device)
-                    kwargs["generate_kwargs"] = {
-                        "prompt_ids": prompt_ids,
-                        "prompt_condition_type": "first-segment",
-                    }
-                except Exception as prompt_error:
-                    logger.warning(f"Failed to process prompt, continuing without it: {prompt_error}")
+            # Load audio to numpy array at 16 kHz
+            if not _HAVE_TORCHAUDIO:
+                raise HTTPException(
+                    status_code=415,
+                    detail="torchaudio is required for audio decoding. Please install torchaudio.",
+                )
 
-            # Transcribe, retrying without timestamps on IndexError
-            try:
-                result = asr(temp_file_path, **kwargs)
-            except IndexError as ie:
-                logger.warning(f"IndexError in ASR pipeline: {ie}. Retrying without timestamps.")
-                fallback_kwargs = {k: v for k, v in kwargs.items() if k != "return_timestamps"}
-                result = asr(temp_file_path, **fallback_kwargs, return_timestamps=False)
+            waveform, sr = torchaudio.load(temp_file_path)
+            if sr != 16000:
+                waveform = torchaudio.functional.resample(waveform, sr, 16000)
+                sr = 16000
+            audio_array = waveform.squeeze().numpy()
 
-            # Validate result
-            if result is None:
-                raise HTTPException(status_code=500, detail="ASR pipeline returned None result")
+            # Tokenize features
+            inputs = asr_processor(
+                audio_array,
+                sampling_rate=sr,
+                return_tensors="pt"
+            ).input_features
 
-            # Extract segments
-            segments = []
-            chunks = result.get("chunks", []) if isinstance(result, dict) else []
-            if chunks:
-                for chunk in chunks:
-                    if not chunk:
-                        continue
-                    timestamp = chunk.get("timestamp") if isinstance(chunk, dict) else None
-                    if timestamp and len(timestamp) >= 2:
-                        start, end = float(timestamp[0]), float(timestamp[1])
-                    else:
-                        start, end = 0.0, 0.0
-                    text = chunk.get("text", "").strip() if isinstance(chunk, dict) else ""
-                    segments.append({"text": text, "start": start, "end": end})
-            if not segments:
-                text = result.get("text", "").strip() if isinstance(result, dict) and result.get("text") else ""
-                segments.append({"text": text, "start": 0.0, "end": 0.0})
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            dtype = torch.float16 if device == "cuda" else torch.float32
+            inputs = inputs.to(device, dtype=dtype)
 
-            logger.info(f"Transcription completed: {len(segments)} segments")
-            duration = segments[-1]["end"] if segments else 0.0
-            return {
-                "segments": segments,
-                "language": result.get("language", "unknown") if isinstance(result, dict) else "unknown",
-                "duration": duration,
-            }
+            # Generation
+            predicted_ids = model.generate(inputs, cache_implementation="static")
+            transcription = asr_processor.batch_decode(
+                predicted_ids, skip_special_tokens=True
+            )[0].strip()
+
+            # Build response
+            segments = [{"text": transcription, "start": 0.0, "end": 0.0}]
+            logger.info("Transcription completed")
+            return {"segments": segments, "language": "unknown", "duration": 0.0}
 
         finally:
             # Clean up temporary file
@@ -215,6 +199,7 @@ async def transcribe_audio(file: UploadFile = File(...), prompt: Optional[str] =
                 os.unlink(temp_file_path)
 
     except HTTPException:
+        # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
         logger.error(f"Transcription error: {e}")
