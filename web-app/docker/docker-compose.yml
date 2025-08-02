@@ -65,7 +65,7 @@ services:
       - ../backend/.env
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-    command: >
+    command:
       --model ${VLLM_MODEL:-Qwen/Qwen3-1.7B}
       --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.7}
       --max-model-len ${VLLM_MAX_MODEL_LEN:-2048}
