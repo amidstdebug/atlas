@@ -1,6 +1,7 @@
 """
 Whisper Transcription Service
-A standalone FastAPI service for audio transcription using OpenAI Whisper
+A standalone FastAPI service for audio transcription using a Hugging Face
+Transformers Whisper model.
 """
 
 import tempfile
@@ -9,7 +10,7 @@ import logging
 from typing import List, Dict, Any
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
-import whisper
+from transformers import pipeline
 import torch
 
 # Configure logging
@@ -18,21 +19,21 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Whisper Transcription Service",
-    description="Standalone audio transcription service using OpenAI Whisper",
+    description="Standalone audio transcription service using Hugging Face Whisper",
     version="1.0.0"
 )
 
-# Global variable to store the loaded model
-whisper_model = None
+# Global variable to store the loaded pipeline
+asr_pipeline = None
 
-def load_whisper_model():
-    """Load the Whisper model on startup"""
-    global whisper_model
-    if whisper_model is None:
+def load_whisper_pipeline():
+    """Load the Whisper pipeline on startup"""
+    global asr_pipeline
+    if asr_pipeline is None:
         try:
             # Check if CUDA is available and print GPU info
             if torch.cuda.is_available():
-                device = "cuda"
+                device = 0
                 gpu_name = torch.cuda.get_device_name(0)
                 gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
                 logger.info(f"CUDA is available. Using GPU: {gpu_name} ({gpu_memory:.1f} GB)")
@@ -40,20 +41,26 @@ def load_whisper_model():
                 device = "cpu"
                 logger.info("CUDA is not available. Using CPU.")
 
-            # Load model - use 'base' for faster processing, 'large' for better accuracy
-            model_size = os.getenv("WHISPER_MODEL_SIZE", "large-v3-turbo")
-            whisper_model = whisper.load_model(model_size, device=device)
+            model_name = os.getenv(
+                "WHISPER_MODEL_ID", "jlvdoorn/whisper-large-v3-atco2-asr"
+            )
+            asr_pipeline = pipeline(
+                "automatic-speech-recognition",
+                model=model_name,
+                chunk_length_s=30,
+                device=device,
+            )
 
-            logger.info(f"Whisper model '{model_size}' loaded successfully on {device}")
+            logger.info(f"Whisper model '{model_name}' loaded successfully on {device}")
         except Exception as e:
             logger.error(f"Failed to load Whisper model: {str(e)}")
             raise
-    return whisper_model
+    return asr_pipeline
 
 @app.on_event("startup")
 async def startup_event():
     """Load the Whisper model on startup"""
-    load_whisper_model()
+    load_whisper_pipeline()
 
 @app.get("/health")
 async def health_check():
@@ -83,35 +90,33 @@ async def transcribe_audio(file: UploadFile = File(...)):
             temp_file_path = temp_file.name
 
         try:
-            # Get the model
-            model = load_whisper_model()
+            # Get the pipeline
+            asr = load_whisper_pipeline()
 
             # Transcribe the audio
-            result = model.transcribe(temp_file_path, word_timestamps=True)
+            result = asr(temp_file_path, return_timestamps=True)
 
             # Extract segments
             segments = []
-            if 'segments' in result:
-                for seg in result['segments']:
-                    segments.append({
-                        'text': seg['text'].strip(),
-                        'start': float(seg['start']),
-                        'end': float(seg['end'])
-                    })
-            else:
-                # Fallback: create a single segment
-                segments.append({
-                    'text': result['text'].strip(),
-                    'start': 0.0,
-                    'end': 10.0  # Default duration for chunk
-                })
+            for chunk in result.get("chunks", []):
+                start, end = chunk.get("timestamp", (0.0, 0.0))
+                segments.append(
+                    {
+                        "text": chunk.get("text", "").strip(),
+                        "start": float(start),
+                        "end": float(end),
+                    }
+                )
+            if not segments:
+                segments.append({"text": result.get("text", "").strip(), "start": 0.0, "end": 0.0})
 
             logger.info(f"Transcription completed: {len(segments)} segments")
 
+            duration = segments[-1]["end"] if segments else 0.0
             return {
                 "segments": segments,
-                "language": result.get('language', 'unknown'),
-                "duration": result.get('duration', 0.0)
+                "language": result.get("language", "unknown"),
+                "duration": duration,
             }
 
         finally:
