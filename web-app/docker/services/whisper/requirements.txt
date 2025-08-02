@@ -2,8 +2,9 @@ fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
 transformers==4.35.0
-torch==2.0.1+cu117
-torchaudio==2.0.1+cu117
+torch
+torchaudio
+torchvision
 datasets==2.12.0
 tokenizers==0.14.1
 numpy==1.24.3

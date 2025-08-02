@@ -21,6 +21,9 @@ from services.auth.jwt import get_token_data
 from services.summary.vllm_service import generate_completion
 from config.settings import settings
 
+import re
+import difflib
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Summary"])
@@ -168,94 +171,71 @@ async def process_transcription_block(
     request: dict,
     token_data: TokenData = Depends(get_token_data)
 ):
-    """Process a completed transcription block: clean text and extract NER entities in one step."""
+    """Process a completed transcription block: apply manual keyword-based NER with fuzzy matching."""
     try:
         raw_text = request.get("text", "")
-        custom_ner_prompt = request.get("ner_prompt", "")  # Accept custom NER prompt
-        
         if not raw_text.strip():
             return {"cleaned_text": "", "ner_text": ""}
 
-        # Use custom prompt if provided, otherwise use optimized default
-        if custom_ner_prompt.strip():
-            system_prompt = custom_ner_prompt
-        else:
-            # Optimized NER prompt for small model - much more concise
-            system_prompt = """Clean ATC text and tag entities. Return JSON only.
-
-Entity tags:
-- IDENTIFIER: <span class="ner-identifier">callsign</span>
-- WEATHER: <span class="ner-weather">weather</span> 
-- TIMES: <span class="ner-times">time</span>
-- LOCATION: <span class="ner-location">location</span>
-- IMPACT: <span class="ner-impact">emergency</span>
-
-Format: {"cleaned_text": "text", "ner_text": "tagged_text"}"""
-        
-        # Call the summarization service once with the combined prompt
-        payload = {
-            "model": settings.vllm_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": raw_text},
-            ],
-            "stream": False,
-            "temperature": 0.7,
-            "top_p": 0.8,
-            "top_k": 20,
-            "min_p": 0,
-            "max_tokens": 512,  # Limit output length for efficiency
-            "chat_template_kwargs": {"enable_thinking": False}
-        }
-        print("payload:", payload)
-
-        result = await generate_completion(payload)
-
-        print("system prompt:", system_prompt, "result:", result)
-
-        # Robust OpenAI-compatible response parsing
-        if isinstance(result, dict) and "error" in result:
-            logger.error(f"vLLM/OpenAI error: {result['error']}")
-            raise HTTPException(status_code=500, detail=f"vLLM/OpenAI error: {result['error']}")
-
-        content = ""
+        # Load manual NER keywords
         try:
-            choices = result.get("choices", [])
-            if choices and "message" in choices[0] and "content" in choices[0]["message"]:
-                content = choices[0]["message"]["content"].strip()
+            with open('ner_keywords.txt', 'r') as f:
+                keywords = [line.strip() for line in f if line.strip()]
+        except Exception as e:
+            logger.error(f"Failed to load NER keywords file: {e}")
+            keywords = []
+
+        # Split keywords by length to avoid fuzzy on short ones
+        short_kw = [kw for kw in keywords if len(kw) <= 3]
+        long_kw  = [kw for kw in keywords if len(kw) >  3]
+
+        cleaned_text = raw_text
+
+        # First pass: token-level exact or fuzzy matching
+        tokens = re.findall(r'\w+|\W+', raw_text)
+        ner_tokens = []
+        for tok in tokens:
+            if re.fullmatch(r'\w+', tok):
+                norm = tok
+                matched = False
+
+                # fuzzy match long keywords
+                for kw in long_kw:
+                    ratio = difflib.SequenceMatcher(None, norm.lower(), kw.lower()).ratio()
+                    if ratio >= 0.8:
+                        matched = True
+                        break
+
+                # exact match short keywords
+                if not matched:
+                    for kw in short_kw:
+                        if norm.lower() == kw.lower():
+                            matched = True
+                            break
+
+                if matched:
+                    ner_tokens.append(f'<span class="ner-keyword">{tok}</span>')
+                else:
+                    ner_tokens.append(tok)
             else:
-                logger.error(f"No valid content in vLLM/OpenAI response: {result}")
-                raise HTTPException(status_code=500, detail="No valid content in vLLM/OpenAI response.")
+                ner_tokens.append(tok)
 
-            if content.startswith("```json"):
-                content = content[7:]
-            if content.endswith("```"):
-                content = content[:-3]
-            content = content.strip()
+        ner_text = "".join(ner_tokens)
 
-            data = json.loads(content)
+        # Second pass: catch spaced-out variants of short keywords (e.g. "E T A")
+        for kw in short_kw:
+            spaced_pattern = r"\b" + r"\s*".join(map(re.escape, kw)) + r"\b"
+            pattern = re.compile(spaced_pattern, flags=re.IGNORECASE)
+            ner_text = pattern.sub(lambda m: f'<span class="ner-keyword">{m.group(0)}</span>', ner_text)
 
-            # Ensure all keys are present, providing sensible defaults
-            cleaned_text = data.get("cleaned_text", raw_text) # Fallback to raw_text if not in response
-
-            return {
-                "cleaned_text": cleaned_text,
-                "ner_text": data.get("ner_text", cleaned_text)
-            }
-
-        except (json.JSONDecodeError, TypeError) as e:
-            logger.error(f"Failed to parse combined processing JSON: {e}\nRaw response: {content}")
-            # Fallback - return the raw text if JSON parsing fails
-            return {
-                "cleaned_text": raw_text,
-                "ner_text": raw_text
-            }
+        return {
+            "cleaned_text": cleaned_text,
+            "ner_text": ner_text
+        }
 
     except Exception as e:
         logger.error(f"Error processing transcription block: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Block processing failed: {str(e)}")
-
-
 
 async def generate_structured_summary(
     transcription: str,
