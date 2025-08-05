@@ -10,6 +10,7 @@ from api.auth import router as auth_router
 from api.transcription import router as transcription_router
 from api.summary import router as summary_router
 from api.health import router as health_router
+from api.ner_keywords import router as ner_keywords_router
 from config.settings import settings
 
 app = FastAPI(
@@ -32,6 +33,7 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(transcription_router)
 app.include_router(summary_router)
+app.include_router(ner_keywords_router)
 
 @app.get("/")
 async def root():

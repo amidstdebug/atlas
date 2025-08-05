@@ -177,12 +177,12 @@ async def process_transcription_block(
         if not raw_text.strip():
             return {"cleaned_text": "", "ner_text": ""}
 
-        # Load manual NER keywords
+        # Load manual NER keywords from the keyword manager
+        from ..services.ner_keywords.manager import ner_keyword_manager
         try:
-            with open('ner_keywords.txt', 'r') as f:
-                keywords = [line.strip() for line in f if line.strip()]
+            keywords = ner_keyword_manager.get_all_keywords()
         except Exception as e:
-            logger.error(f"Failed to load NER keywords file: {e}")
+            logger.error(f"Failed to load NER keywords: {e}")
             keywords = []
 
         # Split keywords by length to avoid fuzzy on short ones
