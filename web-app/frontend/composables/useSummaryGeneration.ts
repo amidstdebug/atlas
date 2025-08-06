@@ -17,7 +17,7 @@ interface AutoReportConfig {
 
 export const useSummaryGeneration = (reactiveSegments: Ref<any[]>) => {
   const transcriptionStore = useTranscriptionStore()
-  const { $api } = useNuxtApp()
+  // Note: useNuxtApp() will be called within functions to avoid SSR issues
 
   const state = ref<SummaryState>({
     isGenerating: false,
@@ -195,26 +195,99 @@ export const useSummaryGeneration = (reactiveSegments: Ref<any[]>) => {
     const transcriptionStore = useTranscriptionStore()
     // Prioritize segments passed from the watcher, fall back to store for manual triggers.
     const segments = segmentsToProcess || transcriptionStore.getSegments
-    const currentTranscription = segments.map((s: any) => s.text).join(' ')
 
-    if (!currentTranscription) {
-      console.warn('No transcription available for auto-report')
+    if (!segments || segments.length === 0) {
+      console.warn('No transcription segments available for auto-report')
       return
     }
 
-    console.log('[Auto-Report] Attempting to send API request for structured summary generation.')
+    console.log('[Auto-Report] Using NEW intelligent situation report system')
+    
     try {
-      await generateSummary(
-        currentTranscription,
-        autoReportConfig.value.summaryMode,
-        autoReportConfig.value.customPrompt,
-        state.value.lastSummary,
-        true, // structured
-        segments, // use the determined segments
-        autoReportConfig.value.formatTemplate // pass format template
-      )
+      // NEW: Use intelligent situation report system with 3-category analysis
+      await generateIntelligentSituationReport(segments)
     } catch (error) {
       console.error('Auto-report generation failed:', error)
+    }
+  }
+
+  const generateIntelligentSituationReport = async (allSegments: any[]) => {
+    const transcriptionStore = useTranscriptionStore()
+    
+    // Get current report from the last summary
+    const currentReport = state.value.lastSummary
+    
+    // Determine new vs old segments based on when the last report was generated
+    // For now, we'll consider the last 3 segments as "new" and the rest as "old"
+    // In a production system, you'd track this more precisely with timestamps
+    const newSegmentCount = Math.min(3, allSegments.length)
+    const newSegments = allSegments.slice(-newSegmentCount)
+    const oldSegments = allSegments.slice(0, -newSegmentCount)
+    
+    console.log(`[Intelligent Report] Analyzing ${newSegments.length} new segments vs ${oldSegments.length} old segments`)
+
+    state.value.isGenerating = true
+    state.value.error = null
+
+    try {
+      const { $api } = useNuxtApp()
+
+      const requestPayload = {
+        current_report: currentReport,
+        new_segments: newSegments.map(seg => ({
+          text: seg.text,
+          start: seg.start,
+          end: seg.end
+        })),
+        old_segments: oldSegments.map(seg => ({
+          text: seg.text,
+          start: seg.start,
+          end: seg.end
+        })),
+        custom_prompt: autoReportConfig.value.customPrompt || 'Extract pending items and emergencies from transcription. Focus on safety issues and required actions.',
+        format_template: autoReportConfig.value.formatTemplate
+      }
+
+      console.log('[Intelligent Report] Request payload:', requestPayload)
+
+      const response = await $api.post('/summary/intelligent-situation-report', requestPayload)
+
+      if (response.data) {
+        const { should_update, reason, analysis, structured_summary } = response.data
+        
+        console.log(`[Intelligent Report] Analysis result: should_update=${should_update}, reason="${reason}"`)
+        console.log(`[Intelligent Report] Change analysis:`, analysis)
+        
+        if (!should_update) {
+          console.log(`%c[Intelligent Report] 🚫 Update skipped: ${reason}`, 'color: #FF9800; font-weight: bold;')
+          return
+        }
+
+        if (structured_summary) {
+          // Convert structured data to a readable format for display
+          const summaryText = formatStructuredSummary(structured_summary)
+          state.value.lastSummary = summaryText
+
+          // Store in transcription store
+          transcriptionStore.addSummary({
+            id: Date.now().toString(),
+            summary: summaryText,
+            structured_summary: structured_summary,
+            timestamp: new Date().toISOString()
+            // Note: analysis data logged to console for debugging
+          })
+
+          console.log(`%c[Intelligent Report] ✅ Report updated: ${reason}`, 'color: #4CAF50; font-weight: bold;')
+        } else {
+          console.log(`%c[Intelligent Report] ⚠️ No structured summary generated despite should_update=true`, 'color: #FF9800; font-weight: bold;')
+        }
+      }
+    } catch (error: any) {
+      console.error('[Intelligent Report] Generation error:', error)
+      state.value.error = error.response?.data?.detail || 'Intelligent situation report generation failed'
+      throw error
+    } finally {
+      state.value.isGenerating = false
     }
   }
 
@@ -259,6 +332,7 @@ export const useSummaryGeneration = (reactiveSegments: Ref<any[]>) => {
     autoReportConfig,
     generateSummary,
     generateAutoReport,
+    generateIntelligentSituationReport,  // NEW: Export the new function
     toggleAutoReport,
     updateAutoReportConfig,
     setCustomPrompt,

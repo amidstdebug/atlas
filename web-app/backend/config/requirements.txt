@@ -11,3 +11,4 @@ fuzzywuzzy
 python-Levenshtein
 pydantic-settings
 pyjwt
+google-generativeai

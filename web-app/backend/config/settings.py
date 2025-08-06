@@ -23,8 +23,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = os.environ.get("JWT_ALGORITHM", "HS256")
 
     # Model settings
-    vllm_model: str = os.environ.get("VLLM_MODEL", "empty")
-    assert vllm_model != "empty", "VLLM_MODEL is not set"
+    # vllm_model: str = os.environ.get("VLLM_MODEL", "empty")  # COMMENTED OUT: Old vLLM model
+    # assert vllm_model != "empty", "VLLM_MODEL is not set"  # COMMENTED OUT: Old vLLM assertion
+    
+    # NEW: Gemini API settings
+    gemini_api_key: str = os.environ.get("GEMINI_API_KEY", "")
+    # Note: Gemini API key validation is handled in the service layer
 
     # CORS settings
     cors_origins: list = ["*"]

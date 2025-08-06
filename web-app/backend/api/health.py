@@ -59,24 +59,15 @@ async def health_check():
     """Check the health of the API and all dependent services"""
     timestamp = datetime.utcnow().isoformat()
     
-    # Check services concurrently
-    whisper_health, vllm_health = await asyncio.gather(
-        check_service_health("whisper", settings.whisper_service_url),
-        check_service_health("vllm", settings.vllm_server_url),
-        return_exceptions=True
-    )
+    # Check services concurrently - Only Whisper now, Gemini API is external
+    whisper_health = await check_service_health("whisper", settings.whisper_service_url)
     
-    # Handle exceptions from concurrent calls
+    # Handle exceptions from service call
     if isinstance(whisper_health, Exception):
         whisper_health = {"status": "unhealthy", "error": str(whisper_health)}
-    if isinstance(vllm_health, Exception):
-        vllm_health = {"status": "unhealthy", "error": str(vllm_health)}
     
-    # Determine overall health
-    all_healthy = (
-        whisper_health.get("status") == "healthy" and
-        vllm_health.get("status") == "healthy"
-    )
+    # Determine overall health - Only need Whisper to be healthy
+    all_healthy = whisper_health.get("status") == "healthy"
     
     overall_status = "healthy" if all_healthy else "degraded"
     
@@ -90,10 +81,10 @@ async def health_check():
                 "url": settings.whisper_service_url,
                 **whisper_health
             },
-            "vllm": {
-                "name": "vLLM Language Model Service", 
-                "url": settings.vllm_server_url,
-                **vllm_health
+            "gemini": {
+                "name": "Google Gemini API",
+                "status": "external_service",
+                "note": "External API - health not monitored"
             }
         }
     }
