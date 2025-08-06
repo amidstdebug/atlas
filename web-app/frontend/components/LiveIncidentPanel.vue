@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Sparkles, Clock, AlertTriangle, Users, AlertOctagon, Activity, Eye } from 'lucide-vue-next'
-import { ref, computed, watch } from 'vue'
+import { Sparkles, Clock, AlertTriangle, Users, AlertOctagon, Activity, Eye, Check, X, Timer } from 'lucide-vue-next'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,7 @@ interface Summary {
       eta_etr_info?: string
       calculated_time?: string
       priority: string
-      timestamps: number[]
+      timestamps: Array<{start: number, end: number}>
       segment_indices: number[]
     }>
     emergency_information?: Array<{
@@ -24,7 +24,7 @@ interface Summary {
       description: string
       severity: string
       immediate_action_required: boolean
-      timestamps: number[]
+      timestamps: Array<{start: number, end: number}>
       segment_indices: number[]
     }>
   }
@@ -55,6 +55,49 @@ const emit = defineEmits<{
   (e: 'toggleAutoMode'): void
 }>()
 
+// --- Timer and Dismissed Items Management ---
+const currentTime = ref(Date.now())
+const dismissedItems = ref(new Set<string>())
+const itemCreationTimes = ref(new Map<string, number>()) // Track when each item was first seen
+
+let timerInterval: NodeJS.Timeout | null = null
+
+onMounted(() => {
+  // Update current time every second for elapsed time calculations
+  timerInterval = setInterval(() => {
+    currentTime.value = Date.now()
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (timerInterval) {
+    clearInterval(timerInterval)
+  }
+})
+
+function dismissItem(itemId: string) {
+  dismissedItems.value.add(itemId)
+  itemCreationTimes.value.delete(itemId) // Clean up
+}
+
+function ensureItemCreationTime(itemId: string) {
+  if (!itemCreationTimes.value.has(itemId)) {
+    itemCreationTimes.value.set(itemId, Date.now())
+  }
+}
+
+function formatElapsedTime(itemId: string): string {
+  const creationTime = itemCreationTimes.value.get(itemId)
+  if (!creationTime) return "0 m 0 s"
+  
+  const elapsedMs = currentTime.value - creationTime
+  const elapsedMinutes = Math.floor(elapsedMs / 60000)
+  const elapsedSeconds = Math.floor((elapsedMs % 60000) / 1000)
+  
+  // Always show minutes and seconds format: "x m x s"
+  return `${elapsedMinutes} m ${elapsedSeconds} s`
+}
+
 // --- Alert Management ---
 
 // --- Kanban Data Transformation ---
@@ -69,16 +112,22 @@ const kanbanColumns = computed(() => {
       // Handle pending information
       if (summary.structured_summary.pending_information) {
         summary.structured_summary.pending_information.forEach((item: any, index: number) => {
-          columns.pending_information.items.push({
-            id: `${summary.id}-pending-${index}`,
-            content: item.description,
-            eta_etr_info: item.eta_etr_info,
-            calculated_time: item.calculated_time,
-            priority: item.priority,
-            timestamps: item.timestamps,
-            segment_indices: item.segment_indices,
-            latest_timestamp: item.timestamps?.length > 0 ? item.timestamps[item.timestamps.length - 1] : 0
-          })
+          const itemId = `${summary.id}-pending-${index}`
+          if (!dismissedItems.value.has(itemId)) {
+            // Ensure we track when this item was first seen
+            ensureItemCreationTime(itemId)
+            
+            columns.pending_information.items.push({
+              id: itemId,
+              content: item.description,
+              eta_etr_info: item.eta_etr_info,
+              calculated_time: item.calculated_time,
+              priority: item.priority,
+              timestamps: item.timestamps,
+              segment_indices: item.segment_indices,
+              latest_timestamp: item.timestamps?.length > 0 ? item.timestamps[item.timestamps.length - 1].end : 0
+            })
+          }
         })
       }
 
@@ -93,7 +142,7 @@ const kanbanColumns = computed(() => {
             immediate_action_required: item.immediate_action_required,
             timestamps: item.timestamps,
             segment_indices: item.segment_indices,
-            latest_timestamp: item.timestamps?.length > 0 ? item.timestamps[item.timestamps.length - 1] : 0
+            latest_timestamp: item.timestamps?.length > 0 ? item.timestamps[item.timestamps.length - 1].end : 0
           })
         })
       }
@@ -127,6 +176,22 @@ function getPriorityColor(priority: string): string {
     case 'medium': return 'text-orange-600 bg-orange-50 border-orange-200'
     case 'low': return 'text-blue-600 bg-blue-50 border-blue-200'
     default: return 'text-gray-600 bg-gray-50 border-gray-200'
+  }
+}
+
+function getAgeColor(itemId: string): string {
+  const creationTime = itemCreationTimes.value.get(itemId)
+  if (!creationTime) return 'text-green-600 bg-green-50'
+  
+  const elapsedMs = currentTime.value - creationTime
+  const elapsedSeconds = Math.floor(elapsedMs / 1000)
+  
+  if (elapsedSeconds >= 600) { // 10+ minutes
+    return 'text-red-600 bg-red-50' // Very old - needs attention
+  } else if (elapsedSeconds >= 300) { // 5+ minutes
+    return 'text-orange-600 bg-orange-50' // Moderately old
+  } else {
+    return 'text-green-600 bg-green-50' // Recent
   }
 }
 
@@ -226,22 +291,56 @@ function handleToggleAutoMode() {
           <div class="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 min-h-0 max-h-[calc(100vh-300px)] custom-scrollbar">
             <TransitionGroup name="kanban-item">
               <div v-for="item in column.items" :key="item.id" class="p-2 rounded-md bg-background shadow-sm border border-border/50">
+                <!-- Header with timestamp and actions -->
                 <div class="flex items-center justify-between mb-2">
-                  <Badge variant="outline" class="text-xs font-mono">
-                    {{ formatTimestampBadge(item.latest_timestamp) }}
-                  </Badge>
-                  <!-- Priority badge for pending items -->
-                  <Badge v-if="item.priority" variant="secondary" :class="getPriorityColor(item.priority)" class="text-xs">
-                    {{ item.priority.toUpperCase() }}
-                  </Badge>
-                  <!-- Category badge for emergency items -->
-                  <div v-if="item.category" class="flex items-center space-x-1">
-                    <Badge variant="destructive" :class="getCategoryColor(item.category)" class="text-xs">
-                      {{ item.category.replace('_', '/') }}
+                  <div class="flex items-center space-x-2">
+                    <Badge variant="outline" class="text-xs font-mono">
+                      {{ formatTimestampBadge(item.latest_timestamp) }}
                     </Badge>
-                    <Badge v-if="item.severity" variant="outline" class="text-xs text-red-600 border-red-300">
-                      {{ item.severity.toUpperCase() }}
+                    <!-- Elapsed time for pending items -->
+                    <div v-if="item.priority" class="flex items-center space-x-1 text-xs rounded px-2 py-1" :class="getAgeColor(item.id)">
+                      <Timer class="h-3 w-3" />
+                      <span class="font-mono font-semibold">{{ formatElapsedTime(item.id) }}</span>
+                    </div>
+                  </div>
+                  
+                  <div class="flex items-center space-x-1">
+                    <!-- Priority badge for pending items -->
+                    <Badge v-if="item.priority" variant="secondary" :class="getPriorityColor(item.priority)" class="text-xs">
+                      {{ item.priority.toUpperCase() }}
                     </Badge>
+                    
+                    <!-- Category badge for emergency items -->
+                    <div v-if="item.category" class="flex items-center space-x-1">
+                      <Badge variant="destructive" :class="getCategoryColor(item.category)" class="text-xs">
+                        {{ item.category.replace('_', '/') }}
+                      </Badge>
+                      <Badge v-if="item.severity" variant="outline" class="text-xs text-red-600 border-red-300">
+                        {{ item.severity.toUpperCase() }}
+                      </Badge>
+                    </div>
+                    
+                    <!-- Dismiss buttons for pending items only -->
+                    <div v-if="item.priority" class="flex items-center space-x-1 ml-2">
+                      <Button
+                        @click="dismissItem(item.id)"
+                        variant="ghost"
+                        size="sm"
+                        class="h-6 w-6 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        title="Mark as completed"
+                      >
+                        <Check class="h-3 w-3" />
+                      </Button>
+                      <Button
+                        @click="dismissItem(item.id)"
+                        variant="ghost"
+                        size="sm"
+                        class="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title="Dismiss as not relevant"
+                      >
+                        <X class="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 
