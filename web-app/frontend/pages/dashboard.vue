@@ -10,9 +10,9 @@ import TranscriptionPanel from '@/components/TranscriptionPanel.vue'
 import LiveIncidentPanel from '@/components/LiveIncidentPanel.vue'
 import AudioSimulationPlayer from '@/components/AudioSimulationPlayer.vue'
 import HealthStatusModal from '@/components/HealthStatusModal.vue'
-import NERLegendModal from '@/components/NERLegendModal.vue'
+
 import HealthCheckOverlay from '@/components/HealthCheckOverlay.vue'
-import { useBackendHealth } from '@/composables/useBackendHealth'
+import { useHealthCheck } from '@/composables/useHealthCheck'
 import { watch, computed, ref, onMounted, onUnmounted } from 'vue'
 
 // definePageMeta({
@@ -26,12 +26,13 @@ const authStore = useAuthStore()
 
 // Backend health state
 const {
-  isCheckingBackendHealth,
+  isChecking: isCheckingBackendHealth,
   backendHealthy,
-  backendError,
+  error: backendError,
   isDashboardDisabled,
-  retryBackendConnection
-} = useBackendHealth()
+  checkHealth: checkBackendHealth,
+  retryConnection: retryBackendConnection
+} = useHealthCheck()
 
 // Stores and composables
 const transcriptionStore = useTranscriptionStore()
@@ -65,7 +66,7 @@ const handleSimulationSegmentsUpdated = (segments: any[]) => {
 // Configuration state
 const isConfigPanelOpen = ref(false)
 const isHealthModalOpen = ref(false)
-const isNerLegendModalOpen = ref(false)
+
 const customPrompt = ref('Extract pending items and emergencies from transcription. Focus on safety issues and required actions.')
 const customWhisperPrompt = ref('')
 const customFormatTemplate = ref('')
@@ -98,7 +99,7 @@ const {
 } = useSummaryGeneration(transcriptionSegments)
 
 // Sidebar resizing state
-const sidebarWidth = ref(320)
+const sidebarWidth = ref(480)
 const isResizing = ref(false)
 const minWidth = 250
 const maxWidth = 600
@@ -147,6 +148,8 @@ onMounted(async () => {
   pollingLogInterval = setInterval(() => {
     console.log(`[Segment Polling] Total segments: ${transcriptionSegments.value.length}`)
   }, 1000)
+
+  await checkBackendHealth()
 })
 
 // Watch for changes and save to localStorage
@@ -284,9 +287,7 @@ function openHealthModal() {
   isHealthModalOpen.value = true
 }
 
-function openNerLegendModal() {
-  isNerLegendModalOpen.value = true
-}
+
 
 function resetConfig() {
   customPrompt.value = 'Extract pending items and emergencies from transcription. Focus on safety issues and required actions.'
@@ -458,7 +459,7 @@ useHead({
             @stop-recording="handleToggleRecording"
             @toggle-recording="handleToggleRecording"
             @clear-transcription="handleClearTranscription"
-            @open-ner-legend="openNerLegendModal"
+
             class="h-full"
           />
         </div>
@@ -500,9 +501,7 @@ useHead({
     />
 
     <!-- NER Legend Modal -->
-    <NERLegendModal
-      v-model:is-open="isNerLegendModalOpen"
-    />
+
 
     <!-- Prompt Configuration Panel -->
     <ConfigPanel

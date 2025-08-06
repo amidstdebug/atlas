@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { X, Settings, RotateCcw, MessageSquare, Mic, Code } from 'lucide-vue-next'
+import { X, Settings, RotateCcw, MessageSquare, Mic, Code, Tags } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import SimpleNERKeywordManager from '@/components/SimpleNERKeywordManager.vue'
 
 interface Props {
   isOpen: boolean
@@ -68,8 +69,8 @@ const localCustomSummaryPrompt = ref(props.customSummaryPrompt || '')
 const localCustomWhisperPrompt = ref(props.customWhisperPrompt || '')
 const localCustomFormatTemplate = ref(props.customFormatTemplate || '')
 
-// Current tab (summary, ner, or format)
-const activeTab = ref<'summary' | 'whisper' | 'format'>('summary')
+// Current tab (summary, whisper, format, or ner)
+const activeTab = ref<'summary' | 'whisper' | 'format' | 'ner'>('summary')
 
 // Watch for prop changes and sync local state
 watch(() => props.customSummaryPrompt, (newVal) => {
@@ -216,6 +217,16 @@ const isValidJson = computed(() => {
           >
             <Code class="h-4 w-4" />
             <span>Format Template</span>
+          </button>
+          <button
+            @click="activeTab = 'ner'"
+            class="flex items-center space-x-2 px-6 py-3 text-sm font-medium transition-colors"
+            :class="activeTab === 'ner' 
+              ? 'bg-background text-foreground border-b-2 border-blue-500' 
+              : 'text-muted-foreground hover:text-foreground'"
+          >
+            <Tags class="h-4 w-4" />
+            <span>NER Keywords</span>
           </button>
         </div>
       </div>
@@ -376,6 +387,20 @@ const isValidJson = computed(() => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- NER Keywords Tab -->
+        <div v-if="activeTab === 'ner'" class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-semibold text-sm text-foreground">NER Keywords</h3>
+              <p class="text-xs text-muted-foreground mt-1">Manage keywords for Named Entity Recognition highlighting in transcriptions</p>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <SimpleNERKeywordManager />
           </div>
         </div>
 

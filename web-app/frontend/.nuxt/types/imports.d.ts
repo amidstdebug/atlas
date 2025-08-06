@@ -175,7 +175,7 @@ declare global {
   const useAttrs: typeof import('vue')['useAttrs']
   const useAudioRecording: typeof import('../../composables/audio-recording/index')['useAudioRecording']
   const useAuthStore: typeof import('../../stores/auth')['useAuthStore']
-  const useBackendHealth: typeof import('../../composables/useBackendHealth')['useBackendHealth']
+  const useBackendHealth: typeof import('../../composables/useHealthCheck')['useBackendHealth']
   const useBase64: typeof import('@vueuse/core')['useBase64']
   const useBattery: typeof import('@vueuse/core')['useBattery']
   const useBluetooth: typeof import('@vueuse/core')['useBluetooth']
@@ -258,6 +258,8 @@ declare global {
   const useMouseInElement: typeof import('@vueuse/core')['useMouseInElement']
   const useMousePressed: typeof import('@vueuse/core')['useMousePressed']
   const useMutationObserver: typeof import('@vueuse/core')['useMutationObserver']
+  const useNERColors: typeof import('../../composables/useNERColors')['useNERColors']
+  const useNERKeywordManager: typeof import('../../composables/useNERKeywordManager')['useNERKeywordManager']
   const useNavigatorLanguage: typeof import('@vueuse/core')['useNavigatorLanguage']
   const useNetwork: typeof import('@vueuse/core')['useNetwork']
   const useNow: typeof import('@vueuse/core')['useNow']
@@ -417,9 +419,6 @@ declare global {
   // @ts-ignore
   export type { TranscriptionSegment, NEREntity, TranscriptionResponse, CleanTextResponse, ProcessBlockResponse, RecordingState, AudioRecordingVariables } from '../../composables/audio-recording/types'
   import('../../composables/audio-recording/types')
-  // @ts-ignore
-  export type { BackendHealthState } from '../../composables/useBackendHealth'
-  import('../../composables/useBackendHealth')
   // @ts-ignore
   export type { ServiceHealth, HealthStatus } from '../../composables/useHealthCheck'
   import('../../composables/useHealthCheck')
@@ -608,7 +607,7 @@ declare module 'vue' {
     readonly useAttrs: UnwrapRef<typeof import('vue')['useAttrs']>
     readonly useAudioRecording: UnwrapRef<typeof import('../../composables/audio-recording/index')['useAudioRecording']>
     readonly useAuthStore: UnwrapRef<typeof import('../../stores/auth')['useAuthStore']>
-    readonly useBackendHealth: UnwrapRef<typeof import('../../composables/useBackendHealth')['useBackendHealth']>
+    readonly useBackendHealth: UnwrapRef<typeof import('../../composables/useHealthCheck')['useBackendHealth']>
     readonly useBase64: UnwrapRef<typeof import('@vueuse/core')['useBase64']>
     readonly useBattery: UnwrapRef<typeof import('@vueuse/core')['useBattery']>
     readonly useBluetooth: UnwrapRef<typeof import('@vueuse/core')['useBluetooth']>
@@ -691,6 +690,8 @@ declare module 'vue' {
     readonly useMouseInElement: UnwrapRef<typeof import('@vueuse/core')['useMouseInElement']>
     readonly useMousePressed: UnwrapRef<typeof import('@vueuse/core')['useMousePressed']>
     readonly useMutationObserver: UnwrapRef<typeof import('@vueuse/core')['useMutationObserver']>
+    readonly useNERColors: UnwrapRef<typeof import('../../composables/useNERColors')['useNERColors']>
+    readonly useNERKeywordManager: UnwrapRef<typeof import('../../composables/useNERKeywordManager')['useNERKeywordManager']>
     readonly useNavigatorLanguage: UnwrapRef<typeof import('@vueuse/core')['useNavigatorLanguage']>
     readonly useNetwork: UnwrapRef<typeof import('@vueuse/core')['useNetwork']>
     readonly useNow: UnwrapRef<typeof import('@vueuse/core')['useNow']>

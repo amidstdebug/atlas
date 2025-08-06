@@ -17,6 +17,7 @@ interface AutoReportConfig {
 
 export const useSummaryGeneration = (reactiveSegments: Ref<any[]>) => {
   const transcriptionStore = useTranscriptionStore()
+  const { $api } = useNuxtApp()
 
   const state = ref<SummaryState>({
     isGenerating: false,
@@ -73,11 +74,7 @@ export const useSummaryGeneration = (reactiveSegments: Ref<any[]>) => {
 
     try {
       // Get the Nuxt app instance
-      const nuxtApp = (globalThis as any).$nuxt || (window as any).$nuxt
-      if (!nuxtApp) {
-        throw new Error('Nuxt app not available')
-      }
-      const { $api } = nuxtApp
+      const { $api } = useNuxtApp()
 
       if (structured) {
         // Use the new structured summary endpoint

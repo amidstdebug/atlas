@@ -10,7 +10,7 @@ from api.auth import router as auth_router
 from api.transcription import router as transcription_router
 from api.summary import router as summary_router
 from api.health import router as health_router
-from api.ner_keywords import router as ner_keywords_router
+from api.ner_keywords_simple import router as ner_keywords_router
 from config.settings import settings
 
 app = FastAPI(
@@ -29,11 +29,11 @@ app.add_middleware(
 )
 
 # Include API routers
-app.include_router(health_router)
-app.include_router(auth_router)
+app.include_router(health_router)  # Keep health endpoints at root level
+app.include_router(auth_router)    # Already has /auth prefix
 app.include_router(transcription_router)
 app.include_router(summary_router)
-app.include_router(ner_keywords_router)
+app.include_router(ner_keywords_router, prefix="/api")
 
 @app.get("/")
 async def root():

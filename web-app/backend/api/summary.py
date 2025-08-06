@@ -171,62 +171,146 @@ async def process_transcription_block(
     request: dict,
     token_data: TokenData = Depends(get_token_data)
 ):
-    """Process a completed transcription block: apply manual keyword-based NER with fuzzy matching."""
+    """Process a completed transcription block: apply categorized NER with fuzzy matching."""
     try:
         raw_text = request.get("text", "")
         if not raw_text.strip():
             return {"cleaned_text": "", "ner_text": ""}
 
-        # Load manual NER keywords from the keyword manager
-        from ..services.ner_keywords.manager import ner_keyword_manager
+        # Load categorized keywords from the keyword manager
+        from services.ner_keywords.simple_manager import simple_ner_manager
         try:
-            keywords = ner_keyword_manager.get_all_keywords()
+            keywords_by_category = simple_ner_manager.get_keywords_by_category()
+            keyword_data = {'default': [], 'categorized': keywords_by_category}
         except Exception as e:
             logger.error(f"Failed to load NER keywords: {e}")
-            keywords = []
+            keyword_data = {'default': [], 'categorized': {}}
 
-        # Split keywords by length to avoid fuzzy on short ones
-        short_kw = [kw for kw in keywords if len(kw) <= 3]
-        long_kw  = [kw for kw in keywords if len(kw) >  3]
+        # Define default category mappings for uncategorized keywords
+        default_category_mappings = {
+            # Emergency keywords
+            'mayday': 'red',
+            'pan pan': 'red', 
+            'emergency': 'red',
+            'fire': 'red',
+            'medical': 'red',
+            'alert': 'red',
+            'priority': 'red',
+            'urgent': 'red',
+            
+            # Weather keywords
+            'wind': 'blue',
+            'visibility': 'blue',
+            'ceiling': 'blue',
+            'clouds': 'blue',
+            'overcast': 'blue',
+            'clear': 'blue',
+            'turbulence': 'blue',
+            'icing': 'blue',
+            'precipitation': 'blue',
+            
+            # Time keywords
+            'minutes': 'purple',
+            'thousand': 'purple',
+            'hundred': 'purple',
+            
+            # Location keywords
+            'runway': 'green',
+            'taxiway': 'green',
+            'apron': 'green',
+            'gate': 'green',
+            'terminal': 'green',
+            'tower': 'green',
+            'ground': 'green',
+            'approach': 'green',
+            'departure': 'green',
+            'center': 'green',
+            
+            # Identifier keywords
+            'squawk': 'yellow',
+            'transponder': 'yellow',
+            'roger': 'yellow',
+            'wilco': 'yellow',
+            'affirm': 'yellow',
+            'negative': 'yellow',
+            'standby': 'yellow',
+            'cessna': 'yellow',
+            'boeing': 'yellow',
+            'airbus': 'yellow',
+            'helicopter': 'yellow',
+            'fighter': 'yellow',
+            'cargo': 'yellow',
+            'commercial': 'yellow'
+        }
+
+        # Build comprehensive keyword list with categories
+        categorized_keywords = {}
+        
+        # Add user-defined categorized keywords using color names directly
+        for color_category, keywords in keyword_data['categorized'].items():
+            if color_category not in categorized_keywords:
+                categorized_keywords[color_category] = []
+            categorized_keywords[color_category].extend(keywords)
+        
+        # Add default keywords with automatic categorization
+        for keyword in keyword_data['default']:
+            category = default_category_mappings.get(keyword.lower(), 'red')  # default to red
+            if category not in categorized_keywords:
+                categorized_keywords[category] = []
+            categorized_keywords[category].append(keyword)
 
         cleaned_text = raw_text
+        ner_text = raw_text
 
-        # First pass: token-level exact or fuzzy matching
-        tokens = re.findall(r'\w+|\W+', raw_text)
-        ner_tokens = []
-        for tok in tokens:
-            if re.fullmatch(r'\w+', tok):
-                norm = tok
-                matched = False
-
-                # fuzzy match long keywords
-                for kw in long_kw:
-                    ratio = difflib.SequenceMatcher(None, norm.lower(), kw.lower()).ratio()
-                    if ratio >= 0.8:
-                        matched = True
-                        break
-
-                # exact match short keywords
-                if not matched:
-                    for kw in short_kw:
-                        if norm.lower() == kw.lower():
+        # Process each category
+        for category, keywords in categorized_keywords.items():
+            # Split by length for different matching strategies
+            short_kw = [kw for kw in keywords if len(kw) <= 3]
+            long_kw = [kw for kw in keywords if len(kw) > 3]
+            
+            # Token-level matching
+            tokens = re.findall(r'\w+|\W+', ner_text)
+            ner_tokens = []
+            
+            for tok in tokens:
+                if re.fullmatch(r'\w+', tok) and not re.search(r'<span class="ner-', tok):
+                    matched = False
+                    
+                    # Fuzzy match for longer keywords
+                    for kw in long_kw:
+                        ratio = difflib.SequenceMatcher(None, tok.lower(), kw.lower()).ratio()
+                        if ratio >= 0.8:
                             matched = True
                             break
-
-                if matched:
-                    ner_tokens.append(f'<span class="ner-keyword">{tok}</span>')
+                    
+                    # Exact match for short keywords
+                    if not matched:
+                        for kw in short_kw:
+                            if tok.lower() == kw.lower():
+                                matched = True
+                                break
+                    
+                    if matched:
+                        ner_tokens.append(f'<span class="ner-{category}">{tok}</span>')
+                    else:
+                        ner_tokens.append(tok)
                 else:
                     ner_tokens.append(tok)
-            else:
-                ner_tokens.append(tok)
-
-        ner_text = "".join(ner_tokens)
-
-        # Second pass: catch spaced-out variants of short keywords (e.g. "E T A")
-        for kw in short_kw:
-            spaced_pattern = r"\b" + r"\s*".join(map(re.escape, kw)) + r"\b"
-            pattern = re.compile(spaced_pattern, flags=re.IGNORECASE)
-            ner_text = pattern.sub(lambda m: f'<span class="ner-keyword">{m.group(0)}</span>', ner_text)
+            
+            ner_text = "".join(ner_tokens)
+            
+            # Second pass: spaced-out variants for short keywords
+            for kw in short_kw:
+                spaced_pattern = r"\b" + r"\s*".join(map(re.escape, kw)) + r"\b"
+                pattern = re.compile(spaced_pattern, flags=re.IGNORECASE)
+                
+                def replace_match(match):
+                    matched_text = match.group(0)
+                    if not re.search(r'<span class="ner-', matched_text):
+                        return f'<span class="ner-{category}">{matched_text}</span>'
+                    return matched_text
+                
+                ner_text = pattern.sub(replace_match, ner_text)
 
         return {
             "cleaned_text": cleaned_text,
@@ -360,6 +444,13 @@ def create_timestamped_transcription(segments: List[TranscriptionSegment]) -> st
     if not segments:
         return "No transcription available"
 
+    # Optimize for small model - shorter format, limit segments
+    formatted_segments = []
+    for i, segment in enumerate(segments[-20:]):  # Only last 20 segments to save context
+        timestamp = f"[{segment.start:.0f}s]"  # Shorter timestamp format
+        formatted_segments.append(f"{timestamp} {segment.text}")
+
+    return "\n".join(formatted_segments)
     # Optimize for small model - shorter format, limit segments
     formatted_segments = []
     for i, segment in enumerate(segments[-20:]):  # Only last 20 segments to save context

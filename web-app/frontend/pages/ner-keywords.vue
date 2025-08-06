@@ -5,11 +5,11 @@
         NER Keywords Management
       </h1>
       <p class="text-gray-600 dark:text-gray-400">
-        Manage your custom Named Entity Recognition keywords with encrypted storage.
+        Manage your custom Named Entity Recognition keywords with a simple color-coded format.
       </p>
     </div>
     
-    <NERKeywordManager />
+    <SimpleNERKeywordManager />
   </div>
 </template>
 

@@ -22,9 +22,7 @@ interface _GlobalComponents {
     'InvestigationPanel': typeof import("../components/InvestigationPanel.vue")['default']
     'LiveIncidentPanel': typeof import("../components/LiveIncidentPanel.vue")['default']
     'Main': typeof import("../components/Main.vue")['default']
-    'NERKeywordManager': typeof import("../components/NERKeywordManager.vue")['default']
-    'NERLegend': typeof import("../components/NERLegend.vue")['default']
-    'NERLegendModal': typeof import("../components/NERLegendModal.vue")['default']
+    'SimpleNERKeywordManager': typeof import("../components/SimpleNERKeywordManager.vue")['default']
     'TranscriptionPanel': typeof import("../components/TranscriptionPanel.vue")['default']
     'NuxtWelcome': typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']
     'NuxtLayout': typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']
@@ -93,9 +91,7 @@ interface _GlobalComponents {
     'LazyInvestigationPanel': LazyComponent<typeof import("../components/InvestigationPanel.vue")['default']>
     'LazyLiveIncidentPanel': LazyComponent<typeof import("../components/LiveIncidentPanel.vue")['default']>
     'LazyMain': LazyComponent<typeof import("../components/Main.vue")['default']>
-    'LazyNERKeywordManager': LazyComponent<typeof import("../components/NERKeywordManager.vue")['default']>
-    'LazyNERLegend': LazyComponent<typeof import("../components/NERLegend.vue")['default']>
-    'LazyNERLegendModal': LazyComponent<typeof import("../components/NERLegendModal.vue")['default']>
+    'LazySimpleNERKeywordManager': LazyComponent<typeof import("../components/SimpleNERKeywordManager.vue")['default']>
     'LazyTranscriptionPanel': LazyComponent<typeof import("../components/TranscriptionPanel.vue")['default']>
     'LazyNuxtWelcome': LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']>
     'LazyNuxtLayout': LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']>
@@ -170,9 +166,7 @@ export const HealthStatusModal: typeof import("../components/HealthStatusModal.v
 export const InvestigationPanel: typeof import("../components/InvestigationPanel.vue")['default']
 export const LiveIncidentPanel: typeof import("../components/LiveIncidentPanel.vue")['default']
 export const Main: typeof import("../components/Main.vue")['default']
-export const NERKeywordManager: typeof import("../components/NERKeywordManager.vue")['default']
-export const NERLegend: typeof import("../components/NERLegend.vue")['default']
-export const NERLegendModal: typeof import("../components/NERLegendModal.vue")['default']
+export const SimpleNERKeywordManager: typeof import("../components/SimpleNERKeywordManager.vue")['default']
 export const TranscriptionPanel: typeof import("../components/TranscriptionPanel.vue")['default']
 export const NuxtWelcome: typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']
 export const NuxtLayout: typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']
@@ -241,9 +235,7 @@ export const LazyHealthStatusModal: LazyComponent<typeof import("../components/H
 export const LazyInvestigationPanel: LazyComponent<typeof import("../components/InvestigationPanel.vue")['default']>
 export const LazyLiveIncidentPanel: LazyComponent<typeof import("../components/LiveIncidentPanel.vue")['default']>
 export const LazyMain: LazyComponent<typeof import("../components/Main.vue")['default']>
-export const LazyNERKeywordManager: LazyComponent<typeof import("../components/NERKeywordManager.vue")['default']>
-export const LazyNERLegend: LazyComponent<typeof import("../components/NERLegend.vue")['default']>
-export const LazyNERLegendModal: LazyComponent<typeof import("../components/NERLegendModal.vue")['default']>
+export const LazySimpleNERKeywordManager: LazyComponent<typeof import("../components/SimpleNERKeywordManager.vue")['default']>
 export const LazyTranscriptionPanel: LazyComponent<typeof import("../components/TranscriptionPanel.vue")['default']>
 export const LazyNuxtWelcome: LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/welcome.vue")['default']>
 export const LazyNuxtLayout: LazyComponent<typeof import("../node_modules/nuxt/dist/app/components/nuxt-layout")['default']>

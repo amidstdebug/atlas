@@ -117,10 +117,10 @@ function startStreamingCapture() {
     
     recordingBuffer = []
     recordingLength = 0
-    let chunkStartTime = performance.now()
+    let lastChunkTime = 0 // Track actual audio time instead of performance.now()
     
     scriptProcessor.onaudioprocess = (event) => {
-      if (!isSimulating.value) return
+      if (!isSimulating.value || !audioRef.value) return
       
       const inputBuffer = event.inputBuffer
       const inputData = inputBuffer.getChannelData(0)
@@ -131,29 +131,36 @@ function startStreamingCapture() {
       recordingBuffer.push(bufferCopy)
       recordingLength += inputData.length
       
-      // Check if we've recorded enough for a chunk (based on sample rate and time)
+      // Get current audio time for accurate timestamping
+      const currentAudioTime = audioRef.value.currentTime
       const recordedDuration = recordingLength / sampleRate
-      if (recordedDuration >= chunkSize.value) {
+      
+      // Check if we've recorded enough for a chunk OR if we're near the end of the audio
+      const shouldSendChunk = recordedDuration >= chunkSize.value || 
+                             (currentAudioTime >= duration.value - 0.1) // Near end with 100ms tolerance
+      
+      if (shouldSendChunk && recordingBuffer.length > 0) {
         // Create WAV blob from the recorded data
         const wavBlob = createWavBlob(recordingBuffer, recordingLength, sampleRate)
         
-        const chunkStartTimeSeconds = currentChunkIndex.value * chunkSize.value
-        const chunkEndTimeSeconds = Math.min(chunkStartTimeSeconds + chunkSize.value, duration.value)
+        // Use actual audio time for timestamps instead of fixed intervals
+        const chunkStartTime = lastChunkTime
+        const chunkEndTime = Math.min(currentAudioTime, duration.value)
         
-        console.log(`[Simulation] 📤 Streaming chunk ${currentChunkIndex.value}: ${chunkStartTimeSeconds}s - ${chunkEndTimeSeconds}s`)
+        console.log(`[Simulation] 📤 Streaming chunk ${currentChunkIndex.value}: ${chunkStartTime.toFixed(2)}s - ${chunkEndTime.toFixed(2)}s (${recordedDuration.toFixed(2)}s recorded)`)
         
         // Send the chunk
         sendChunkToBackend({
           blob: wavBlob,
-          startTime: chunkStartTimeSeconds,
-          endTime: chunkEndTimeSeconds
+          startTime: chunkStartTime,
+          endTime: chunkEndTime
         }, currentChunkIndex.value)
         
         // Reset buffer for next chunk
         recordingBuffer = []
         recordingLength = 0
         currentChunkIndex.value++
-        chunkStartTime = performance.now()
+        lastChunkTime = chunkEndTime
       }
     }
     
@@ -185,12 +192,15 @@ function monitorPlaybackFallback() {
   const currentTime = audioRef.value.currentTime
   const expectedChunkEndTime = currentChunkIndex.value * chunkSize.value + chunkSize.value
   
-  // Check if we've crossed into the next chunk
-  if (currentTime >= expectedChunkEndTime && currentTime <= duration.value) {
+  // Check if we've crossed into the next chunk OR if we're at the end of the audio
+  const shouldCreateChunk = (currentTime >= expectedChunkEndTime && currentTime <= duration.value) ||
+                           (currentTime >= duration.value - 0.1 && currentChunkIndex.value * chunkSize.value < duration.value)
+  
+  if (shouldCreateChunk) {
     const chunkStartTime = currentChunkIndex.value * chunkSize.value
     const chunkEndTime = Math.min(expectedChunkEndTime, duration.value)
     
-    console.log(`[Simulation] ✂️ Creating chunk ${currentChunkIndex.value} on-demand: ${chunkStartTime}s - ${chunkEndTime}s`)
+    console.log(`[Simulation] ✂️ Creating chunk ${currentChunkIndex.value} on-demand: ${chunkStartTime.toFixed(2)}s - ${chunkEndTime.toFixed(2)}s`)
     
     // Create chunk on-demand and send immediately
     sliceAndSendChunk(file.value, chunkStartTime, chunkEndTime, currentChunkIndex.value)
@@ -444,7 +454,43 @@ function updateTime() {
 
 function handleEnded() {
   isPlaying.value = false
+  
+  // Send any remaining audio data before stopping simulation
+  sendFinalChunk()
+  
   stopSimulation()
+}
+
+function sendFinalChunk() {
+  if (!isSimulating.value) return
+  
+  // For streaming mode: send any remaining buffered audio
+  if (streamingSupported && recordingBuffer.length > 0 && audioRef.value) {
+    const wavBlob = createWavBlob(recordingBuffer, recordingLength, sampleRate)
+    const chunkStartTime = currentChunkIndex.value * chunkSize.value
+    const chunkEndTime = duration.value
+    
+    console.log(`[Simulation] 📤 Sending final chunk ${currentChunkIndex.value}: ${chunkStartTime.toFixed(2)}s - ${chunkEndTime.toFixed(2)}s`)
+    
+    sendChunkToBackend({
+      blob: wavBlob,
+      startTime: chunkStartTime,
+      endTime: chunkEndTime
+    }, currentChunkIndex.value)
+    
+    // Clear the buffer
+    recordingBuffer = []
+    recordingLength = 0
+  }
+  
+  // For fallback mode: check if there's a remaining chunk to send
+  else if (!streamingSupported && file.value) {
+    const lastChunkStart = currentChunkIndex.value * chunkSize.value
+    if (lastChunkStart < duration.value) {
+      console.log(`[Simulation] ✂️ Creating final chunk ${currentChunkIndex.value}: ${lastChunkStart.toFixed(2)}s - ${duration.value.toFixed(2)}s`)
+      sliceAndSendChunk(file.value, lastChunkStart, duration.value, currentChunkIndex.value)
+    }
+  }
 }
 
 function handleClose() {

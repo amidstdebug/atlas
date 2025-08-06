@@ -32,8 +32,9 @@ export { computedAsync, asyncComputed, computedEager, eagerComputed, computedInj
 export { useAdvancedTextProcessing, ProcessedBlock } from '../composables/useAdvancedTextProcessing';
 export { useAudioRecording } from '../composables/audio-recording/index';
 export { TranscriptionSegment, NEREntity, TranscriptionResponse, CleanTextResponse, ProcessBlockResponse, RecordingState, AudioRecordingVariables } from '../composables/audio-recording/types';
-export { useBackendHealth, BackendHealthState } from '../composables/useBackendHealth';
-export { useHealthCheck, ServiceHealth, HealthStatus } from '../composables/useHealthCheck';
+export { useHealthCheck, useBackendHealth, ServiceHealth, HealthStatus } from '../composables/useHealthCheck';
+export { useNERColors } from '../composables/useNERColors';
+export { useNERKeywordManager } from '../composables/useNERKeywordManager';
 export { useSummaryGeneration } from '../composables/useSummaryGeneration';
 export { useAuthStore, User, AuthState } from '../stores/auth';
 export { useTranscriptionStore, SummaryEntry, TranscriptionState, Segment } from '../stores/transcription';

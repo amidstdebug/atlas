@@ -61,8 +61,7 @@ services:
     image: vllm/vllm-openai:latest
     container_name: vllm
     runtime: nvidia  # To use GPUs
-    env_file:
-      - ../backend/.env
+    env_file: ../backend/.env
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     command:

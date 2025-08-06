@@ -15,4 +15,4 @@ fi
 
 # Start services using docker-compose
 echo "Starting backend services..."
-docker-compose -f ./docker/docker-compose.yml -f ./docker/docker-compose-dev.yml up
+docker-compose -f ./docker/docker-compose.yml -f ./docker/docker-compose-dev.yml up --build

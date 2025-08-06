@@ -1,9 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { AlertTriangle, CheckCircle, XCircle, RefreshCw, Clock } from 'lucide-vue-next'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { useHealthCheck } from '~/composables/useHealthCheck'
 
 interface ServiceHealth {
   status: 'healthy' | 'unhealthy' | 'degraded'
@@ -39,99 +36,21 @@ const props = withDefaults(defineProps<Props>(), {
   compact: false
 })
 
-const isChecking = ref(false)
-const healthStatus = ref<HealthStatus | null>(null)
-const error = ref<string | null>(null)
-const lastChecked = ref<Date | null>(null)
-
-const isHealthy = computed(() => healthStatus.value?.status === 'healthy')
-const isDegraded = computed(() => healthStatus.value?.status === 'degraded')
-const isUnhealthy = computed(() => healthStatus.value?.status === 'unhealthy' || !!error.value)
-
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'healthy':
-      return CheckCircle
-    case 'degraded':
-      return AlertTriangle
-    case 'unhealthy':
-      return XCircle
-    default:
-      return AlertTriangle
-  }
-}
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'healthy':
-      return 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30'
-    case 'degraded':
-      return 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/30'
-    case 'unhealthy':
-      return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30'
-    default:
-      return 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-950/30'
-  }
-}
-
-const getBadgeVariant = (status: string) => {
-  switch (status) {
-    case 'healthy':
-      return 'default'
-    case 'degraded':
-      return 'secondary'
-    case 'unhealthy':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
-}
-
-const getServiceStatusText = (service: ServiceHealth) => {
-  if (service.status === 'healthy') {
-    const responseTime = service.response_time_ms ? Math.round(service.response_time_ms) : 0
-    return `Online (${responseTime}ms)`
-  } else if (service.error) {
-    return service.error
-  } else {
-    return 'Offline'
-  }
-}
-
-const formatTimestamp = (timestamp: string) => {
-  try {
-    return new Date(timestamp).toLocaleTimeString()
-  } catch {
-    return timestamp
-  }
-}
-
-const checkHealth = async () => {
-  isChecking.value = true
-  error.value = null
-
-  try {
-    const { $api } = useNuxtApp()
-    const response = await $api.get('/health')
-    healthStatus.value = response.data
-    lastChecked.value = new Date()
-  } catch (err: any) {
-    console.error('Health check failed:', err)
-    
-    if (err.response?.status === 503) {
-      // Service degraded but backend is responding
-      healthStatus.value = err.response.data
-      lastChecked.value = new Date()
-    } else {
-      // Complete failure
-      error.value = err.response?.data?.detail || err.message || 'Health check failed'
-      healthStatus.value = null
-      lastChecked.value = new Date()
-    }
-  } finally {
-    isChecking.value = false
-  }
-}
+const {
+  isChecking,
+  healthStatus,
+  error,
+  lastChecked,
+  isHealthy,
+  isDegraded,
+  isUnhealthy,
+  checkHealth,
+  getStatusColor,
+  getStatusIcon,
+  getBadgeVariant,
+  getServiceStatusText,
+  formatTimestamp
+} = useHealthCheck()
 
 let refreshInterval: any = null
 
@@ -160,11 +79,20 @@ defineExpose({
 <template>
   <!-- Compact Mode -->
   <div v-if="compact" class="flex items-center space-x-2 px-3 py-2 rounded-lg bg-background border border-border/50 hover:bg-muted/50 transition-colors">
-    <component 
-      :is="getStatusIcon(error ? 'unhealthy' : healthStatus?.status || 'unhealthy')" 
+    <svg 
       class="h-4 w-4 flex-shrink-0"
       :class="getStatusColor(error ? 'unhealthy' : healthStatus?.status || 'unhealthy').split(' ')[0]"
-    />
+      fill="none" 
+      stroke="currentColor" 
+      viewBox="0 0 24 24"
+    >
+      <path 
+        stroke-linecap="round" 
+        stroke-linejoin="round" 
+        stroke-width="2" 
+        :d="getStatusIcon(error ? 'unhealthy' : healthStatus?.status || 'unhealthy')"
+      />
+    </svg>
     <div class="flex items-center space-x-2 min-w-0">
       <span class="text-sm font-medium text-foreground truncate">
         {{ error ? 'Error' : 
@@ -189,11 +117,20 @@ defineExpose({
     <CardHeader>
       <div class="flex items-center justify-between">
         <CardTitle class="text-sm font-medium flex items-center space-x-2">
-          <component 
-            :is="getStatusIcon(error ? 'unhealthy' : healthStatus?.status || 'unhealthy')" 
+          <svg 
             class="h-4 w-4"
             :class="getStatusColor(error ? 'unhealthy' : healthStatus?.status || 'unhealthy').split(' ')[0]"
-          />
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path 
+              stroke-linecap="round" 
+              stroke-linejoin="round" 
+              stroke-width="2" 
+              :d="getStatusIcon(error ? 'unhealthy' : healthStatus?.status || 'unhealthy')"
+            />
+          </svg>
           <span>System Status</span>
         </CardTitle>
         <div class="flex items-center space-x-2">

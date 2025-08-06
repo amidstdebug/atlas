@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { useAdvancedTextProcessing } from '@/composables/useAdvancedTextProcessing'
-import NERLegend from './NERLegend.vue'
+
 
 interface TranscriptionSegment {
   text: string
@@ -48,7 +48,6 @@ const emit = defineEmits<{
   'toggleRecording': []
   'clearTranscription': []
   'update:isSimulateMode': [value: boolean]
-  'open-ner-legend': []
 }>()
 
 // Editing state
@@ -208,7 +207,7 @@ function handleSimulateModeToggle(value: boolean) {
             </div>
           </div>
           <!-- NER Legend Button -->
-          <NERLegend @open-ner-legend="$emit('open-ner-legend')" />
+          
         </div>
 
         <!-- Error Display -->
@@ -269,7 +268,7 @@ function handleSimulateModeToggle(value: boolean) {
       <div class="flex-1 overflow-hidden p-4 min-h-0">
         <div v-if="segments.length > 0" class="h-full min-h-0">
           <!-- Transcription Timeline -->
-          <div class="h-full overflow-y-auto overflow-x-hidden pr-2 min-h-0">
+          <div class="h-full overflow-y-auto overflow-x-hidden pr-2 min-h-0 max-h-[calc(100vh-200px)] custom-scrollbar">
             <div class="relative z-10 min-h-full">
               <div class="absolute top-4 bottom-4 w-0.5 bg-blue-500/10" style="left: 40px;"></div>
               <TransitionGroup
@@ -396,48 +395,8 @@ function handleSimulateModeToggle(value: boolean) {
 }
 
 /* NER Entity Highlighting */
-.ner-highlighted-content :deep(.ner-identifier) {
-  background-color: rgba(250, 204, 21, 0.2); /* Softer yellow */
-  color: #a16207; /* Darker, readable text */
-  padding: 1px 5px;
-  border-radius: 6px;
-  font-weight: 500;
-  border: 1px solid rgba(250, 204, 21, 0.4);
-  box-shadow: none;
-}
-
-.ner-highlighted-content :deep(.ner-weather) {
-  background-color: rgba(59, 130, 246, 0.15); /* Softer blue */
-  color: #1d4ed8;
-  padding: 1px 5px;
-  border-radius: 6px;
-  font-weight: 500;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  box-shadow: none;
-}
-
-.ner-highlighted-content :deep(.ner-times) {
-  background-color: rgba(168, 85, 247, 0.15); /* Softer purple */
-  color: #7e22ce;
-  padding: 1px 5px;
-  border-radius: 6px;
-  font-weight: 500;
-  border: 1px solid rgba(168, 85, 247, 0.3);
-  box-shadow: none;
-}
-
-.ner-highlighted-content :deep(.ner-location) {
-  background-color: rgba(34, 197, 94, 0.15); /* Softer green */
-  color: #15803d;
-  padding: 1px 5px;
-  border-radius: 6px;
-  font-weight: 500;
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  box-shadow: none;
-}
-
-.ner-highlighted-content :deep(.ner-impact) {
-  background-color: rgba(239, 68, 68, 0.15); /* Softer red */
+.ner-highlighted-content :deep(.ner-red) {
+  background-color: rgba(239, 68, 68, 0.15); /* Red */
   color: #dc2626;
   padding: 1px 5px;
   border-radius: 6px;
@@ -446,35 +405,123 @@ function handleSimulateModeToggle(value: boolean) {
   box-shadow: none;
 }
 
+.ner-highlighted-content :deep(.ner-yellow) {
+  background-color: rgba(250, 204, 21, 0.2); /* Yellow */
+  color: #a16207;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  box-shadow: none;
+}
+
+.ner-highlighted-content :deep(.ner-blue) {
+  background-color: rgba(59, 130, 246, 0.15); /* Blue */
+  color: #1d4ed8;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  box-shadow: none;
+}
+
+.ner-highlighted-content :deep(.ner-green) {
+  background-color: rgba(34, 197, 94, 0.15); /* Green */
+  color: #15803d;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  box-shadow: none;
+}
+
+.ner-highlighted-content :deep(.ner-purple) {
+  background-color: rgba(168, 85, 247, 0.15); /* Purple */
+  color: #7e22ce;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  box-shadow: none;
+}
+
+.ner-highlighted-content :deep(.ner-orange) {
+  background-color: rgba(249, 115, 22, 0.15); /* Orange */
+  color: #ea580c;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  box-shadow: none;
+}
+
+.ner-highlighted-content :deep(.ner-pink) {
+  background-color: rgba(236, 72, 153, 0.15); /* Pink */
+  color: #be185d;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(236, 72, 153, 0.3);
+  box-shadow: none;
+}
+
+.ner-highlighted-content :deep(.ner-gray) {
+  background-color: rgba(107, 114, 128, 0.15); /* Gray */
+  color: #374151;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid rgba(107, 114, 128, 0.3);
+  box-shadow: none;
+}
+
 /* Dark mode variants */
-.dark .ner-highlighted-content :deep(.ner-identifier) {
+.dark .ner-highlighted-content :deep(.ner-red) {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.dark .ner-highlighted-content :deep(.ner-yellow) {
   background-color: rgba(250, 204, 21, 0.15);
-  color: #facc15; /* Brighter yellow for dark mode */
+  color: #facc15;
   border-color: rgba(250, 204, 21, 0.3);
 }
 
-.dark .ner-highlighted-content :deep(.ner-weather) {
+.dark .ner-highlighted-content :deep(.ner-blue) {
   background-color: rgba(59, 130, 246, 0.15);
-  color: #93c5fd; /* Brighter blue for dark mode */
+  color: #93c5fd;
   border-color: rgba(59, 130, 246, 0.3);
 }
 
-.dark .ner-highlighted-content :deep(.ner-times) {
-  background-color: rgba(168, 85, 247, 0.15);
-  color: #c084fc; /* Brighter purple for dark mode */
-  border-color: rgba(168, 85, 247, 0.3);
-}
-
-.dark .ner-highlighted-content :deep(.ner-location) {
+.dark .ner-highlighted-content :deep(.ner-green) {
   background-color: rgba(34, 197, 94, 0.15);
-  color: #4ade80; /* Brighter green for dark mode */
+  color: #4ade80;
   border-color: rgba(34, 197, 94, 0.3);
 }
 
-.dark .ner-highlighted-content :deep(.ner-impact) {
-  background-color: rgba(239, 68, 68, 0.15);
-  color: #f87171; /* Brighter red for dark mode */
-  border-color: rgba(239, 68, 68, 0.3);
+.dark .ner-highlighted-content :deep(.ner-purple) {
+  background-color: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.dark .ner-highlighted-content :deep(.ner-orange) {
+  background-color: rgba(249, 115, 22, 0.15);
+  color: #fb923c;
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+.dark .ner-highlighted-content :deep(.ner-pink) {
+  background-color: rgba(236, 72, 153, 0.15);
+  color: #f472b6;
+  border-color: rgba(236, 72, 153, 0.3);
+}
+
+.dark .ner-highlighted-content :deep(.ner-gray) {
+  background-color: rgba(107, 114, 128, 0.15);
+  color: #9ca3af;
+  border-color: rgba(107, 114, 128, 0.3);
 }
 
 .segment-enter-from {
@@ -489,5 +536,38 @@ function handleSimulateModeToggle(value: boolean) {
 
 .segment-move {
   transition: transform 0.3s ease-out;
+}
+
+/* Custom scrollbar for transcription panel */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode scrollbar */
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 </style>
