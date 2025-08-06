@@ -131,10 +131,26 @@ async def generate_structured_summary_endpoint(
             format_template=format_template
         )
 
+        # Handle case where no relevant information was found
+        if structured_summary is None:
+            return SummaryResponse(
+                summary="",
+                structured_summary=None,
+                metadata={
+                    "mode": "structured", 
+                    "segments_count": len(request.transcription_segments or []),
+                    "relevance_check": "no_updates_needed"
+                }
+            )
+
         return SummaryResponse(
             summary="",  # No traditional summary for structured mode
             structured_summary=structured_summary,
-            metadata={"mode": "structured", "segments_count": len(request.transcription_segments or [])}
+            metadata={
+                "mode": "structured", 
+                "segments_count": len(request.transcription_segments or []),
+                "relevance_check": "updates_found"
+            }
         )
 
     except Exception as e:
@@ -326,13 +342,19 @@ async def generate_structured_summary(
     transcription_segments: List[TranscriptionSegment],
     custom_prompt: str,  # Now required, no Optional
     format_template: Optional[str] = None
-) -> StructuredSummary:
+) -> Optional[StructuredSummary]:
     """Generate a structured summary with configurable format for ATC analysis"""
     import datetime
 
     # Create timestamped transcription for the prompt
     timestamped_transcription = create_timestamped_transcription(transcription_segments)
     current_time = datetime.datetime.now()
+
+    # First stage: Relevance check to avoid unnecessary processing
+    relevance_check = await check_transcription_relevance(timestamped_transcription, custom_prompt)
+    if not relevance_check:
+        logger.info("No relevant updates found in transcription - skipping structured summary generation")
+        return None
 
     # Default format if none provided
     if not format_template:
@@ -343,7 +365,8 @@ async def generate_structured_summary(
                     "eta_etr_info": "",
                     "calculated_time": "",
                     "priority": "low|medium|high",
-                    "timestamps": []
+                    "timestamps": [],
+                    "segment_indices": []
                 }
             ],
             "emergency_information": [
@@ -352,18 +375,27 @@ async def generate_structured_summary(
                     "description": "",
                     "severity": "high", 
                     "immediate_action_required": True,
-                    "timestamps": []
+                    "timestamps": [],
+                    "segment_indices": []
                 }
             ]
         }, indent=2)
 
-    # Simple prompt structure - custom_prompt is always provided
-    system_prompt = f"""ATC analyst. Time: {current_time.strftime("%H%M")}H. {custom_prompt}
+    # Enhanced prompt structure with better instructions
+    system_prompt = f"""ATC analyst. Current time: {current_time.strftime("%H:%M")}H. 
+
+{custom_prompt}
+
+CRITICAL INSTRUCTIONS:
+1. Only include NEW pending or emergency information that requires attention
+2. Include specific segment timestamps and indices for each item
+3. Be precise - avoid false alarms or redundant information
+4. If no new critical information exists, return empty arrays
 
 Output JSON format:
 {format_template}
 
-Return only valid JSON."""
+Return only valid JSON with accurate timestamps and segment references."""
 
     user_prompt = timestamped_transcription
 
@@ -375,11 +407,11 @@ Return only valid JSON."""
             {"role": "user", "content": user_prompt},
         ],
         "stream": False,
-        "temperature": 0.7,
-        "top_p": 0.8,
-        "top_k": 20,
+        "temperature": 0.3,  # Lower temperature for more consistent output
+        "top_p": 0.9,
+        "top_k": 40,
         "min_p": 0,
-        "max_tokens": 512,  # Limit output length for efficiency
+        "max_tokens": 1024,  # Increased for better detail
         "chat_template_kwargs": {"enable_thinking": False}
     }
     summary_result = await generate_completion(payload)
@@ -387,11 +419,7 @@ Return only valid JSON."""
     # Robust OpenAI-compatible response parsing
     if isinstance(summary_result, dict) and "error" in summary_result:
         logger.error(f"vLLM/OpenAI error: {summary_result['error']}")
-        # Return empty structure on parse failure
-        return StructuredSummary(
-            pending_information=[],
-            emergency_information=[]
-        )
+        return None
 
     content = ""
     try:
@@ -400,11 +428,7 @@ Return only valid JSON."""
             content = choices[0]["message"]["content"].strip()
         else:
             logger.error(f"No valid content in vLLM/OpenAI response: {summary_result}")
-            # Return empty structure on parse failure
-            return StructuredSummary(
-                pending_information=[],
-                emergency_information=[]
-            )
+            return None
 
         if content.startswith("```json"):
             content = content[7:]
@@ -415,15 +439,26 @@ Return only valid JSON."""
         logger.debug(f"Attempting to parse structured JSON response: {content}")
         response_data = json.loads(content)
 
-        # Parse pending information
+        # Parse pending information with enhanced timestamp handling
         pending_items = []
         for item_data in response_data.get("pending_information", []):
-            pending_items.append(PendingInformationItem(**item_data))
+            # Validate and enhance timestamp data
+            enhanced_item = enhance_item_timestamps(item_data, transcription_segments)
+            if enhanced_item:  # Only add if timestamps are valid
+                pending_items.append(PendingInformationItem(**enhanced_item))
 
-        # Parse emergency information
+        # Parse emergency information with enhanced timestamp handling
         emergency_items = []
         for item_data in response_data.get("emergency_information", []):
-            emergency_items.append(EmergencyItem(**item_data))
+            # Validate and enhance timestamp data
+            enhanced_item = enhance_item_timestamps(item_data, transcription_segments)
+            if enhanced_item:  # Only add if timestamps are valid
+                emergency_items.append(EmergencyItem(**enhanced_item))
+
+        # Return None if no items were found (avoiding empty structure)
+        if not pending_items and not emergency_items:
+            logger.info("No valid pending or emergency items found after processing")
+            return None
 
         return StructuredSummary(
             pending_information=pending_items,
@@ -432,29 +467,106 @@ Return only valid JSON."""
 
     except (json.JSONDecodeError, TypeError) as e:
         logger.error(f"Failed to parse structured JSON response: {e}\nRaw response: {content}")
-        # Return empty structure on parse failure
-        return StructuredSummary(
-            pending_information=[],
-            emergency_information=[]
-        )
+        return None
+
+
+async def check_transcription_relevance(timestamped_transcription: str, custom_prompt: str) -> bool:
+    """First stage check to determine if transcription contains relevant information"""
+    relevance_prompt = f"""Analyze this ATC transcription for NEW information requiring attention.
+
+Context: {custom_prompt}
+
+Question: Does this transcription contain any NEW:
+1. Emergency situations (mayday, pan-pan, medical, fire, etc.)
+2. Pending requests (pilot waiting for clearance, information, etc.)
+3. Critical operational updates requiring immediate attention
+
+Transcription:
+{timestamped_transcription}
+
+Respond with only "YES" if new critical information exists, "NO" if routine communication only."""
+
+    payload = {
+        "model": settings.vllm_model,
+        "messages": [{"role": "user", "content": relevance_prompt}],
+        "stream": False,
+        "temperature": 0.1,
+        "max_tokens": 10,
+        "chat_template_kwargs": {"enable_thinking": False}
+    }
+    
+    try:
+        result = await generate_completion(payload)
+        choices = result.get("choices", [])
+        if choices and "message" in choices[0]:
+            response = choices[0]["message"]["content"].strip().upper()
+            return "YES" in response
+    except Exception as e:
+        logger.error(f"Error in relevance check: {e}")
+        return True  # Default to processing if check fails
+    
+    return False
+
+
+def enhance_item_timestamps(item_data: dict, segments: List[TranscriptionSegment]) -> Optional[dict]:
+    """Enhance item with accurate timestamp and segment index information"""
+    if not segments:
+        return None
+    
+    # Extract timestamps if provided by LLM
+    timestamps = item_data.get("timestamps", [])
+    segment_indices = item_data.get("segment_indices", [])
+    
+    # If no specific timestamps provided, try to infer from description
+    if not timestamps and not segment_indices:
+        description = item_data.get("description", "").lower()
+        
+        # Find relevant segments based on content matching
+        relevant_indices = []
+        for i, segment in enumerate(segments):
+            if any(keyword in segment.text.lower() for keyword in 
+                   ["emergency", "mayday", "pan", "medical", "fire", "request", "clearance", "waiting"]):
+                relevant_indices.append(i)
+        
+        # Use the most recent relevant segments (last 3)
+        segment_indices = relevant_indices[-3:] if relevant_indices else [len(segments) - 1]
+    
+    # Validate and populate timestamps from segment indices
+    validated_timestamps = []
+    validated_indices = []
+    
+    for idx in segment_indices:
+        if 0 <= idx < len(segments):
+            segment = segments[idx]
+            validated_timestamps.extend([segment.start, segment.end])
+            validated_indices.append(idx)
+    
+    # Fallback to recent segments if no valid indices
+    if not validated_indices:
+        last_segment = segments[-1]
+        validated_timestamps = [last_segment.start, last_segment.end]
+        validated_indices = [len(segments) - 1]
+    
+    # Update item with validated data
+    item_data["timestamps"] = validated_timestamps
+    item_data["segment_indices"] = validated_indices
+    
+    return item_data
 
 
 def create_timestamped_transcription(segments: List[TranscriptionSegment]) -> str:
-    """Create a timestamped transcription for the AI prompt"""
+    """Create a timestamped transcription for the AI prompt with enhanced context"""
     if not segments:
         return "No transcription available"
 
-    # Optimize for small model - shorter format, limit segments
+    # Use more segments for better context, but optimize format for efficiency
+    context_window = min(30, len(segments))  # Increased from 20 to 30
+    recent_segments = segments[-context_window:]
+    
     formatted_segments = []
-    for i, segment in enumerate(segments[-20:]):  # Only last 20 segments to save context
-        timestamp = f"[{segment.start:.0f}s]"  # Shorter timestamp format
-        formatted_segments.append(f"{timestamp} {segment.text}")
-
-    return "\n".join(formatted_segments)
-    # Optimize for small model - shorter format, limit segments
-    formatted_segments = []
-    for i, segment in enumerate(segments[-20:]):  # Only last 20 segments to save context
-        timestamp = f"[{segment.start:.0f}s]"  # Shorter timestamp format
+    for i, segment in enumerate(recent_segments):
+        segment_index = len(segments) - context_window + i
+        timestamp = f"[{segment.start:.0f}s-{segment.end:.0f}s|#{segment_index}]"
         formatted_segments.append(f"{timestamp} {segment.text}")
 
     return "\n".join(formatted_segments)

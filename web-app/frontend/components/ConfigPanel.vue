@@ -134,7 +134,8 @@ function loadDefaultFormatTemplate() {
         "eta_etr_info": "",
         "calculated_time": "",
         "priority": "low|medium|high",
-        "timestamps": []
+        "timestamps": [],
+        "segment_indices": []
       }
     ],
     "emergency_information": [
@@ -143,7 +144,8 @@ function loadDefaultFormatTemplate() {
         "description": "",
         "severity": "high",
         "immediate_action_required": true,
-        "timestamps": []
+        "timestamps": [],
+        "segment_indices": []
       }
     ]
   }, null, 2)
@@ -298,7 +300,7 @@ const isValidJson = computed(() => {
           <div class="flex items-center justify-between">
             <div>
               <h3 class="font-semibold text-sm text-foreground">Whisper Prompt</h3>
-              <p class="text-xs text-muted-foreground mt-1">Provide optional context to guide transcription</p>
+              <p class="text-xs text-muted-foreground mt-1">Provide keywords and context to guide transcription accuracy</p>
             </div>
             <Button
               variant="outline"
@@ -310,18 +312,34 @@ const isValidJson = computed(() => {
             </Button>
           </div>
 
+          <!-- Whisper Keywords Usage Info -->
+          <div class="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+            <div class="flex items-start space-x-2">
+              <Mic class="h-4 w-4 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+              <div class="space-y-1">
+                <p class="text-xs font-medium text-purple-900 dark:text-purple-100">Whisper Prompt Usage</p>
+                <div class="text-xs text-purple-700 dark:text-purple-300 space-y-1">
+                  <p>• Add domain-specific keywords to improve transcription accuracy</p>
+                  <p>• Example: <code class="bg-purple-100 dark:bg-purple-900 px-1 rounded text-purple-800 dark:text-purple-200">callsign runway clearance approach tower ground</code></p>
+                  <p>• Keywords are passed as prompt_ids to Whisper for better recognition</p>
+                  <p>• Use space-separated words, no special formatting needed</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="space-y-2">
-            <Label for="whisper-prompt" class="text-sm">Prompt</Label>
+            <Label for="whisper-prompt" class="text-sm">Keywords & Context</Label>
             <Textarea
               id="whisper-prompt"
               v-model="localCustomWhisperPrompt"
-              placeholder="Enter context or leave empty for none"
+              placeholder="Enter keywords and context (e.g., callsign runway clearance approach tower ground control)"
               class="min-h-[250px] resize-none bg-background/50 border-border/50"
               :class="{ 'border-purple-300 dark:border-purple-600': localCustomWhisperPrompt }"
             />
             <div class="space-y-2">
               <p class="text-xs text-muted-foreground">
-                {{ localCustomWhisperPrompt ? `${localCustomWhisperPrompt.length} characters` : 'Using default whisper prompt' }}
+                {{ localCustomWhisperPrompt ? `${localCustomWhisperPrompt.length} characters` : 'No custom whisper prompt' }}
               </p>
             </div>
           </div>

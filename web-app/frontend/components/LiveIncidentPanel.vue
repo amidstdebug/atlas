@@ -11,10 +11,22 @@ interface Summary {
   summary: string
   timestamp: string
   structured_summary?: {
-    [key: string]: {
-      content: string,
-      latest_timestamp: number
-    }
+    pending_information?: Array<{
+      description: string
+      eta_etr_info?: string
+      calculated_time?: string
+      priority: string
+      timestamps: number[]
+      segment_indices: number[]
+    }>
+    emergency_information?: Array<{
+      category: string
+      description: string
+      severity: string
+      immediate_action_required: boolean
+      timestamps: number[]
+      segment_indices: number[]
+    }>
   }
 }
 
@@ -64,7 +76,8 @@ const kanbanColumns = computed(() => {
             calculated_time: item.calculated_time,
             priority: item.priority,
             timestamps: item.timestamps,
-            latest_timestamp: item.timestamps?.[0]?.end || 0
+            segment_indices: item.segment_indices,
+            latest_timestamp: item.timestamps?.length > 0 ? item.timestamps[item.timestamps.length - 1] : 0
           })
         })
       }
@@ -79,7 +92,8 @@ const kanbanColumns = computed(() => {
             severity: item.severity,
             immediate_action_required: item.immediate_action_required,
             timestamps: item.timestamps,
-            latest_timestamp: item.timestamps?.[0]?.end || 0
+            segment_indices: item.segment_indices,
+            latest_timestamp: item.timestamps?.length > 0 ? item.timestamps[item.timestamps.length - 1] : 0
           })
         })
       }
@@ -209,7 +223,7 @@ function handleToggleAutoMode() {
               <h3 :class="`text-sm font-semibold text-${column.color}-900 dark:text-${column.color}-100`">{{ column.title }}</h3>
             </div>
           </div>
-          <div class="flex-1 overflow-y-auto p-2 space-y-2">
+          <div class="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 min-h-0 max-h-[calc(100vh-300px)] custom-scrollbar">
             <TransitionGroup name="kanban-item">
               <div v-for="item in column.items" :key="item.id" class="p-2 rounded-md bg-background shadow-sm border border-border/50">
                 <div class="flex items-center justify-between mb-2">
@@ -221,9 +235,14 @@ function handleToggleAutoMode() {
                     {{ item.priority.toUpperCase() }}
                   </Badge>
                   <!-- Category badge for emergency items -->
-                  <Badge v-if="item.category" variant="destructive" :class="getCategoryColor(item.category)" class="text-xs">
-                    {{ item.category.replace('_', '/') }}
-                  </Badge>
+                  <div v-if="item.category" class="flex items-center space-x-1">
+                    <Badge variant="destructive" :class="getCategoryColor(item.category)" class="text-xs">
+                      {{ item.category.replace('_', '/') }}
+                    </Badge>
+                    <Badge v-if="item.severity" variant="outline" class="text-xs text-red-600 border-red-300">
+                      {{ item.severity.toUpperCase() }}
+                    </Badge>
+                  </div>
                 </div>
                 
                 <div v-html="formatSummaryContent(item.content)" class="prose prose-sm max-w-none dark:prose-invert text-foreground/80 text-xs mb-2"></div>
@@ -241,6 +260,11 @@ function handleToggleAutoMode() {
                 <!-- Immediate action indicator for emergencies -->
                 <div v-if="item.immediate_action_required" class="text-xs text-red-600 dark:text-red-400 font-semibold border-t pt-1 mt-1">
                   ⚠️ IMMEDIATE ACTION REQUIRED
+                </div>
+                
+                <!-- Debug info for segment indices (development) -->
+                <div v-if="item.segment_indices && item.segment_indices.length > 0" class="text-xs text-muted-foreground/60 border-t pt-1 mt-1">
+                  <span class="font-mono">Segments: {{ item.segment_indices.join(', ') }}</span>
                 </div>
               </div>
             </TransitionGroup>
@@ -264,5 +288,38 @@ function handleToggleAutoMode() {
 .kanban-item-leave-to {
   opacity: 0;
   transform: scale(0.95) translateY(-10px);
+}
+
+/* Custom scrollbar for incident panel columns */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode scrollbar */
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 </style>

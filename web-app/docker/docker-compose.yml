@@ -51,7 +51,7 @@ services:
       retries: 10
       start_period: 120s
     volumes:
-      - ../backend:/usr/src/app  # mount server code for hot reload
+      - ./services/whisper:/app  # mount whisper service code for hot reload
       - ./models:/root/.cache/huggingface  # persist HuggingFace cache
       - ./models:/models  # persist model files
     networks:

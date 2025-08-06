@@ -31,14 +31,16 @@ class PendingInformationItem(BaseModel):
     eta_etr_info: Optional[str] = None
     calculated_time: Optional[str] = None  # Calculated actual time
     priority: str = "medium"  # low, medium, high
-    timestamps: List[Dict[str, Any]] = []
+    timestamps: List[float] = []  # List of start/end timestamps
+    segment_indices: List[int] = []  # Indices of relevant transcription segments
 
 class EmergencyItem(BaseModel):
     category: str  # MAYDAY_PAN, CASEVAC, AIRCRAFT_DIVERSION, OTHERS
     description: str
     severity: str = "high"  # always high for emergencies
     immediate_action_required: bool = True
-    timestamps: List[Dict[str, Any]] = []
+    timestamps: List[float] = []  # List of start/end timestamps
+    segment_indices: List[int] = []  # Indices of relevant transcription segments
 
 class StructuredSummary(BaseModel):
     pending_information: List[PendingInformationItem]

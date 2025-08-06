@@ -157,6 +157,8 @@ class SimpleNERKeywordManager:
             all_keywords.extend(keywords)
         return all_keywords
     
+
+    
     def get_stats(self) -> Dict[str, Any]:
         """Get keyword statistics"""
         keywords_by_cat = self.get_keywords_by_category()
