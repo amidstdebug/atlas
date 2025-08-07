@@ -523,9 +523,6 @@ async def process_transcription_block(
             if not keywords:  # Skip empty categories
                 continue
                 
-            short_kw = [kw for kw in keywords if len(kw) <= 3]
-            long_kw = [kw for kw in keywords if len(kw) > 3]
-            
             tokens = re.findall(r'\w+|\W+', ner_text)
             ner_tokens = []
             
@@ -533,19 +530,11 @@ async def process_transcription_block(
                 if re.fullmatch(r'\w+', tok) and not re.search(r'<span class="ner-', tok):
                     matched = False
                     
-                    # Fuzzy match for longer keywords
-                    for kw in long_kw:
-                        ratio = difflib.SequenceMatcher(None, tok.lower(), kw.lower()).ratio()
-                        if ratio >= 0.8:
+                    # Exact match for all keywords (case insensitive)
+                    for kw in keywords:
+                        if tok.lower() == kw.lower():
                             matched = True
                             break
-                    
-                    # Exact match for short keywords
-                    if not matched:
-                        for kw in short_kw:
-                            if tok.lower() == kw.lower():
-                                matched = True
-                                break
                     
                     if matched:
                         ner_tokens.append(f'<span class="ner-{category}">{tok}</span>')
