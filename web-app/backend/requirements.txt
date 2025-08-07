@@ -12,9 +12,9 @@ httpcore==1.0.9
 httpx==0.28.1
 idna==3.10
 Levenshtein==0.27.1
-numpy==2.2.6
+numpy
 openai==1.58.1
-pandas==2.3.0
+pandas
 pyasn1==0.6.1
 pydantic==2.11.5
 pydantic-settings==2.9.1
@@ -37,7 +37,6 @@ typing_extensions==4.12.2
 tzdata==2025.2
 urllib3==2.3.0
 uvicorn[standard]==0.34.0
-whisper-live==0.7.1
 google-cloud-aiplatform==1.46.0
 google-generativeai==0.8.1
 iso8601==2.1.0
