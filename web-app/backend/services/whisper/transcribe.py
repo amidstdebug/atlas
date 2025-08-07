@@ -54,7 +54,7 @@ async def transcribe_audio_file(
             "file_content": encoded,
             "filename": filename,
             "content_type": content_type,
-            # "prompt": prompt,
+            "prompt": prompt,
         })
         result = await queue.await_result(job_id)
         if isinstance(result, dict) and result.get("error"):

@@ -7,6 +7,7 @@ Transformers Whisper model.
 import tempfile
 import os
 import logging
+import traceback
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
 
@@ -165,11 +166,17 @@ async def transcribe_audio(file: UploadFile = File(...), prompt: Optional[str] =
 					detail="torchaudio is required for audio decoding. Please install torchaudio.",
 				)
 
+			logger.info(f"Loading audio file: {temp_file_path}")
 			waveform, sr = torchaudio.load(temp_file_path)
+			logger.info(f"Original audio shape: {waveform.shape}, sample rate: {sr}")
+			
 			if sr != 16000:
 				waveform = torchaudio.functional.resample(waveform, sr, 16000)
 				sr = 16000
+				logger.info(f"Resampled audio shape: {waveform.shape}")
+			
 			audio_array = waveform.squeeze().numpy()
+			logger.info(f"Audio array shape: {audio_array.shape}, duration: {len(audio_array)/sr:.2f}s")
 
 			# Tokenize features
 			inputs = asr_processor(
@@ -177,6 +184,7 @@ async def transcribe_audio(file: UploadFile = File(...), prompt: Optional[str] =
 				sampling_rate=sr,
 				return_tensors="pt"
 			).input_features
+			logger.info(f"Input features shape: {inputs.shape}")
 
 			device = "cuda" if torch.cuda.is_available() else "cpu"
 			dtype = torch.float16 if device == "cuda" else torch.float32
@@ -191,20 +199,32 @@ async def transcribe_audio(file: UploadFile = File(...), prompt: Optional[str] =
 			# Add prompt if provided
 			logger.info(f"PROMPT: {prompt}")
 			if prompt and prompt.strip():
-				# Encode the prompt to get prompt_ids
-				prompt_inputs = asr_processor.tokenizer(
-					prompt.strip(), 
-					return_tensors="pt",
-					add_special_tokens=False
-				).input_ids
-				if prompt_inputs.shape[1] > 0:
-					generation_kwargs["prompt_ids"] = prompt_inputs.to(device)
-					logger.info(f"Using prompt for transcription: {prompt[:100]}...")
+				# Use the tokenizer's helper function to get the correctly formatted prompt IDs
+				try:
+					prompt_ids = asr_processor.tokenizer.get_prompt_ids(
+						prompt.strip(), 
+						return_tensors="pt"
+					)
+					logger.info(f"Prompt IDs shape: {prompt_ids.shape if prompt_ids is not None else 'None'}")
+					if prompt_ids is not None and prompt_ids.numel() > 0:
+						generation_kwargs["prompt_ids"] = prompt_ids.to(device)
+						logger.info(f"Using prompt for transcription: {prompt[:100]}...")
+				except Exception as prompt_error:
+					logger.warning(f"Error processing prompt, continuing without it: {prompt_error}")
 			
+			logger.info("Starting model generation...")
 			predicted_ids = model.generate(inputs, **generation_kwargs)
-			transcription = asr_processor.batch_decode(
+			logger.info(f"Generated IDs shape: {predicted_ids.shape}")
+			
+			transcription_batch = asr_processor.batch_decode(
 				predicted_ids, skip_special_tokens=True
-			)[0].strip()
+			)
+			logger.info(f"Batch decode result length: {len(transcription_batch)}")
+			
+			if len(transcription_batch) == 0:
+				raise ValueError("No transcription results returned from model")
+			
+			transcription = transcription_batch[0].strip()
 
 			# Build response
 			segments = [{"text": transcription, "start": 0.0, "end": 0.0}]
@@ -221,6 +241,7 @@ async def transcribe_audio(file: UploadFile = File(...), prompt: Optional[str] =
 		raise
 	except Exception as e:
 		logger.error(f"Transcription error: {e}")
+		logger.error(f"Stack trace: {traceback.format_exc()}")
 		raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
 
 @app.get("/")
